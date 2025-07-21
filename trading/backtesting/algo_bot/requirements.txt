@@ -1,0 +1,27 @@
+Biblioteka CCXT do pobierania danych z giełd
+
+ccxt>=2.8.58
+
+Przetwarzanie danych
+
+pandas>=1.5.0
+numpy>=1.23.0
+
+Skrypt backtestów
+
+backtesting>=0.3.2
+TA-Lib>=0.4.24
+
+Konfiguracja i serializacja YAML
+
+yaml>=6.0
+
+Testy jednostkowe
+
+distlib>=0.3.6
+pytest>=7.4.0
+
+(opcjonalnie) jeśli planujesz wizualizacje
+
+tmatplotlib>=3.6.0
+

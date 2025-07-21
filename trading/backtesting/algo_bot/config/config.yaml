@@ -1,0 +1,57 @@
+# Konfiguracja projektu algo_bot
+
+# Ścieżki do danych
+# Używane jako ścieżki względem katalogu głównego projektu
+# Muszą być wcięte pod klucz 'data'
+data:
+  raw_dir: "bot_data/raw"       # katalog z surowymi CSV
+  processed_dir: "bot_data/processed"  # katalog z przetworzonymi CSV
+
+# Parametry backtestu
+backtest:
+  cash: 100000         # początkowy kapitał w USD
+  commission: 0.002    # prowizja 0.2% na transakcję
+  trade_on_close: true # czy realizować zlecenia na zamknięciu świecy
+
+# Pipeline przetwarzania danych (features do compute_features)
+defaults:
+  features:
+    - type: BBANDS
+      params:
+        timeperiod: 21
+        nbdevup: 2.0
+        nbdevdn: 2.0
+    - type: RSI
+      params:
+        timeperiod: 14
+
+# Ustawienia poszczególnych strategii (nazwa katalogu/plików w strategies)
+strategies:
+  bollinger_band_breakout_short:
+    run: {}          # dodatkowe argumenty do bt.run(), np. {'trade_on_close': True}
+    optimize:
+      window:
+        - 10
+        - 15
+        - 20
+        - 25
+        - 30
+      num_std:
+        - 1.5
+        - 2.0
+        - 2.5
+        - 3.0
+      take_profit:
+        - 0.01
+        - 0.03
+        - 0.05
+        - 0.07
+      stop_loss:
+        - 0.01
+        - 0.03
+        - 0.05
+      maximize: "Equity Final [$]"
+
+# Możesz dodać dodatkowe sekcje:
+# external_data: API/ścieżki do indeksów Fear&Greed, open interest itp.
+# alerts: konfiguracje powiadomień po zakończeniu backtestów
