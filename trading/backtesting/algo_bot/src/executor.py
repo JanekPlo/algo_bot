@@ -7,7 +7,7 @@ Opis:
 - Pobiera przetworzone dane z bot_data/processed
 - Dynamicznie ładuje wybraną strategię z katalogu strategies
 - Uruchamia backtest (lub optymalizację, gdy użyto flagi)
-- Zapisuje statystyki do katalogu results jako JSON i CSV
+- Zapisuje statystyki i dane pomocnicze do katalogu results
 
 Użycie example:
     python3 -m src.executor --symbol BTC_USDT --timeframe 4h --strategy bollinger_band_breakout_short
@@ -32,11 +32,11 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description='Uruchom backtest lub optymalizację strategii w algo_bot'
     )
-    parser.add_argument('--symbol','-s', required=True, help="Symbol formatu BTC_USDT")
-    parser.add_argument('--timeframe','-t', required=True, help="Interwał np. 4h")
-    parser.add_argument('--strategy','-st', required=True, help="Nazwa pliku strategii bez .py")
-    parser.add_argument('--optimize','-o', action='store_true', help="Optymalizacja parametrów")
-    parser.add_argument('--config','-c', default='config/config.yaml', help="Ścieżka do config.yaml")
+    parser.add_argument('--symbol', '-s', required=True, help="Symbol formatu BTC_USDT")
+    parser.add_argument('--timeframe', '-t', required=True, help="Interwał np. 4h")
+    parser.add_argument('--strategy', '-st', required=True, help="Nazwa pliku strategii bez .py")
+    parser.add_argument('--optimize', '-o', action='store_true', help="Optymalizacja parametrów")
+    parser.add_argument('--config', '-c', default='config/config.yaml', help="Ścieżka do config.yaml")
     return parser.parse_args()
 
 
@@ -49,13 +49,21 @@ def load_config(path: str) -> dict:
 
 
 def main():
+    # Debug prints
+    print(">>> Executor startuje <<<<")
     args = parse_args()
+    print(f">>> Parsed args: symbol={args.symbol}, timeframe={args.timeframe}, strategy={args.strategy}, optimize={args.optimize}")
     cfg = load_config(args.config)
+
+    # Debug strategies folder
+    strategies_folder = os.path.join(PROJECT_ROOT, 'strategies')
+    print(f">>> Strategies folder contents: {os.listdir(strategies_folder)}")
 
     # Ścieżki do danych
     processed_dir = os.path.join(PROJECT_ROOT, cfg['data']['processed_dir'])
     csv_name = f"{args.symbol}-{args.timeframe}.csv"
     data_path = os.path.join(processed_dir, csv_name)
+    print(f">>> Looking for data at: {data_path}")
     if not os.path.exists(data_path):
         print(f"Brak przetworzonych danych: {data_path}")
         sys.exit(1)
@@ -64,28 +72,39 @@ def main():
     df = load_csv_ohlcv(data_path)
 
     # Dynamiczny import strategii
-    strategy_module = importlib.import_module(f"strategies.{args.strategy}")
+    print(f">>> Importing strategy module: strategies.{args.strategy}")
+    try:
+        strategy_module = importlib.import_module(f"strategies.{args.strategy}")
+    except Exception as e:
+        print(f"!!! Błąd importu strategii: {e}")
+        sys.exit(1)
     class_name = ''.join([w.title() for w in args.strategy.split('_')])
-    StrategyClass = getattr(strategy_module, class_name)
+    print(f">>> Resolving class name: {class_name}")
+    try:
+        StrategyClass = getattr(strategy_module, class_name)
+    except Exception as e:
+        print(f"!!! Błąd pobierania klasy strategii: {e}")
+        sys.exit(1)
 
-    # Konfiguracja backtestu i strategii
+    # Konfiguracja globalna i strategii
     backtest_cfg = cfg.get('backtest', {})
     strat_cfg = cfg.get('strategies', {}).get(args.strategy, {})
 
-    # Wykonaj backtest lub optymalizację
+    # Uruchom test lub optymalizację
     if args.optimize:
-        opt_kwargs = strat_cfg.get('optimize', {})
-        result = optimize_backtest(
+        print(">>> Running optimize_backtest...")
+        optimize_kwargs = strat_cfg.get('optimize', {})
+        stats, all_results = optimize_backtest(
             data=df,
             strategy_cls=StrategyClass,
-            optimize_kwargs=opt_kwargs,
+            optimize_kwargs=optimize_kwargs,
             cash=backtest_cfg.get('cash', 100000),
-            commission=backtest_cfg.get('commission', 0.002),
-            maximize=opt_kwargs.get('maximize')
+            commission=backtest_cfg.get('commission', 0.002)
         )
     else:
+        print(">>> Running run_backtest...")
         run_kwargs = strat_cfg.get('run', {})
-        result = run_backtest(
+        stats = run_backtest(
             data=df,
             strategy_cls=StrategyClass,
             strategy_kwargs=run_kwargs,
@@ -94,7 +113,7 @@ def main():
         )
 
     # Wyświetl statystyki
-    print(result)
+    print(stats)
 
     # Przygotuj katalog results
     results_dir = os.path.join(PROJECT_ROOT, 'results')
@@ -105,13 +124,13 @@ def main():
     # Zapis JSON
     json_path = os.path.join(results_dir, f"{base}.json")
     with open(json_path, 'w') as f:
-        f.write(result.to_json())
+        f.write(stats.to_json())
     print(f"Statystyki JSON zapisane: {json_path}")
 
     # Zapis equity curve CSV
     try:
         eq_path = os.path.join(results_dir, f"{base}_equity.csv")
-        result._equity_curve.to_csv(eq_path)
+        stats._equity_curve.to_csv(eq_path)
         print(f"Equity curve zapisane: {eq_path}")
     except Exception:
         print("Błąd zapisu equity curve.")
@@ -119,10 +138,16 @@ def main():
     # Zapis logu transakcji CSV
     try:
         trades_path = os.path.join(results_dir, f"{base}_trades.csv")
-        result._trades.to_csv(trades_path)
+        stats._trades.to_csv(trades_path)
         print(f"Log transakcji zapisany: {trades_path}")
     except Exception:
         print("Błąd zapisu logu transakcji.")
+
+    # Zapis pełnej macierzy optymalizacji, jeśli była
+    if args.optimize:
+        opt_csv = os.path.join(results_dir, f"{base}_opt_results.csv")
+        all_results.to_csv(opt_csv, index=False)
+        print(f"Pełne wyniki optymalizacji zapisane: {opt_csv}")
 
 if __name__ == '__main__':
     main()

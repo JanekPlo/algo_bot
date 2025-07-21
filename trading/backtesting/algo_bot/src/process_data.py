@@ -1,110 +1,213 @@
 #!/usr/bin/env python3
-"""
-process_data.py – przetwarza surowe dane OHLCV z bot_data/raw,
-                     wzbogaca je o wybrane cechy i zapisuje do bot_data/processed.
+from __future__ import annotations
 
-Rola pliku w szkielecie:
-- Standaryzacja i weryfikacja kolumn OHLCV.
-- Obliczanie wskaźników technicznych (np. Bollinger Bands, RSI).
-- Doklejanie dodatkowych źródeł (np. Fear&Greed, Open Interest) – tu można rozszerzyć.
-- Zapis gotowego DataFrame do CSV w katalogu processed.
+"""
+process_data.py – standaryzuje RAW → PROCESSED
+- RAW: bot_data/raw/BTC_USDT-5m.csv (kolumny: ts(ms) + datetime(UTC) + OHLCV; legacy: 'timestamp' w s)
+- PROCESSED: bot_data/processed/binance_<SYMBOL>_<TF>.csv
+  • index = UTC datetime
+  • kolumny: Open,High,Low,Close,Volume (+ opcjonalne featury)
+
+Walidacja:
+- sprawdzamy siatkę czasu wg TF; jeśli braków > 0.5% → błąd
+- wypełnienie braków (≤0.5%): Close→Open, High/Low = max/min z O/C, Volume=0
 
 Użycie:
-    python3 src/process_data.py
+  # jeden plik RAW
+  python3 src/process_data.py bot_data/raw/BTC_USDT-5m.csv
+
+  # batch na wszystkie RAW-5m
+  for f in bot_data/raw/*-5m.csv; do python3 src/process_data.py "$f"; done
 """
-import os
-import glob
-import yaml
+
+import argparse
+from pathlib import Path
+from typing import Dict, Any, Tuple
+
 import pandas as pd
-import talib
-from typing import Dict, Any
 
-# Ścieżki do katalogów projektu
-PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
-RAW_DIR = os.path.join(PROJECT_ROOT, 'bot_data', 'raw')
-PROCESSED_DIR = os.path.join(PROJECT_ROOT, 'bot_data', 'processed')
-CONFIG_PATH = os.path.join(PROJECT_ROOT, 'config', 'config.yaml')
+# --- opcjonalne featury (TA-Lib) ---
+try:
+    import talib
+    _HAS_TALIB = True
+except Exception:
+    _HAS_TALIB = False
+
+# --- konfiguracje ---
+TF_MS = {"5m": 300_000, "15m": 900_000, "1h": 3_600_000, "4h": 14_400_000}
+DEFAULT_MAX_MISSING_RATIO = 0.005  # 0.5%
+
+RAW_DIR = Path("bot_data/raw")
+PROC_DIR = Path("bot_data/processed")
 
 
-def load_config(path: str) -> Dict[str, Any]:
+def parse_legacy_name(raw_path: Path) -> Tuple[str, str]:
     """
-    Wczytuje plik YAML z konfiguracją projektu.
+    BTC_USDT-5m.csv -> ('BTCUSDT','5m')
     """
-    if not os.path.exists(path):
-        raise FileNotFoundError(f"Brak pliku konfiguracyjnego: {path}")
-    with open(path) as f:
-        return yaml.safe_load(f)
+    stem = raw_path.stem  # BTC_USDT-5m
+    base, tf = stem.split("-", 1)
+    b, q = base.split("_", 1)
+    symbol = f"{b}{q}".upper()
+    return symbol, tf
 
 
-def compute_features(df: pd.DataFrame, feature_cfg: Dict[str, Any]) -> pd.DataFrame:
-    """
-    Dla DataFrame df oblicza wskaźniki na podstawie konfiguracji feature_cfg.
-
-    feature_cfg przykładowo:
-      - type: BBANDS
-        params: {timeperiod: 21, nbdevup: 2.0, nbdevdn: 2.0}
-      - type: RSI
-        params: {timeperiod: 14}
-    """
-    for feat in feature_cfg:
-        ftype = feat.get('type', '').upper()
-        params = feat.get('params', {})
-        if ftype == 'BBANDS':
-            upper, mid, lower = talib.BBANDS(df['Close'], **params)
-            df['BB_upper'] = upper
-            df['BB_middle'] = mid
-            df['BB_lower'] = lower
-        elif ftype == 'RSI':
-            df['RSI'] = talib.RSI(df['Close'], **params)
+def _ensure_ts_datetime(df: pd.DataFrame) -> pd.DataFrame:
+    # ts (ms)
+    if "ts" not in df.columns:
+        if "timestamp" in df.columns:
+            t = df["timestamp"].astype(int)
+            df["ts"] = t.where(t > 3_000_000_000, t * 1000)
         else:
-            # Miejsce na dodatkowe źródła np. Fear&Greed
-            print(f"Nieznany typ cechy: {ftype}, pomijam.")
+            raise ValueError("RAW must contain 'ts' (ms) or legacy 'timestamp' (s)")
+    # datetime (UTC)
+    if "datetime" not in df.columns:
+        df["datetime"] = pd.to_datetime(df["ts"], unit="ms", utc=True)
+    else:
+        df["datetime"] = pd.to_datetime(df["datetime"], utc=True)
+
+    # Koercja i sanity: usuń wiersze z brakującym ts, rzutuj ts na int
+    df["ts"] = pd.to_numeric(df["ts"], errors="coerce")
+    df = df.dropna(subset=["ts"]).copy()
+    df["ts"] = df["ts"].astype("int64")
     return df
 
 
-def process_file(path: str, feature_cfg: Dict[str, Any]) -> None:
-    """
-    Przetwarza pojedynczy surowy plik CSV oraz oblicza cechy.
-    """
-    df = pd.read_csv(path, parse_dates=['datetime'])
-    df = df.rename(columns={'datetime': 'datetime'})
-    df = df.set_index('datetime').sort_index()
+def validate_and_fill(df: pd.DataFrame, timeframe: str, max_missing_ratio=DEFAULT_MAX_MISSING_RATIO) -> pd.DataFrame:
+    step = TF_MS[timeframe]
+    df = df.sort_values("ts").drop_duplicates(subset=["ts"])
 
-    # Weryfikacja podstawowych kolumn OHLCV
-    expected = ['Open', 'High', 'Low', 'Close', 'Volume']
-    missing = set(expected) - set(df.columns)
+    ts_start, ts_end = int(df["ts"].iloc[0]), int(df["ts"].iloc[-1])
+    full_index = range(ts_start, ts_end + step, step)
+
+    have = set(df["ts"].tolist())
+    missing = [t for t in full_index if t not in have]
+    miss_ratio = len(missing) / max(1, len(list(full_index)))
+
+    if miss_ratio > max_missing_ratio:
+        raise ValueError(f"Too many missing bars ({miss_ratio:.3%}) — aborting. Missing count={len(missing)}")
+
     if missing:
-        raise ValueError(f"Brakuje kolumn OHLCV: {missing} w {path}")
-    df = df[expected]
+        filler = pd.DataFrame({"ts": missing})
+        merged = pd.concat([df, filler], ignore_index=True).sort_values("ts")
+        merged["datetime"] = pd.to_datetime(merged["ts"], unit="ms", utc=True)
 
-    # Oblicz wskaźniki techniczne
+        # wypełnianie wg spec:
+        merged["Close"] = merged["Close"].ffill()
+        merged["Open"]  = merged["Open"].fillna(merged["Close"].shift(1))
+        merged["High"]  = merged["High"].fillna(merged[["Open", "Close"]].max(axis=1))
+        merged["Low"]   = merged["Low"].fillna(merged[["Open", "Close"]].min(axis=1))
+        merged["Volume"]= merged["Volume"].fillna(0.0)
+
+        df = merged
+
+    return df.sort_values("ts").reset_index(drop=True)
+
+
+def processed_filename(symbol_no_slash: str, timeframe: str) -> Path:
+    PROC_DIR.mkdir(parents=True, exist_ok=True)
+    return PROC_DIR / f"binance_{symbol_no_slash}_{timeframe}.csv"
+
+
+def compute_features(df: pd.DataFrame, feature_cfg: Dict[str, Any] | None) -> pd.DataFrame:
+    """
+    Opcjonalne featury. Jeśli TA-Lib brak – pomiń grzecznie.
+    feature_cfg (przykład):
+      - {'type':'BBANDS','params':{'timeperiod':21,'nbdevup':2.0,'nbdevdn':2.0}}
+      - {'type':'RSI','params':{'timeperiod':14}}
+    """
+    if not feature_cfg:
+        return df
+    if not _HAS_TALIB:
+        print("[process] TA-Lib not available – skipping features")
+        return df
+
+    for feat in feature_cfg:
+        ftype = str(feat.get("type", "")).upper()
+        params = feat.get("params", {}) or {}
+        if ftype == "BBANDS":
+            upper, mid, lower = talib.BBANDS(df["Close"], **params)
+            df["BB_upper"] = upper
+            df["BB_middle"] = mid
+            df["BB_lower"] = lower
+        elif ftype == "RSI":
+            df["RSI"] = talib.RSI(df["Close"], **params)
+        else:
+            print(f"[process] Unknown feature type: {ftype} (skip)")
+    return df
+
+
+def process_file(raw_path: Path, feature_cfg: Dict[str, Any] | None = None,
+                 max_missing_ratio: float = DEFAULT_MAX_MISSING_RATIO) -> Path:
+    """
+    Przetwarza pojedynczy RAW → PROCESSED (z walidacją i ewentualnym fill braków).
+    Zwraca ścieżkę wyjściową.
+    """
+    if not raw_path.exists():
+        raise FileNotFoundError(raw_path)
+
+    symbol, timeframe = parse_legacy_name(raw_path)
+    if timeframe not in TF_MS:
+        raise ValueError(f"Unsupported timeframe in filename: {timeframe}")
+
+    df = pd.read_csv(raw_path)
+    df = _ensure_ts_datetime(df)
+
+    # sanity OHLCV
+    needed = ["Open", "High", "Low", "Close", "Volume"]
+    for c in needed:
+        if c not in df.columns:
+            raise ValueError(f"Missing column '{c}' in RAW {raw_path}")
+
+    # walidacja + fill braków
+    df = validate_and_fill(df[["ts", "datetime", "Open", "High", "Low", "Close", "Volume"]],
+                           timeframe, max_missing_ratio=max_missing_ratio)
+
+    # Trzymaj kolumnę 'datetime' (UTC) w PROCESSED, żeby loader backtestera mógł ją sparsować
+    df["datetime"] = pd.to_datetime(df["datetime"], utc=True)
+    df = df.sort_values("datetime")
+
+    # opcjonalne featury
     df = compute_features(df, feature_cfg)
 
-    # Zapis do katalogu processed
-    os.makedirs(PROCESSED_DIR, exist_ok=True)
-    fname = os.path.basename(path)
-    out_path = os.path.join(PROCESSED_DIR, fname)
-    df.to_csv(out_path)
-    print(f"Przetworzono i zapisano: {out_path}")
+    out = processed_filename(symbol, timeframe)
+    cols_order = [
+        "datetime",
+        "Open", "High", "Low", "Close", "Volume",
+    ] + [c for c in df.columns if c not in ["datetime", "Open", "High", "Low", "Close", "Volume"]]
+    df[cols_order].to_csv(out, index=False)
+    print(f"[process] Wrote PROCESSED → {out}  rows={len(df)}")
+    return out
 
 
 def main():
-    # Wczytaj konfigurację projektu i listę cech
-    cfg = load_config(CONFIG_PATH)
-    feature_cfg = cfg.get('defaults', {}).get('features', [])
+    ap = argparse.ArgumentParser()
+    ap.add_argument("raw_path", nargs="?", help="np. bot_data/raw/BTC_USDT-5m.csv")
+    ap.add_argument("--max-missing-ratio", type=float, default=DEFAULT_MAX_MISSING_RATIO,
+                    help="Dopuszczalny udział braków (domyślnie 0.005 = 0.5%)")
+    # Prosto: na razie bez YAML – featury można dopchnąć później
+    ap.add_argument("--features-json", help="Opcjonalny JSON z listą featurów", default=None)
+    args = ap.parse_args()
 
-    # Przetwórz każdy plik w RAW_DIR
-    pattern = os.path.join(RAW_DIR, '*.csv')
-    files = glob.glob(pattern)
-    if not files:
-        print(f"Brak plików raw w {RAW_DIR}")
-        return
-    for path in files:
-        try:
-            process_file(path, feature_cfg)
-        except Exception as e:
-            print(f"Błąd podczas przetwarzania {path}: {e}")
+    feature_cfg = None
+    if args.features_json:
+        import json
+        feature_cfg = json.loads(args.features_json)
+
+    if args.raw_path:
+        process_file(Path(args.raw_path), feature_cfg=feature_cfg, max_missing_ratio=args.max_missing_ratio)
+    else:
+        # batch: wszystkie RAW
+        files = sorted(RAW_DIR.glob("*.csv"))
+        if not files:
+            print(f"[process] Brak plików RAW w {RAW_DIR}")
+            return
+        for p in files:
+            try:
+                process_file(p, feature_cfg=feature_cfg, max_missing_ratio=args.max_missing_ratio)
+            except Exception as e:
+                print(f"[process] ERROR {p}: {e}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

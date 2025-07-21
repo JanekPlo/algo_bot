@@ -1,0 +1,44 @@
+__mode: random
+__n: 5
+__seed: 101
+
+ema_fast:   {type: int,   min: 13, max: 21}
+ema_mid:    {type: choice, values: [55, 89]}
+ema_slow:   {type: choice, values: [200]}
+
+slope_mode: {type: choice, values: ["pct"]}
+slope_lookback: {type: choice, values: [21, 34]}
+slope_thr_mid:  {type: float, min: 0.00005, max: 0.00010, step: 0.00001}
+slope_thr_slow: {type: float, min: 0.00003, max: 0.00006, step: 0.000005}
+
+zscore_window: {type: choice, values: [80, 100, 140]}
+deadzone:      {type: choice, values: [3.0, 4.0, 5.0]}
+
+pullback_lookback:  {type: choice, values: [10, 15, 20]}
+pullback_atr_len:   {type: choice, values: [14]}
+pullback_atr_mult:  {type: float, min: 0.10, max: 0.15, step: 0.01}
+entry_max_atr_mult: {type: float, min: 0.50, max: 0.80, step: 0.05}
+require_rebound:    {type: choice, values: [true]}
+
+short_l1: {type: choice, values: [5, 7]}
+short_l2: {type: choice, values: [15, 20]}
+short_l3: {type: choice, values: [10, 15]}
+long_l1:  {type: choice, values: [15, 20]}
+long_l2:  {type: choice, values: [10, 15]}
+
+t3_len: {type: choice, values: [4, 5, 6]}
+t3_b:   {type: float, min: 0.60, max: 0.80, step: 0.10}
+
+rr_target:       {type: choice, values: [1.5, 2.0]}
+sl_atr_mult:     {type: float, min: 0.40, max: 0.60, step: 0.05}
+trail_atr_mult:  {type: float, min: 1.5, max: 2.5, step: 0.25}
+tp_has_priority: {type: choice, values: [true]}
+
+stale_max_bars: {type: choice, values: [30, 40, 60]}
+cooldown_bars:  {type: choice, values: [5, 10, 20]}
+
+side: {type: choice, values: ["both"]}
+trade_on_close: {type: choice, values: [true]}
+
+tp_pct: {type: choice, values: [null]}
+sl_pct: {type: choice, values: [null]}

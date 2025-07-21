@@ -1,97 +1,241 @@
 #!/usr/bin/env python3
-"""
-fetch_data.py – pobiera historyczne dane OHLCV z giełdy (Binance, Bybit itp.)
-                       i zapisuje surowe CSV do katalogu bot_data/raw w katalogu projektu.
-"""
-import os
+from __future__ import annotations
+
+import argparse
+import math
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Optional, Iterable, List
+
 import ccxt
 import pandas as pd
-import argparse
-import time
-from datetime import datetime
 
-# Funkcja zwraca katalog projektu (rodzic katalogu tego skryptu)
-def get_project_root() -> str:
+
+# === Konfiguracja kroków czasowych (ms) ===
+TF_MS = {
+    "1m": 60_000,
+    "3m": 180_000,
+    "5m": 300_000,
+    "15m": 900_000,
+    "30m": 1_800_000,
+    "1h": 3_600_000,
+    "2h": 7_200_000,
+    "4h": 14_400_000,
+    "1d": 86_400_000,
+}
+
+
+# === Utils ===
+def to_ccxt_symbol(sym: str) -> str:
     """
-    Zwraca absolutną ścieżkę do katalogu głównego projektu (jeden poziom wyżej niż src/).
+    Normalizuje zapis symbolu do formatu CCXT, np.:
+    - 'BTC_USDT'  -> 'BTC/USDT'
+    - 'BTCUSDT'   -> 'BTC/USDT'
+    - 'BTC/USDT'  -> 'BTC/USDT' (bez zmian)
     """
-    return os.path.abspath(
-        os.path.join(os.path.dirname(__file__), os.pardir)
-    )
+    s = sym.strip().upper()
+    if "/" in s:
+        return s
+    if "_" in s:
+        b, q = s.split("_", 1)
+        return f"{b}/{q}"
+    if s.endswith("USDT"):
+        return f"{s[:-4]}/USDT"
+    # fallback – spróbuj domyślnie USDT
+    return f"{s}/USDT"
 
-# Funkcja zwraca katalog raw względem root projektu
-def get_raw_dir() -> str:
+
+def raw_filename(symbol_ccxt: str, timeframe: str) -> Path:
+    """RAW zapisujemy w legacy formacie: bot_data/raw/BTC_USDT-5m.csv"""
+    base, quote = symbol_ccxt.split("/")
+    fn = f"{base}_{quote}-{timeframe}.csv"
+    return Path("bot_data/raw") / fn
+
+
+def ensure_parent(path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+
+def last_ts_from_file(path: Path) -> Optional[int]:
     """
-    Zwraca ścieżkę do bot_data/raw w katalogu projektu.
-    Tworzy katalog, jeśli nie istnieje.
+    Zwraca ostatni ts (ms) z istniejącego pliku RAW.
+    Obsługuje też legacy kolumnę 'timestamp' (sekundy).
     """
-    root = get_project_root()
-    raw_dir = os.path.join(root, 'bot_data', 'raw')
-    os.makedirs(raw_dir, exist_ok=True)
-    return raw_dir
-
-
-def init_exchange(name: str, api_key: str = None, secret: str = None, **kwargs) -> ccxt.Exchange:
-    if not hasattr(ccxt, name):
-        raise ValueError(f"Nieznana giełda CCXT: {name}")
-    exch_cls = getattr(ccxt, name)
-    return exch_cls({ 'apiKey': api_key, 'secret': secret, **kwargs })
-
-
-def fetch_ohlcv(exchange, symbol: str, timeframe: str, since: int, limit: int) -> pd.DataFrame:
-    """Pobiera pełny zestaw danych przez paginację i zwraca DataFrame."""
-    all_bars = []
-    while True:
-        bars = exchange.fetch_ohlcv(symbol, timeframe=timeframe, since=since, limit=limit)
-        if not bars:
-            break
-        all_bars.extend(bars)
-        since = bars[-1][0] + 1
-        time.sleep(exchange.rateLimit / 1000)
-    df = pd.DataFrame(all_bars, columns=['timestamp','Open','High','Low','Close','Volume'])
-    df['datetime'] = pd.to_datetime(df['timestamp'], unit='ms')
-    return df.set_index('datetime').drop(columns=['timestamp'])
-
-
-def save_csv(df: pd.DataFrame, path: str):
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    df.to_csv(path)
-    print(f"Zapisano: {path}")
-
-
-def parse_args():
-    p = argparse.ArgumentParser(description='Pobierz OHLCV i zapisz do bot_data/raw')
-    p.add_argument('symbol', help="Para, np. 'BTC/USDT'.")
-    p.add_argument('timeframe', help="Interwał, np. '1h', '4h', '1d'.")
-    p.add_argument('--start', help="Data startu YYYY-MM-DD (domyślnie 2020-01-01).", default='2020-01-01')
-    p.add_argument('--exchange', help="Nazwa CCXT (domyślnie 'binance').", default='binance')
-    p.add_argument('--limit', type=int, help="Liczba świec na zapytanie (domyślnie 1000).", default=1000)
-    return p.parse_args()
-
-
-def main():
-    args = parse_args()
-    # Parsowanie daty startowej
+    if not path.exists():
+        return None
     try:
-        dt = datetime.strptime(args.start, '%Y-%m-%d')
-        since = int(dt.timestamp() * 1000)
-    except ValueError:
-        print("Nieprawidłowy format daty. Użyj YYYY-MM-DD.")
-        return
+        df = pd.read_csv(path, usecols=["ts"])
+        if "ts" in df.columns and len(df):
+            return int(df["ts"].max())
+    except Exception:
+        # Legacy fallback
+        try:
+            df = pd.read_csv(path, usecols=["timestamp"])
+            if len(df):
+                t = int(df["timestamp"].max())
+                return t if t > 3_000_000_000 else t * 1000
+        except Exception:
+            return None
+    return None
 
-    exchange = init_exchange(args.exchange, enableRateLimit=True)
-    print(f"Ładowanie {args.timeframe} danych dla {args.symbol} od {exchange.iso8601(since)}...")
-    df = fetch_ohlcv(exchange, args.symbol, args.timeframe, since, args.limit)
 
-    # Zapis do katalogu bot_data/raw w root projektu
-    raw_dir = get_raw_dir()
-    safe_symbol = args.symbol.replace('/', '_')
-    filename = f"{safe_symbol}-{args.timeframe}.csv"
-    out_path = os.path.join(raw_dir, filename)
-    save_csv(df, out_path)
+def backoff_sleep(attempt: int) -> None:
+    """Łagodny backoff (max 30s)."""
+    time.sleep(min(30.0, 1.6 ** attempt))
 
-if __name__ == '__main__':
+
+def fetch_ohlcv_batches(
+    ex: ccxt.Exchange,
+    symbol: str,
+    timeframe: str,
+    since_ms: int,
+    until_ms: Optional[int] = None,
+    limit: int = 1000,
+) -> Iterable[List[List[float]]]:
+    """
+    Generator batchy OHLCV (z retry) od 'since_ms' do 'until_ms' (jeśli podane).
+    """
+    tf_ms = TF_MS[timeframe]
+    cursor = since_ms
+    while True:
+        # przerwij, jeśli osiągnęliśmy limit czasu
+        if until_ms is not None and cursor > until_ms:
+            return
+
+        # kilka prób z backoffem
+        ohlcv = None
+        for i in range(6):
+            try:
+                ohlcv = ex.fetch_ohlcv(symbol, timeframe=timeframe, since=cursor, limit=limit)
+                break
+            except (ccxt.NetworkError, ccxt.DDoSProtection, ccxt.ExchangeNotAvailable) as e:
+                print(f"[fetch] WARN {type(e).__name__}: {e} (retry {i+1}/6)")
+                backoff_sleep(i)
+        if ohlcv is None:
+            # ostatnia próba – jeśli nadal None, rzuć wyjątek
+            raise RuntimeError("fetch_ohlcv failed after retries")
+
+        if not ohlcv:
+            return
+
+        yield ohlcv
+
+        # przesuwamy kursor na koniec batcha + jedna świeca
+        last_ts = ohlcv[-1][0]
+        cursor = last_ts + tf_ms
+
+        # rate limit friendly
+        time.sleep(ex.rateLimit / 1000.0)
+
+
+def _save_append(path: Path, new_df: pd.DataFrame) -> None:
+    """
+    Dopisuje nowe wiersze do RAW, deduplikuje po 'ts', sortuje.
+    Gwarantuje kolumny: ts, datetime, Open, High, Low, Close, Volume
+    """
+    cols = ["ts", "datetime", "Open", "High", "Low", "Close", "Volume"]
+
+    if path.exists():
+        old = pd.read_csv(path)
+        df = pd.concat([old, new_df], ignore_index=True)
+    else:
+        df = new_df.copy()
+
+    # Dedup + sort
+    if "ts" not in df.columns and "timestamp" in df.columns:
+        # legacy 'timestamp' → 'ts' (sekundy → ms)
+        t = df["timestamp"].astype(int)
+        df["ts"] = t.where(t > 3_000_000_000, t * 1000)
+
+    if "datetime" not in df.columns:
+        df["datetime"] = pd.to_datetime(df["ts"], unit="ms", utc=True)
+    else:
+        df["datetime"] = pd.to_datetime(df["datetime"], utc=True)
+
+    df = df.drop_duplicates(subset=["ts"]).sort_values("ts")
+
+    for c in cols:
+        if c not in df.columns:
+            if c == "datetime":
+                df["datetime"] = pd.to_datetime(df["ts"], unit="ms", utc=True)
+            else:
+                df[c] = pd.NA
+
+    df = df[cols]
+    df.to_csv(path, index=False)
+
+
+# === Main CLI ===
+def main():
+    ap = argparse.ArgumentParser(description="Pobiera OHLCV do RAW (z resume) – Binance Futures")
+    ap.add_argument("symbol", help="np. BTC/USDT, BTC_USDT lub BTCUSDT")
+    ap.add_argument("timeframe", choices=list(TF_MS.keys()))
+    ap.add_argument("--start", required=True, help="Początek zakresu w UTC, np. 2024-01-01")
+    ap.add_argument("--end", help="Koniec zakresu w UTC (opcjonalnie), np. 2024-06-30")
+    ap.add_argument("--limit", type=int, default=1000, help="Limit świec na jeden request (domyślnie 1000)")
+    ap.add_argument("--exchange", default="binance", choices=["binance"], help="Na razie wspieramy binance")
+    ap.add_argument("--market", default="future", choices=["future", "spot"], help="Typ rynku dla CCXT")
+    args = ap.parse_args()
+
+    symbol = to_ccxt_symbol(args.symbol)
+    tf = args.timeframe
+    tf_ms = TF_MS[tf]
+
+    # Daty → ms
+    start_dt = pd.to_datetime(args.start, utc=True)
+    since_ms = int(start_dt.timestamp() * 1000)
+    until_ms = None
+    if args.end:
+        end_dt = pd.to_datetime(args.end, utc=True)
+        until_ms = int(end_dt.timestamp() * 1000)
+
+    # CCXT client
+    if args.exchange == "binance":
+        ex = ccxt.binance({
+            "enableRateLimit": True,
+            "options": {"defaultType": "future" if args.market == "future" else "spot"},
+        })
+    else:
+        raise NotImplementedError("Tylko binance na tę chwilę")
+
+    # Plik RAW + resume
+    out_path = raw_filename(symbol, tf)
+    ensure_parent(out_path)
+
+    last_in_file = last_ts_from_file(out_path)
+    if last_in_file is not None and last_in_file >= since_ms:
+        since_ms = last_in_file + tf_ms
+        print(f"[fetch] Resume from {pd.to_datetime(since_ms, unit='ms', utc=True)}")
+
+    # Główny loop
+    buffers: list[pd.DataFrame] = []
+    total_rows = 0
+    try:
+        for batch in fetch_ohlcv_batches(ex, symbol, tf, since_ms, until_ms, limit=args.limit):
+            df = pd.DataFrame(batch, columns=["ts", "Open", "High", "Low", "Close", "Volume"])
+            df["datetime"] = pd.to_datetime(df["ts"], unit="ms", utc=True)
+            buffers.append(df)
+
+            if len(buffers) >= 12:  # co kilka batchy flush – zmniejsza zużycie RAM
+                flush = pd.concat(buffers, ignore_index=True)
+                _save_append(out_path, flush)
+                total_rows += len(flush)
+                buffers = []
+                print(f"[flush] {total_rows} rows written → {out_path}")
+
+        if buffers:
+            flush = pd.concat(buffers, ignore_index=True)
+            _save_append(out_path, flush)
+            total_rows += len(flush)
+            print(f"[flush] {total_rows} rows written → {out_path}")
+
+        print(f"[done] RAW saved: {out_path} (rows appended: {total_rows})")
+
+    except Exception as e:
+        print(f"[error] {e}")
+        raise
+
+
+if __name__ == "__main__":
     main()
-
-# This code is part of a cryptocurrency trading bot project.
-# BGH approved

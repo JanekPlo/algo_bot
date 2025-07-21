@@ -9,7 +9,7 @@ data:
 
 # Parametry backtestu
 backtest:
-  cash: 100000         # początkowy kapitał w USD
+  cash: 1000000         # początkowy kapitał w USD
   commission: 0.002    # prowizja 0.2% na transakcję
   trade_on_close: true # czy realizować zlecenia na zamknięciu świecy
 
@@ -51,6 +51,21 @@ strategies:
         - 0.03
         - 0.05
       maximize: "Equity Final [$]"
+
+  short_trend_following:
+    run: {}
+    optimize:
+      fast_window:    [20, 50, 100]
+      slow_window:    [100, 150, 200]
+      atr_multiplier: [1.0, 1.5, 2.0, 2.5]
+      maximize: 'Equity Final [$]'
+
+  simple_momentum:
+    run: {}
+    optimize:
+      short_window: [5, 10, 15, 20, 25]
+      long_window:  [30, 40, 50, 60]
+      maximize: 'Equity Final [$]'
 
 # Możesz dodać dodatkowe sekcje:
 # external_data: API/ścieżki do indeksów Fear&Greed, open interest itp.

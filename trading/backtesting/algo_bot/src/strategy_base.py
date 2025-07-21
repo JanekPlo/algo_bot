@@ -1,72 +1,88 @@
-"""
-strategy_base.py – definicja abstrakcyjnej klasy strategii zgodnej z koncepcją RBI.
+# src/strategy_base.py
+from __future__ import annotations
 
-Rola pliku w szkielecie:
-- Narzuca jednolity interfejs dla wszystkich strategii (Research → Backtest → Implement).
-- Każda strategia dziedziczy po tej klasie, implementuje własną logikę sygnałów.
-- Ułatwia integrację z modułem backtester i executor.
-
-Kluczowe metody:
-- __init__: przyjmuje dane OHLCV oraz słownik parametrów.
-- generate_signals: abstrakcyjna metoda, wypełnia wektor sygnałów (1 = long, -1 = short, 0 = brak pozycji).
-- get_signals: zwraca sygnały, wywołuje generate_signals przy pierwszym dostępie.
-- optionally: helpery do ewaluacji, wizualizacji lub metryk (można rozbudować).
-"""
 from abc import ABC, abstractmethod
-from typing import Dict, Any
+from dataclasses import dataclass, fields, is_dataclass
+from types import SimpleNamespace
+from typing import Any, Optional, Type
+
 import pandas as pd
+
+
+@dataclass
+class Signal:
+    """
+    Minimalny sygnał, który runner potrafi zrozumieć.
+    - action: 'enter' | 'exit' | None
+    - side:   'long'  | 'short' | None
+    - size:   jeśli None, runner użyje domyślnego sizingu (np. --size_usdt)
+    - tp/sl:  jeśli None, runner użyje globalnych ustawień (np. --tp_pct/--sl_pct)
+    - meta:   dowolne dodatki do logów / journala (np. wartości wskaźników)
+    """
+    action: Optional[str] = None
+    side:   Optional[str] = None
+    size:   Optional[float] = None
+    tp_pct: Optional[float] = None
+    sl_pct: Optional[float] = None
+    meta:   Optional[dict[str, Any]] = None
+
 
 class StrategyBase(ABC):
     """
-    Abstrakcyjna klasa bazowa dla strategii tradingowych.
-    Każda strategia powinna implementować metodę generate_signals().
+    Jednolity interfejs strategii (backtest + live).
+    Każda strategia:
+      - definiuje ParamSchema (opcjonalnie; dataclass),
+      - implementuje required_features() oraz on_bar(df) -> Signal.
     """
-    def __init__(self, data: pd.DataFrame, params: Dict[str, Any]):
-        """
-        Inicjalizacja strategii.
+    ParamSchema: Optional[Type] = None  # np. dataclass z parametrami
 
-        Args:
-            data (pd.DataFrame): OHLCV DataFrame z kolumnami ['Open','High','Low','Close','Volume'].
-            params (dict): Parametry strategii, np. {'window':21, 'threshold':0.05}.
+    def __init__(self, params: dict[str, Any] | Any = None) -> None:
         """
-        # Surowe dane cenowe (DataFrame index = datetime)
-        self.data = data.copy()
-        # Parametry strategii przekazane przez użytkownika
-        self.params = params
-        # Miejsce na sygnały: 1=wejście long, -1=wejście short, 0=flat
-        self.signals: pd.Series = pd.Series(0, index=self.data.index, dtype="int8")
+        params: dict z parametrami lub instancja ParamSchema (jeśli ją masz).
+        """
+        if params is None:
+            params = {}
+
+        if self.ParamSchema is not None:
+            if is_dataclass(self.ParamSchema) and not isinstance(params, self.ParamSchema):
+                # waliduj przez dataclass
+                allowed = {f.name for f in fields(self.ParamSchema)}
+                filtered = {k: v for k, v in dict(params).items() if k in allowed}
+                self.p = self.ParamSchema(**filtered)  # type: ignore
+            else:
+                # już zainstancjonowane
+                self.p = params
+        else:
+            # brak schematu – przyjmij wszystko
+            self.p = SimpleNamespace(**dict(params))
+
+    # ----- interfejs, który runner/backtester może wołać -----
+
+    @staticmethod
+    def required_features() -> set[str]:
+        """
+        Jakich kolumn/feature'ów wymaga strategia w df?
+        Domyślnie Close, ale można rozszerzyć (np. {'Close','ATR','EMA_fast','EMA_slow'}).
+        """
+        return {"Close"}
+
+    def init(self, state: Any) -> None:
+        """
+        Jednorazowa inicjalizacja (opcjonalna). Backtester/live może przekazać swój 'state'.
+        """
+        return None
 
     @abstractmethod
-    def generate_signals(self) -> None:
+    def on_bar(self, df: pd.DataFrame) -> Signal:
         """
-        Główna logika strategii - ustala sygnały wejścia/wyjścia.
-        Po wywołaniu self.signals będzie wypełniona wartościami 1, -1 lub 0.
+        Główna logika – df zawiera ostatnie N świec (zamknięte!). Użyj df.iloc[-1].
+        Zwróć Signal(action, side, ...).
         """
-        ...
+        raise NotImplementedError
 
-    def get_signals(self) -> pd.Series:
-        """
-        Zwraca sygnały strategii. Jeśli nie wygenerowano jeszcze sygnałów,
-        wywołuje generate_signals().
+    # ----- małe udogodnienia -----
 
-        Returns:
-            pd.Series: sygnały dla każdego punktu czasowego.
-        """
-        # Generujemy sygnały tylko raz
-        if (self.signals == 0).all():
-            self.generate_signals()
-        return self.signals
-
-    def summary(self) -> pd.DataFrame:
-        """
-        Opcjonalna metoda do szybkiego podsumowania sygnałów:
-        liczbą sygnałów long/short, procentowym udziałem pozycji.
-        Można nadpisać lub rozbudować.
-        """
-        summary = {
-            'total_bars': len(self.signals),
-            'long_signals': int((self.signals == 1).sum()),
-            'short_signals': int((self.signals == -1).sum()),
-            'flat_bars': int((self.signals == 0).sum()),
-        }
-        return pd.DataFrame.from_dict(summary, orient='index', columns=['value'])
+    @property
+    def side(self) -> Optional[str]:
+        """Jeśli w parametrach jest 'side', można do niego wygodnie sięgnąć jak dotąd w live."""
+        return getattr(self.p, "side", None)
