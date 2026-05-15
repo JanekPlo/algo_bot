@@ -1,8 +1,5 @@
 # tests/conftest.py
-# Dodajemy katalog główny projektu do sys.path, aby importy z 'src' i 'strategies' działały
-import sys
-import os
-
-PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
-if PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, PROJECT_ROOT)
+# Po decyzji A (flatten + algo_bot package) sys.path hack nie jest potrzebny —
+# pakiet algo_bot jest importowalny po `pip install -e .` (faza 1, decyzja B).
+# Plik zostawiamy pusty: pytest go automatycznie zaladuje gdy bedziemy chcieli
+# dodac shared fixtures.

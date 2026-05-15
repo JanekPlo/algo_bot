@@ -1,4 +1,4 @@
-# src/telemetry/journal.py
+# algo_bot/telemetry/journal.py
 import csv, json
 from pathlib import Path
 from datetime import datetime, timezone

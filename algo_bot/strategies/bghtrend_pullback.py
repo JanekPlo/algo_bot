@@ -1,4 +1,4 @@
-# strategies/bghtrend_pullback.py
+# algo_bot/strategies/bghtrend_pullback.py
 from __future__ import annotations
 from dataclasses import dataclass
 from typing import Tuple
@@ -6,9 +6,9 @@ from typing import Tuple
 import numpy as np
 import pandas as pd
 
-from src.strategy_base import StrategyBase, Signal
+from algo_bot.strategy_base import StrategyBase, Signal
 
-from indicators import ema, rsi, t3, atr, xtrender_components
+from algo_bot.indicators import ema, rsi, t3, atr, xtrender_components
 
 # =========================
 # Paramy

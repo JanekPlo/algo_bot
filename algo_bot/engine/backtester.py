@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# src/engine/backtester.py
+# algo_bot/engine/backtester.py
 from __future__ import annotations
 
 import os
@@ -15,7 +15,7 @@ import pandas as pd
 from backtesting import Backtest
 from backtesting import Strategy as BTStrategy
 
-from src.strategy_base import StrategyBase
+from algo_bot.strategy_base import StrategyBase
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, os.pardir))
 RAW_DIR = os.path.join(PROJECT_ROOT, "bot_data", "processed")
@@ -62,11 +62,11 @@ def load_ohlcv_csv(symbol: str, timeframe: str) -> pd.DataFrame:
 # ------------------------------
 def resolve_strategy_class(name: str):
     """
-    Ładuje strategię z strategies.<name>
+    Ładuje strategię z algo_bot.strategies.<name>
     1) preferuje class Strategy (API oparte o StrategyBase)
     2) wsteczna zgodność: CamelCase (np. simple_momentum -> SimpleMomentum)
     """
-    module = importlib.import_module(f"strategies.{name}")
+    module = importlib.import_module(f"algo_bot.strategies.{name}")
 
     if hasattr(module, "Strategy"):
         return getattr(module, "Strategy")
@@ -75,7 +75,7 @@ def resolve_strategy_class(name: str):
     if hasattr(module, class_name):
         return getattr(module, class_name)
 
-    raise AttributeError(f"Module strategies.{name} doesn't expose class Strategy or {class_name}")
+    raise AttributeError(f"Module algo_bot.strategies.{name} doesn't expose class Strategy or {class_name}")
 
 
 def coerce_params(StratClass, params_dict: Dict[str, Any]) -> Any:

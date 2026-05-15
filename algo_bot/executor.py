@@ -10,8 +10,15 @@ Opis:
 - Zapisuje statystyki i dane pomocnicze do katalogu results
 
 Użycie example:
-    python3 -m src.executor --symbol BTC_USDT --timeframe 4h --strategy bollinger_band_breakout_short
-    python3 -m src.executor -s ETH_USDT -t 1h -st simple_momentum -o
+    python3 -m algo_bot.executor --symbol BTC_USDT --timeframe 4h --strategy bollinger_band_breakout_short
+    python3 -m algo_bot.executor -s ETH_USDT -t 1h -st simple_momentum -o
+
+UWAGA — TODO dyskusja w fazie 1:
+  Import 'from algo_bot.backtester' pozostaje broken (1:1 jak bylo przed flatten —
+  poprzednio 'from src.backtester' tez nie istnialo, prawdziwy backtester to engine/backtester).
+  Funkcja 'optimize_backtest' tez nie istnieje (logika opt. zyje w algo_bot.engine.sweep).
+  Decyzja: czy ten plik deprecation i polegamy na algo_bot.engine.backtester:main(),
+  czy migrujemy executor zeby uzywal engine/backtester + sweep zgodnie z nowa architektura.
 """
 import os
 import sys
@@ -20,12 +27,12 @@ import importlib
 import yaml
 from datetime import datetime
 
-# Dodaj project root do sys.path
+# PROJECT_ROOT uzywany tylko do liczenia sciezek do data/results.
+# sys.path hack usuniety: po `pip install -e .` algo_bot jest importowalne globalnie.
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
-sys.path.insert(0, PROJECT_ROOT)
 
-from src.data_loader import load_csv_ohlcv
-from src.backtester import run_backtest, optimize_backtest
+from algo_bot.data_loader import load_csv_ohlcv
+from algo_bot.backtester import run_backtest, optimize_backtest  # FIXME (decyzja faza 1): broken — patrz docstring
 
 
 def parse_args():
@@ -72,9 +79,9 @@ def main():
     df = load_csv_ohlcv(data_path)
 
     # Dynamiczny import strategii
-    print(f">>> Importing strategy module: strategies.{args.strategy}")
+    print(f">>> Importing strategy module: algo_bot.strategies.{args.strategy}")
     try:
-        strategy_module = importlib.import_module(f"strategies.{args.strategy}")
+        strategy_module = importlib.import_module(f"algo_bot.strategies.{args.strategy}")
     except Exception as e:
         print(f"!!! Błąd importu strategii: {e}")
         sys.exit(1)

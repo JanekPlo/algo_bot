@@ -1,10 +1,10 @@
-# strategies/template.py
+# algo_bot/strategies/template.py
 from __future__ import annotations
 
 from dataclasses import dataclass
 import pandas as pd
 
-from src.strategy_base import StrategyBase, Signal
+from algo_bot.strategy_base import StrategyBase, Signal
 
 name = "template"
 

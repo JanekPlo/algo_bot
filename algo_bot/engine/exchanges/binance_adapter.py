@@ -1,4 +1,4 @@
-# src/exchanges/binance_adapter.py
+# algo_bot/engine/exchanges/binance_adapter.py
 import os, ccxt
 from typing import Any, Dict, List, Optional
 

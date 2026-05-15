@@ -1,4 +1,4 @@
-# src/strategy_base.py
+# algo_bot/strategy_base.py
 from __future__ import annotations
 
 from abc import ABC, abstractmethod

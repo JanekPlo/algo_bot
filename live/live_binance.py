@@ -9,9 +9,9 @@ try:
 except Exception:
     from backports.zoneinfo import ZoneInfo  # pip install backports.zoneinfo tzdata
 
-from src.strategy_loader import load_strategy
-from src.engine.exchanges.binance_adapter import BinanceFuturesAdapter
-from src.telemetry.journal import Journal
+from algo_bot.strategy_loader import load_strategy
+from algo_bot.engine.exchanges.binance_adapter import BinanceFuturesAdapter
+from algo_bot.telemetry.journal import Journal
 
 
 def ts() -> str:

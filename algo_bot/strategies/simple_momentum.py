@@ -1,10 +1,10 @@
-# strategies/simple_momentum.py
+# algo_bot/strategies/simple_momentum.py
 from __future__ import annotations
 
 from dataclasses import dataclass
 import pandas as pd
 
-from src.strategy_base import StrategyBase, Signal
+from algo_bot.strategy_base import StrategyBase, Signal
 
 name = "simple_momentum"
 

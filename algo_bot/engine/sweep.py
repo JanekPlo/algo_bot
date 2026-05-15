@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# src/engine/sweep.py
+# algo_bot/engine/sweep.py
 from __future__ import annotations
 
 import os, sys, json, math, random, csv, hashlib, itertools, importlib
@@ -14,8 +14,8 @@ except Exception:
     yaml = None
 
 # używamy istniejącego backtestera jako silnika
-from src.engine.backtester import run_backtest, save_outputs, run_id as make_run_id
-from src.strategy_base import StrategyBase
+from algo_bot.engine.backtester import run_backtest, save_outputs, run_id as make_run_id
+from algo_bot.strategy_base import StrategyBase
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, os.pardir))
 EXP_DIR = os.path.join(PROJECT_ROOT, "results", "experiments")
@@ -26,14 +26,14 @@ INDEX_CSV = os.path.join(EXP_DIR, "index.csv")
 # Strategy loader / ParamSchema
 # ------------------------------
 def resolve_strategy_class(name: str):
-    m = importlib.import_module(f"strategies.{name}")
+    m = importlib.import_module(f"algo_bot.strategies.{name}")
     if hasattr(m, "Strategy"):
         return getattr(m, "Strategy")
     # legacy CamelCase fallback
     cls_name = "".join(p.capitalize() for p in name.split("_"))
     if hasattr(m, cls_name):
         return getattr(m, cls_name)
-    raise AttributeError(f"strategies.{name} must expose Strategy (or {cls_name})")
+    raise AttributeError(f"algo_bot.strategies.{name} must expose Strategy (or {cls_name})")
 
 def coerce_params(StratClass, params_dict: Dict[str, Any]) -> Dict[str, Any]:
     """

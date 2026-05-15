@@ -1,5 +1,5 @@
 """
-src/data_loader.py – ujednolicony loader danych OHLCV.
+algo_bot/data_loader.py – ujednolicony loader danych OHLCV.
 
 Nowy tor pracy (dla PROCESSED):
 - load_processed(symbol, timeframe, ...) -> DataFrame z indeksem UTC i kolumnami OHLCV (+ ew. featury)

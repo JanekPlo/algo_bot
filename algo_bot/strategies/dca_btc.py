@@ -7,7 +7,7 @@ from typing import Optional
 import pandas as pd
 import math
 
-from src.strategy_base import StrategyBase, Signal
+from algo_bot.strategy_base import StrategyBase, Signal
 
 
 name = "dca_btc"
