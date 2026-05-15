@@ -1,27 +1,35 @@
-Biblioteka CCXT do pobierania danych z giełd
+# =============================================================================
+# requirements.txt — runtime dependencies dla algo_bot
+# Dev tooling (ruff, mypy, pytest-cov, pre-commit) trafi do pyproject.toml
+# w sekcji [project.optional-dependencies] po decyzji B.
+#
+# WAZNE: TA-Lib wymaga systemowej biblioteki libta-lib PRZED `pip install`:
+#   Ubuntu/WSL:  sudo apt install -y libta-lib-dev      (lub kompilacja ze zrodel)
+#   macOS:       brew install ta-lib
+#   Windows:     uzyc whl z https://github.com/cgohlke/talib-build/releases
+# =============================================================================
 
-ccxt>=2.8.58
-
-Przetwarzanie danych
-
+# --- Core: ingestion + processing ---
+ccxt>=2.8.58            # exchange API client (Binance/Bybit OHLCV + execution)
 pandas>=1.5.0
 numpy>=1.23.0
 
-Skrypt backtestów
+# --- Backtesting engine + indicators ---
+backtesting>=0.3.2      # https://kernc.github.io/backtesting.py/
+TA-Lib>=0.4.24          # wymaga systemowego libta-lib, patrz naglowek
 
-backtesting>=0.3.2
-TA-Lib>=0.4.24
+# --- Config + env ---
+PyYAML>=6.0             # poprawiona nazwa (poprzednio bledne 'yaml')
+python-dotenv>=1.0.0    # ladowanie .env w live_binance.py
 
-Konfiguracja i serializacja YAML
+# --- Time zones (Europe/Warsaw w live_binance) ---
+tzdata>=2024.1          # potrzebne dla zoneinfo na Windowsie
 
-yaml>=6.0
+# --- Visualization (notebooks + research) ---
+matplotlib>=3.6.0       # poprawiona nazwa (poprzednio literowka 'tmatplotlib')
 
-Testy jednostkowe
-
-distlib>=0.3.6
+# --- Testing ---
 pytest>=7.4.0
 
-(opcjonalnie) jeśli planujesz wizualizacje
-
-tmatplotlib>=3.6.0
-
+# UWAGA: usunieto 'distlib>=0.3.6' (brak uzycia w kodzie, prawdopodobnie przypadek).
+# Jesli pamietasz po co to bylo, dodaj z powrotem + komentarz dlaczego.

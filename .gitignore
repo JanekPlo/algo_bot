@@ -1,0 +1,67 @@
+# =============================================================================
+# .gitignore — algo_bot
+# Zakres: cale repozytorium (rootowe). Project-specific ignory (bot_data, results)
+# siedza w trading/backtesting/algo_bot/.gitignore — zostana skonsolidowane po flatten.
+# =============================================================================
+
+# === Secrets — NIGDY do repo ===
+.deploy_key
+.deploy_key.pub
+.env
+.env.local
+.env.*.local
+!.env.example
+*.pem
+*.key
+
+# === Python — cache i artifacts ===
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+.eggs/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# === Virtual environments ===
+.venv/
+venv/
+env/
+.python-version
+
+# === IDE / Editor ===
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# === OS ===
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# === Jupyter ===
+.ipynb_checkpoints/
+*-checkpoint.ipynb
+
+# === Logs (lokalne, nie commitujemy) ===
+*.log
+logs/
+
+# === Dane runtime — generowane lokalnie ===
+bot_data/raw/*.csv
+bot_data/processed/*.csv
+!bot_data/**/.gitkeep
+
+# === Wyniki backtestow / experimentow / live ===
+results/
+!results/.gitkeep
