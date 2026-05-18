@@ -1,140 +1,146 @@
-Algo Bot — RBI Framework
+# algo_bot — RBI Trading Framework
 
-Repozytorium: https://github.com/JanekPlo/algo_bot
+> Quantitative trading framework dla kryptowalutowych perpetual futures, zbudowany wokół metodologii RBI (**R**esearch → **B**acktest → **I**mplement). Część projektu Digital Alchemy.
 
-Lekki framework do badania, testowania i uruchamiania kryptowalutowych strategii tradingowych według modelu RBI (Research → Backtest → Implement).
+[![Status](https://img.shields.io/badge/status-alpha-orange)]()
+[![Python](https://img.shields.io/badge/python-3.11%2B-blue)]()
+[![License](https://img.shields.io/badge/license-MIT-green)]()
 
-📋 Spis treści
+## Co tu jest
 
-Opis projektu
+Lekki framework do:
+- **Pobierania** historycznych danych OHLCV z giełd (Binance, Bybit) przez CCXT
+- **Przetwarzania** surowych danych, liczenia wskaźników technicznych
+- **Backtestowania** strategii (backtesting.py) z grid/random search po parametrach
+- **Walk-forward analysis** dla rygorystycznego out-of-sample testowania *(faza 2)*
+- **Live trading** na Binance Futures z hybrid TP/SL i journalingiem
+- **Deployment na VPS** z monitoringiem 24/7 *(faza 5)*
 
-Wymagania
+## Quick start
 
-Instalacja
-
-Pobieranie danych
-
-Przetwarzanie danych
-
-Strategie
-
-Backtester i Executor
-
-Analiza wyników
-
-Testy
-
-Contributing
-
-Opis projektu
-
-Ten projekt zapewnia spójny szkielet do:
-
-Pobierania historycznych danych OHLCV z giełd (Binance, Bybit) przez CCXT (src/fetch_data.py, src/data_loader.py).
-
-Przetwarzania surowych danych, liczenia wskaźników technicznych i łączenia źródeł w jednorodne pliki CSV (src/process_data.py).
-
-Backtestowania strategii (Backtesting.py) z możliwością optymalizacji (src/backtester.py, src/executor.py).
-
-Tworzenia i przechowywania strategii w katalogu strategies/. Każdy plik to osobna klasa dziedzicząca po Strategy.
-
-Analizy wyników w Jupyter Notebookach (notebooks/).
-
-Wymagania
-
-Python 3.8+
-
-Zainstalowane dependencies z requirements.txt:
-
-pip install -r requirements.txt
-
-Instalacja
-
+```bash
+# 1. Clone
 git clone git@github.com:JanekPlo/algo_bot.git
 cd algo_bot
-pip install -r requirements.txt
 
-Pobieranie danych
+# 2. Stwórz conda env (instaluje Python 3.11 + TA-Lib z conda-forge)
+make env
+conda activate algo_bot
 
-Skrypt CLI do pobierania surowych danych BTC/USDT z Binance:
+# 3. Zainstaluj pakiet + dev deps
+make install
 
-python3 src/fetch_data.py BTC/USDT 4h --start 2020-01-01
+# 4. Sprawdź setup
+algo-backtest --help
+make check     # ruff + mypy + pytest
+```
 
-symbol: para rynkowa (BTC/USDT)
+Pełny walkthrough setupu: [docs/guides/getting-started.md](docs/guides/getting-started.md).
 
-timeframe: interwał świecy (1h, 4h, 1d)
+## Codzienna praca
 
-start: data początkowa (YYYY-MM-DD)
+```bash
+# Backtest pojedynczej strategii
+algo-backtest --symbol BTC/USDT --timeframe 4h --strategy bghtrend_pullback \
+    --params '{"ema_fast":21,"ema_mid":89}'
 
-Surowe pliki zapisują się w bot_data/raw/.
+# Sweep parametrów (grid lub random search)
+algo-sweep --strategy bghtrend_pullback --symbols BTC/USDT --timeframes 4h \
+    --start 2020-01-01 --end 2025-01-01 --space_file config/bghtrend_b1.yaml
 
-Przetwarzanie danych
+# Testy / lint / typecheck
+make test
+make lint
+make typecheck
+make check       # wszystko razem (CI-style)
+```
 
-Standaryzacja, liczenie wskaźników (BBANDS, RSI) i zapis gotowych CSV do bot_data/processed/:
+Więcej: [docs/guides/daily-workflow.md](docs/guides/daily-workflow.md), [docs/guides/makefile-cheatsheet.md](docs/guides/makefile-cheatsheet.md).
 
-python3 src/process_data.py
+## Dokumentacja
 
-Konfiguracja wskaźników w config/config.yaml (sekcja defaults.features).
+Pełna dokumentacja w [`docs/`](docs/README.md):
 
-Strategie
+- **[ROADMAP](docs/ROADMAP.md)** — plan rozwoju w 5 fazach (Foundation → Production na VPS)
+- **[ARCHITECTURE](docs/ARCHITECTURE.md)** — warstwy systemu, mapa modułów
+- **[Guides](docs/README.md#mapa-docs)** — getting started, daily workflow, makefile cheatsheet
+- **[Reference](docs/reference/package-overview.md)** — encyklopedia (per moduł, config, metryki)
+- **[Concepts](docs/concepts/glossary.md)** — koncepty, glossary, methodology
+- **[ADR](docs/adr/README.md)** — Architecture Decision Records (dlaczego coś jest tak)
+- **[CHANGELOG](docs/CHANGELOG.md)** — historia zmian
 
-Katalog strategies/ zawiera pliki-strategie:
+## Struktura repozytorium
 
-bollinger_band_breakout_short.py: przerwanie poniżej dolnego pasma Bollingera → short z TP/SL.
+```
+algo_bot/                              # repo root (= ten plik)
+├── algo_bot/                          # główny pakiet Python
+│   ├── strategy_base.py               # StrategyBase + Signal — unified API
+│   ├── strategy_loader.py             # dynamic loading strategii
+│   ├── data_loader.py                 # CSV OHLCV reader/writer
+│   ├── fetch_data.py                  # CCXT → bot_data/raw/*.csv
+│   ├── process_data.py                # raw → processed z featurami
+│   ├── executor.py                    # legacy CLI (FIXME)
+│   ├── funding.py                     # funding rate (perp futures)
+│   ├── engine/
+│   │   ├── backtester.py              # silnik backtestowy (wrapper na backtesting.py)
+│   │   ├── sweep.py                   # grid + random search
+│   │   └── exchanges/binance_adapter  # CCXT wrapper
+│   ├── strategies/                    # implementacje strategii
+│   │   ├── bghtrend_pullback.py       # MVP candidate (trend + pullback + xtrender)
+│   │   └── ... (6 więcej)
+│   ├── indicators/                    # custom wskaźniki (xtrender, t3, ema, rsi, atr)
+│   └── telemetry/journal.py           # CSV journal trades + equity
+│
+├── live/live_binance.py               # live trading loop (Binance Futures)
+├── tests/                             # pytest
+├── notebooks/                         # research notebooks (Jupyter)
+├── scripts/                           # eksperymenty jednorazowe
+├── config/                            # YAML configi strategii + globalne
+├── docs/                              # dokumentacja (patrz docs/README.md)
+├── bot_data/                          # dane (gitignored)
+│   ├── raw/                           # surowe OHLCV
+│   └── processed/                     # z featurami
+├── results/                           # wyniki backtestów/sweepów/live (gitignored)
+│
+├── pyproject.toml                     # build + deps + tooling config (hatchling)
+├── environment.yml                    # conda env (Python + TA-Lib)
+├── requirements.txt                   # lockfile generowany przez pip-tools
+├── Makefile                           # make help dla listy targetów
+├── .gitignore
+└── README.md                          # ten plik
+```
 
-simple_momentum.py: klasyczne przecięcie dwóch średnich.
+Pełny opis: [docs/reference/package-overview.md](docs/reference/package-overview.md).
 
-Każdy plik definiuje klasę dziedziczącą z backtesting.Strategy
+## Wymagania
 
-Backtester i Executor
+- **Python 3.11+** (3.10 EOL paź 2026)
+- **conda** lub **miniconda** (do envu z TA-Lib)
+- **git**
+- (opcjonalnie) konto Binance z API key dla live tradingu
 
-Backtester (src/backtester.py):
+System: testowane na WSL2 Ubuntu 22+. Powinno działać na Linux/macOS natywnie. Windows native nieoficjalnie wspierany (WSL preferowany).
 
-run_backtest(data, StrategyClass, ...) → pojedynczy test
+## Status projektu
 
-optimize_backtest(data, StrategyClass, optimize_kwargs, ...) → optymalizacja parametrów
+**Faza 1: Foundation** — w trakcie. Patrz [ROADMAP](docs/ROADMAP.md) i [CHANGELOG](docs/CHANGELOG.md).
 
-Executor (src/executor.py): uniwersalny CLI, łączy wszystkie kroki:
+Definicja sukcesu MVP: jedna strategia (kandydat: `bghtrend_pullback`) przejdzie ścieżkę research → in-sample backtest → walk-forward → testnet → mainnet (mały kapitał) → VPS 24/7 z alertami.
 
-python3 -m src.executor \
-  --symbol BTC_USDT \
-  --timeframe 4h \
-  --strategy bollinger_band_breakout_short
+## Contributing
 
-Flaga -o do optymalizacji.
+Repo jest aktualnie pojedynczego autora. Workflow w [docs/guides/daily-workflow.md](docs/guides/daily-workflow.md). Decyzje architektoniczne są dokumentowane jako [ADRs](docs/adr/README.md) — nowe znaczące decyzje wymagają nowego ADR.
 
-Tworzy JSON (results/*.json), equity curve (results/*_equity.csv), log transakcji (results/*_trades.csv).
+Konwencje:
+- Kod: ruff (lint + format), mypy strict-on-new-modules
+- Docstrings: Google style
+- Commits: imperative mood, conventional commits ish (`feat:`, `fix:`, `docs:`, `chore:`, `refactor:`, `build:`)
+- Branches: aktualnie tylko `master`, feature branches gdy CI/PRs zostaną dodane
 
-Analiza wyników
+## Licencja
 
-Notebooki w notebooks/:
+MIT. Autor: [JanekPlo](https://github.com/JanekPlo).
 
-01_data_exploration.ipynb
+---
 
-02_bollinger_analysis.ipynb
-
-Uruchom Jupyter:
-
-jupyter lab notebooks/02_bollinger_analysis.ipynb
-
-Testy
-
-Proste testy unit i integration w tests/:
-
-pytest -q
-
-Contributing
-
-Fork repozytorium
-
-Stwórz feature branch (git checkout -b feature/xyz)
-
-Wprowadź zmiany, napisz testy
-
-git push origin feature/xyz
-
-Otwórz Pull Request na GitHubie
-
-Autor: JanekPlo
-Licencja: MIT
-
+*"Możemy nie mamy miliardów jak Jane Street, ale musimy działać jak oni, a nie na odwal się."* — zasada projektu
