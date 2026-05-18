@@ -1,4 +1,30 @@
-# algo_bot/strategy_base.py
+"""
+algo_bot/strategy_base.py
+
+Bazowa klasa wszystkich strategii w algo_bot + dataclass Signal jako format
+zwracanej decyzji. Strategia implementuje pojedynczą metodę:
+
+    def on_bar(self, df: pd.DataFrame) -> Signal
+
+Silniki (algo_bot/engine/backtester.py i live/live_binance.py) wywołują tę metodę
+na każdej zamkniętej świecy. Strategia jest agnostyczna — nie wie czy uruchamiana
+w backteście czy live.
+
+Public API:
+- Signal — dataclass z polami: action, side, size, tp_pct, sl_pct, meta
+- StrategyBase — abstract base class z ParamSchema (dataclass), required_features(),
+  init(), on_bar() (abstract)
+
+Konwencja parametrów:
+- Strategia deklaruje ParamSchema = SomeDataclass
+- StrategyBase.__init__ filtruje przekazane params do pól ParamSchema
+- Self.p to instancja ParamSchema (lub SimpleNamespace gdy brak schematu)
+
+See also:
+- docs/adr/003-strategybase-signal-api.md (rationale + design)
+- docs/reference/modules/strategy-base.md (TBD — deep reference)
+- docs/concepts/glossary.md (Signal, hold/enter/exit semantics)
+"""
 from __future__ import annotations
 
 from abc import ABC, abstractmethod

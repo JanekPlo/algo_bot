@@ -1,4 +1,28 @@
-# algo_bot/engine/exchanges/binance_adapter.py
+"""
+algo_bot/engine/exchanges/binance_adapter.py
+
+CCXT wrapper dla Binance Futures (USDT-M perpetuals). Wstrzykuje API keys,
+ustawia sandbox mode (testnet/mainnet), ładuje markets. Używany przez live runner
+i fetch_data.
+
+Public API:
+- BinanceFuturesAdapter(api_key, api_secret, testnet=True)
+    Klasa wrapper. Atrybuty:
+    - self.exchange: ccxt.binance — natywny CCXT klient
+    Metody: typowo używane przez `self.exchange.<method>` (CCXT API).
+
+CCXT methods often used:
+- fetch_ohlcv(symbol, timeframe, since, limit)
+- create_market_order(symbol, side, amount, params={})
+- create_order(symbol, type, side, amount, price, params={'stopPrice': ..., 'reduceOnly': True})
+- cancel_order(order_id, symbol)
+- fetch_position(symbol)
+
+See also:
+- docs/adr/004-hybrid-tp-sl-mode.md (jak używamy w live)
+- ccxt docs: https://docs.ccxt.com/
+- Binance Futures API: https://binance-docs.github.io/apidocs/futures/en/
+"""
 import os, ccxt
 from typing import Any, Dict, List, Optional
 

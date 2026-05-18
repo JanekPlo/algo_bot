@@ -1,4 +1,42 @@
-# algo_bot/strategies/bghtrend_pullback.py
+"""
+algo_bot/strategies/bghtrend_pullback.py
+
+MVP candidate strategia. Trend + pullback + xtrender momentum confirm + ATR trail.
+
+Teza ekonomiczna:
+W silnym trendzie cena okresowo "wycofuje się" do EMA89 (pullback), po czym
+kontynuuje ruch trendu. Wchodzimy na pullbacku w kierunku trendu, gdy xtrender
+oscillator potwierdza momentum. Wychodzimy na ATR-based trailing stop albo
+target R:R (1:1.5).
+
+Filtry entry:
+1. Trend definowany przez 3 EMA (21/89/200) — kierunek = nachylenie EMA89/200
+2. Pullback — cena w okolicy EMA89 (ATR-based threshold)
+3. Xtrender — short_t3 > deadzone (long entry) lub < -deadzone (short entry)
+4. Rebound — opcjonalne: ostatnia świeca pokazała powrót w kierunku trendu
+
+Risk management:
+- SL: EMA89 ± 0.5 ATR (off the pullback EMA)
+- TP: 1.5x risk (entry - SL distance × 1.5)
+- Trail: ATR-based, zacieśnia SL gdy cena rośnie
+- Cooldown: 10 świec po SL przed ponownym entry
+- Stale exit: timeout 40 świec gdy brak momentum (deadzone)
+
+Parametry (ParamSchema = XtrenderPullbackParams):
+- ema_fast=21, ema_mid=89, ema_slow=200
+- pullback_lookback=15, pullback_atr_mult=0.15
+- short_l*, long_l* — xtrender params
+- rr_target=1.5, sl_atr_mult=0.5, trail_atr_mult=2.0
+- stale_max_bars=40, cooldown_bars=10
+- side: 'long'|'short'|'both'
+
+Tuning (sweep): patrz config/bghtrend_b1..b4.yaml (4 warianty przestrzeni).
+
+See also:
+- docs/concepts/glossary.md (pullback, ATR trail, xtrender)
+- docs/reference/modules/strategy-bghtrend-pullback.md (TBD — deep walkthrough)
+- ROADMAP faza 2 (walk-forward MVP na tej strategii)
+"""
 from __future__ import annotations
 from dataclasses import dataclass
 from typing import Tuple

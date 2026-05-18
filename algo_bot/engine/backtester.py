@@ -1,5 +1,35 @@
 #!/usr/bin/env python3
-# algo_bot/engine/backtester.py
+"""
+algo_bot/engine/backtester.py
+
+Główny silnik backtestowy algo_bot. Wrapper na backtesting.py adaptujący
+StrategyBase API (on_bar -> Signal) do BTStrategy z backtesting.py.
+
+Public API:
+- run_backtest(symbol, timeframe, strategy, params, ...) -> (stats, equity_df, trades_df)
+    Pojedynczy backtest. Zwraca metryki + equity curve + log transakcji
+    (z opcjonalnymi mikrostructure adjustments dla slippage/spread).
+- save_outputs(rid, symbol, timeframe, strategy, params_in, stats, equity, trades) -> str
+    Zapisuje wyniki do results/backtests/<run_id>/{summary.json, params.json, equity.csv, trades.csv}.
+- run_id(strategy, symbol, timeframe, params) -> str
+    Deterministyczny ID runu (timestamp + strategy + symbol + tf + hash params).
+
+Internal:
+- make_bt_wrapper(StratClass, params_obj) -> BTStrategy subclass
+    Adapter parsujący Signal na backtesting.py API (buy/sell/position.close).
+    Obsługuje TP/SL/trail, cooldown, same-bar TP-vs-SL priority.
+- adjust_trades_df(trades, spread_bps, slippage_bps, ...) -> DataFrame
+    Post-run adjustment dla mikrostructure (spread, slippage).
+
+CLI:
+- python -m algo_bot.engine.backtester --help
+- algo-backtest --help (po pip install -e .)
+
+See also:
+- docs/adr/003-strategybase-signal-api.md (Signal API)
+- docs/adr/005-backtesting-py-mvp-engine.md (rationale silnika)
+- docs/reference/modules/engine-backtester.md (TBD)
+"""
 from __future__ import annotations
 
 import os

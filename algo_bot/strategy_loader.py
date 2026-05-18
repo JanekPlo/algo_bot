@@ -1,4 +1,23 @@
-# algo_bot/strategy_loader.py
+"""
+algo_bot/strategy_loader.py
+
+Dynamic loading strategii po nazwie. Używane w CLI (--strategy bghtrend_pullback)
+i w live runnerze (load_strategy("bghtrend_pullback", params_dict)).
+
+Public API:
+- load_strategy(name: str, params: dict) -> StrategyBase
+    Ładuje algo_bot.strategies.<name>, waliduje że eksportuje Strategy klasę
+    dziedziczącą po StrategyBase, instancjuje z params.
+
+Walidacje:
+- Moduł musi eksportować klasę o nazwie 'Strategy' (konwencja od ADR-003)
+- Strategy musi dziedziczyć po StrategyBase (TypeError jeśli nie)
+- params filtrowane do pól ParamSchema (przypadkowe klucze ignorowane)
+
+See also:
+- docs/adr/003-strategybase-signal-api.md
+- algo_bot/strategy_base.py (StrategyBase + Signal)
+"""
 from __future__ import annotations
 
 import importlib

@@ -1,5 +1,33 @@
 #!/usr/bin/env python3
-# algo_bot/engine/sweep.py
+"""
+algo_bot/engine/sweep.py
+
+Sweep parametrów strategii — grid search albo random search. Wywołuje
+run_backtest per kombinacja parametrów, agreguje wyniki w results/experiments/index.csv.
+
+Public API:
+- expand_param_space(mode, space, n_samples, seed) -> Iterable[dict]
+    Generator kombinacji parametrów. mode='grid' lub 'random'.
+- gen_walk_forward_windows(df, train_bars, test_bars, step_bars) -> List[(start, end)]
+    Generator okien testowych dla walk-forward analysis (opcjonalny dla CLI).
+- extract_metrics(stats: dict) -> dict
+    Wyciąga podzbiór metryk z stats (Sharpe, Calmar, ...) do agregacji.
+- append_index_row(row: dict) -> None
+    Dopisuje wiersz do results/experiments/index.csv (csv.DictWriter).
+
+Konwencja przestrzeni parametrów (YAML/JSON):
+- grid mode: {"short":[5,9,13], "long":[21,34], ...}
+- random mode: {"short":{"type":"int","min":5,"max":25}, "long":{"type":"float","min":0.1,"max":2.0,"step":0.1}}
+
+CLI:
+- python -m algo_bot.engine.sweep --help
+- algo-sweep --help (po pip install -e .)
+
+See also:
+- docs/adr/005-backtesting-py-mvp-engine.md
+- docs/guides/running-sweep.md (TBD)
+- ROADMAP fasa 2 (walk-forward MVP)
+"""
 from __future__ import annotations
 
 import os, sys, json, math, random, csv, hashlib, itertools, importlib

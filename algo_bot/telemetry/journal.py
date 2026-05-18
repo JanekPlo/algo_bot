@@ -1,4 +1,33 @@
-# algo_bot/telemetry/journal.py
+"""
+algo_bot/telemetry/journal.py
+
+Journal — CSV log wszystkich akcji bota: trades (entries+exits z PnL) + equity
+snapshots (cena, pozycja, equity w czasie). Per run_id, w results/live/<run_id>/.
+
+Public API:
+- Journal(run_id, base_dir="results/live")
+    Klasa journala. Tworzy katalog results/live/<run_id>/ + headers CSV.
+- journal.log_entry(trade_id, symbol, timeframe, strategy, params, side, qty, entry_price)
+- journal.log_exit(trade_id, ..., entry_price, exit_price, reason, realized_pnl_usdt)
+- journal.snapshot_equity(symbol, timeframe, last_price, position, equity_usdt, ...)
+
+Format trades.csv kolumny:
+    ts_utc, ts_local, run_id, trade_id, symbol, timeframe, strategy, params,
+    side, qty, entry_price, exit_price, reason, realized_pnl_usdt
+
+Format equity.csv kolumny:
+    ts_utc, ts_local, run_id, symbol, timeframe, last_price, position,
+    equity_usdt, wallet_usdt, unrealized_usdt
+
+Konwencja czasu:
+- ts_utc — UTC, format "%Y-%m-%d %H:%M:%S"
+- ts_local — Europe/Warsaw timezone, ten sam format
+
+See also:
+- live/live_binance.py (główny consumer)
+- algo_bot/engine/backtester.py::save_outputs() (osobny output format dla backtestów)
+- docs/reference/modules/telemetry-journal.md (TBD)
+"""
 import csv, json
 from pathlib import Path
 from datetime import datetime, timezone

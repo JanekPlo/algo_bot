@@ -24,25 +24,45 @@ Faza 5: Production na VPS              → 1-2 tyg.
 
 **Cel:** repo jest porządne, dependencies dzialaja, mamy CI, mamy spójny system konfiguracji i wynik backtestu jest powtarzalny co do bitu.
 
-**Deliverables:**
-- [ ] Naprawiony `requirements.txt` (literówki: `tmatplotlib`, `yaml` → `PyYAML`; dodać `python-dotenv`, `backtesting`, `TA-Lib` wymaga osobnej instalacji systemowej — opisać w README)
-- [ ] `pyproject.toml` z editable install (`pip install -e .`), żeby porzucić `sys.path.insert` w skryptach
-- [ ] `Makefile` z komendami: `make fetch`, `make backtest`, `make sweep`, `make live`, `make test`
-- [ ] Risk management module (`src/risk/limits.py`): max drawdown stop, max concurrent positions, daily loss limit, position sizing oparty o ryzyko (% equity per trade, nie sztywny USDT)
-- [ ] Walk-forward analyzer (`src/engine/walkforward.py`) — out-of-sample, train/test split z rolowaniem okna
-- [ ] Standardowe metryki risk-adjusted (Sharpe, Sortino, Calmar, MAR, profit factor, recovery time) w wynikach backtestu — jeden moduł `src/metrics.py`
-- [ ] CI (GitHub Actions): pytest + ruff + mypy na każdym PR
-- [ ] Pre-commit hooks: ruff + black + isort + pytest na strategicznych testach
-- [ ] Logging zamiast `print` w całym kodzie (structured logs z `loguru` albo stdlib `logging`)
-- [ ] Strukturę katalogów wyrównać: `algo_bot/` → bezpośrednio w roocie repo (obecnie zagnieżdżone w `trading/backtesting/algo_bot/`)
+**Deliverables (kod):**
+- [x] Naprawiony `requirements.txt` (literówki: `tmatplotlib`, `yaml`; dodane `python-dotenv`, `tzdata`; TA-Lib z conda-forge nie z pip) — **DONE 2026-05-14**
+- [x] `pyproject.toml` (hatchling) z editable install (`pip install -e .`), porzucone `sys.path.insert` hacki — **DONE 2026-05-14** (decyzja B, ADR-002)
+- [x] `Makefile` z komendami: `make env`, `make install`, `make test`, `make lint`, `make typecheck`, `make check`, `make backtest`, `make sweep`, `make lock`, `make sync`, `make clean` — **DONE 2026-05-14**
+- [x] `environment.yml` — conda env `algo_bot` z Python 3.11 + TA-Lib z conda-forge — **DONE 2026-05-14**
+- [x] Strukturę katalogów wyrównać: `algo_bot/` w roocie (vs `trading/backtesting/algo_bot/`) — **DONE 2026-05-14** (decyzja A, ADR-001)
+- [x] Konfiguracja ruff (lint + format) i mypy (strict-on-new) w pyproject.toml — **DONE 2026-05-14**
+- [] Risk management module (`algo_bot/risk/limits.py`): max drawdown stop, max concurrent positions, daily loss limit, position sizing oparty o ryzyko (% equity per trade) — **decyzja E**
+- [ ] Walk-forward analyzer (`algo_bot/engine/walkforward.py`) — out-of-sample, train/test split z rolowaniem okna — **decyzja F**
+- [ ] Standardowe metryki risk-adjusted (Sharpe, Sortino, Calmar, MAR, profit factor, recovery time) — `algo_bot/metrics.py` — **decyzja D**
+- [ ] Logging framework + setup (`algo_bot/log.py`) zamiast `print` w całym kodzie — **decyzja C**
+- [ ] CI (GitHub Actions): `make check` na każdym PR/push
+- [ ] Pre-commit hooks: `.pre-commit-config.yaml` z ruff + mypy
+- [ ] Cleanup po decyzjach: `executor.py` FIXME (broken `optimize_backtest`), `tests/test_backtest.py` sygnatura
+- [ ] CLI entries: `algo-fetch`, `algo-process` (po dodaniu `main()` w odpowiednich modułach)
+
+**Deliverables (docs):**
+- [x] `docs/README.md` (TOC) — **DONE 2026-05-14**
+- [x] `docs/CHANGELOG.md` (keep-a-changelog format) — **DONE 2026-05-14**
+- [x] `docs/adr/` template + 5 ADR retroactive (001..005) — **DONE 2026-05-14**
+- [x] `docs/guides/getting-started.md`, `daily-workflow.md`, `makefile-cheatsheet.md` — **DONE 2026-05-14**
+- [x] `docs/reference/package-overview.md` — **DONE 2026-05-14**
+- [x] `docs/concepts/glossary.md` — **DONE 2026-05-14**
+- [x] `README.md` (root) update — entry point pod docs/ — **DONE 2026-05-14**
+- [x] Per-file header docstrings w 10 kluczowych plikach pakietu — **DONE 2026-05-14**
+- [ ] ADR-006..010 per każda nowa decyzja w fazie 1 (logging, metrics, risk, walk-forward, CI/pre-commit)
+- [ ] `docs/reference/modules/<modul>.md` dla każdego NOWEGO modułu (risk, walkforward, metrics, log) — deep reference
+- [ ] `docs/concepts/risk-management.md` (po decyzji E), `walk-forward.md` (po F), `microstructure.md`
 
 **Kryteria sukcesu:**
-- `make test` zielony lokalnie i na CI
+- `make check` zielony lokalnie i na CI
 - Powtarzalność: dwukrotny backtest tej samej strategii z tym samym seedem zwraca bit-identyczne metryki
 - Risk module zatrzyma backtest gdy drawdown przekroczy próg
+- Każdy plik w `algo_bot/` ma per-file header docstring (Google style)
+- Każdy ADR dla decyzji architektonicznej fazy 1 napisany
 
 **Ryzyka:**
-- TA-Lib na Windowsie/macOS bywa upierdliwe → udokumentować alternatywę (`pandas-ta` jako fallback)
+- TA-Lib na Windowsie/macOS bywa upierdliwe → udokumentowane w `docs/guides/getting-started.md` (conda-forge zalecane na każdym OS)
+- Polityka "docs sync z kodem" wymaga dyscypliny — pre-commit hook sprawdzający `docs/` changes when `algo_bot/` changes to follow-up TODO
 
 ---
 
@@ -52,7 +72,7 @@ Faza 5: Production na VPS              → 1-2 tyg.
 
 **Wybór strategii kandydatki:** **bghtrend_pullback** — jest najbardziej dopracowana, ma sensowną tezę ekonomiczną (trend + pullback z xtrenderem jako filtrem momentum), ma cooldown i ATR-trail (już zaimplementowane).
 
-**Deliverables:**
+**Deliverables (kod):**
 - [ ] Pobranie danych: BTC/USDT + ETH/USDT, 15m + 1h + 4h, od 2019 (Binance Futures, perpetual)
 - [ ] In-sample sweep (`b1..b4` configi już są — przejrzeć i ujednolicić)
 - [ ] **Walk-forward** z minimum 5 fold (np. train 12mies, test 3mies, krok 3mies)
@@ -62,6 +82,18 @@ Faza 5: Production na VPS              → 1-2 tyg.
 - [ ] Stress test: 2018-12 (krach), 2020-03 (covid), 2022-06 (luna), 2022-11 (FTX) — strategia musi przeżyć
 - [ ] Notebook `03_bghtrend_walkforward_analysis.ipynb` z pełną analizą
 - [ ] **Decyzja**: czy bghtrend_pullback w obecnej formie nadaje się na MVP czy potrzebuje iteracji
+
+**Deliverables (docs):**
+- [ ] `docs/guides/running-backtest.md` — example argumenty, jak czytać output, troubleshooting
+- [ ] `docs/guides/running-sweep.md` — YAML space format, grid vs random, interpretacja index.csv
+- [ ] `docs/guides/walk-forward-howto.md` — krok-po-kroku jak odpalić WF, jak interpretować
+- [ ] `docs/concepts/walk-forward.md` — methodology (rolling vs anchored, dlaczego obowiązkowe przed live)
+- [ ] `docs/concepts/microstructure.md` — spread, slippage, funding — co adjustujemy w backteście
+- [ ] `docs/reference/modules/strategy-bghtrend-pullback.md` — deep walkthrough strategii MVP (formuły, decisions)
+- [ ] `docs/reference/config-reference.md` — kompletny schema YAML configów (config.yaml + bghtrend_b*.yaml)
+- [ ] `docs/reference/metrics-reference.md` — interpretacja każdej metryki w summary.json
+- [ ] ADR per znaczące decyzje fazy 2 (np. "Czy bghtrend MVP" — ADR-XXX z analizą WF wyników)
+- [ ] CHANGELOG entry v0.2.0 — wszystkie deliverables fazy 2
 
 **Kryteria sukcesu (MVP):**
 - Walk-forward Sharpe > 1.0
@@ -80,13 +112,23 @@ Faza 5: Production na VPS              → 1-2 tyg.
 
 **Cel:** strategia działa identycznie w live jak w backteście. Wszystkie różnice są zrozumiane i udokumentowane.
 
-**Deliverables:**
+**Deliverables (kod):**
 - [ ] Paper trading mode (lokalny symulator, bez wysyłania orderów) — strategia konsumuje real-time WebSocket data, generuje sygnały, journal jak gdyby były trade'y
 - [ ] Testnet run (Binance Futures testnet) — minimum 2 tygodnie ciągłej pracy
 - [ ] Sprawdzenie zgodności sygnałów backtest vs live: re-backtest na danych z okresu testnetu i porównać sygnały bar-by-bar
 - [ ] Alerty (Telegram bot): entry, exit, SL hit, błąd systemu, drift w PnL
 - [ ] Recovery: bot się crashuje → restart → wczytuje state z journalu → kontynuuje (nie otwiera duplikatów pozycji)
 - [ ] Idempotentność orderów (client_order_id) — nie da się otworzyć dwóch identycznych pozycji
+- [ ] Refaktor `live/live_binance.py` → `algo_bot/live/binance.py` + CLI entry `algo-live`
+
+**Deliverables (docs):**
+- [ ] `docs/guides/live-trading-checklist.md` — pre-flight checklist (API keys, .env setup, testnet config)
+- [ ] `docs/guides/paper-trading.md` — jak odpalić paper mode, jak interpretować output
+- [ ] `docs/reference/modules/live-binance.md` — deep reference (flow, recovery, edge cases)
+- [ ] `docs/concepts/backtest-live-mismatch.md` — taksonomia różnic (knoty, slippage, funding, timing) i jak je adresujemy
+- [ ] `docs/guides/telegram-alerts-setup.md` — jak skonfigurować bota Telegram + .env vars
+- [ ] ADR per znaczące decyzje (format alertów, recovery strategy)
+- [ ] CHANGELOG entry v0.3.0
 
 **Kryteria sukcesu:**
 - 2 tygodnie testnetu bez crash'a
@@ -113,11 +155,20 @@ Faza 5: Production na VPS              → 1-2 tyg.
 - [ ] Backup planu: jak wyłączyć bota awaryjnie (kill switch z Telegrama: `/stop` → graceful shutdown z zamknięciem pozycji)
 - [ ] Dokumentacja DR (disaster recovery): co robić jak VPS padnie, jak ręcznie zamknąć pozycje przez giełdę
 
-**Deliverables:**
+**Deliverables (kod):**
 - [ ] Switch konfiguracyjny `mode: testnet|mainnet` (jeden config, łatwy toggle)
 - [ ] Reconciliation: codzienny report — equity z giełdy vs equity z journala (różnica → alert)
 - [ ] Daily report do Telegrama: PnL dzienny/tygodniowy/total, liczba trade'ów, win rate, exposure
 - [ ] Weekly retrospekcja (manualnie) — porównaj live performance vs backtest baseline z tego okresu
+
+**Deliverables (docs):**
+- [ ] `docs/guides/going-live-mainnet.md` — full procedure od testnetu do mainnetu z confirmation prompts
+- [ ] `docs/guides/disaster-recovery.md` — co robić gdy bot padnie/VPS umrze/exchange hack
+- [ ] `docs/concepts/risk-management-production.md` — sizing rules, kill switches, daily loss limits w praktyce
+- [ ] `docs/reference/journal-format.md` — pełen format trades.csv + equity.csv (kolumny, jednostki, edge cases)
+- [ ] Weekly retrospekcja template (w docs/guides/ albo notebook)
+- [ ] CHANGELOG entry v0.4.0
+- [ ] ADR finalny: "MVP go-live decision" (kryteria pass/fail, sign-off)
 
 **Kryteria sukcesu:**
 - 1 miesiąc bez krytycznych błędów
@@ -134,7 +185,7 @@ Faza 5: Production na VPS              → 1-2 tyg.
 
 **Cel:** bot chodzi 24/7 bez nadzoru z odpornością na zwykłe failure modes.
 
-**Deliverables:**
+**Deliverables (kod):**
 - [ ] Dockerfile dla aplikacji + docker-compose (bot + prometheus + grafana + alertmanager)
 - [ ] Systemd unit (alternatywa dla Dockera dla minimalistycznego setupu)
 - [ ] VPS setup playbook (Ansible lub bash script): firewall, unattended-upgrades, fail2ban, swap, log rotation
@@ -146,6 +197,16 @@ Faza 5: Production na VPS              → 1-2 tyg.
 - [ ] Automated backup journalu i configów (rsync do drugiego serwera albo S3 daily)
 - [ ] Healthcheck endpoint (`/health` na localhost) + cron-based watchdog (jeśli health == fail → restart)
 - [ ] Deployment workflow: lokalny push → CI → SSH deploy → restart service (lub `docker-compose pull && up -d`)
+
+**Deliverables (docs):**
+- [ ] `docs/guides/deploying-to-vps.md` — step-by-step deployment guide
+- [ ] `docs/guides/vps-maintenance.md` — daily/weekly/monthly tasks na VPS
+- [ ] `docs/guides/troubleshooting.md` — comprehensive: bot down, ws disconnect, PnL drift, etc.
+- [ ] `docs/reference/monitoring-metrics.md` — wszystkie Prometheus metrics + Grafana dashboard guide
+- [ ] `docs/reference/alerts-reference.md` — wszystkie typy alertów + severity + action items
+- [ ] `docs/concepts/operations.md` — operational philosophy (defensive defaults, fail-safe modes)
+- [ ] **MkDocs migration** (decyzja G follow-up po MVP) — przeniesienie docs do MkDocs + Material z mkdocstrings, deploy na GitHub Pages
+- [ ] CHANGELOG entry v1.0.0 — pełen MVP done
 
 **Kryteria sukcesu:**
 - Bot chodzi 30 dni bez ręcznej interwencji

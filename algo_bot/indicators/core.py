@@ -1,3 +1,26 @@
+"""
+algo_bot/indicators/core.py
+
+Podstawowe wskaźniki techniczne implementowane na pandas.Series. Cienka warstwa
+nad pandas ewm() / rolling() / diff() bez zależności od TA-Lib (te są dostępne
+przez `import talib` w strategiach).
+
+Public API (wszystkie funkcje przyjmują pd.Series i zwracają pd.Series):
+- ema(series, length) — Exponential Moving Average
+- rsi(series, length) — Relative Strength Index (0-100)
+- atr(df, length) — Average True Range (wymaga df z High/Low/Close)
+- t3(series, length, b) — T3 moving average (Tillson)
+
+Konwencja:
+- Brak handlingu NaN — caller decyduje czy dropna/fillna
+- length: int > 0 (sanity check przez pandas, nie my)
+- Wartości zwracane indeksowane jak input series
+
+See also:
+- algo_bot/indicators/xtrender.py — custom oscillator używający tych primitiv
+- algo_bot/indicators/__init__.py — re-exporty (możesz `from algo_bot.indicators import ema`)
+- TA-Lib (przez `import talib`) — alternative implementations, używane w niektórych strategiach
+"""
 from __future__ import annotations
 import numpy as np
 import pandas as pd

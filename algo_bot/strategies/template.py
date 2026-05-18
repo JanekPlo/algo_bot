@@ -1,4 +1,29 @@
-# algo_bot/strategies/template.py
+"""
+algo_bot/strategies/template.py
+
+Skeleton dla nowej strategii w algo_bot. Skopiuj jako starter:
+    cp algo_bot/strategies/template.py algo_bot/strategies/my_new_strategy.py
+i zaimplementuj swoją logikę w `on_bar()`.
+
+Struktura każdej strategii (konwencja od ADR-003):
+1. `name` — string identyfikator (musi pasować do nazwy pliku bez .py)
+2. `@dataclass` z parametrami (sieci się na ParamSchema)
+3. `class Strategy(StrategyBase)` z ParamSchema = ten dataclass
+4. `required_features()` — zwraca set kolumn potrzebnych w df
+5. `init(state)` (opcjonalne) — jednorazowy precompute
+6. `on_bar(df)` — główna logika, zwraca Signal
+
+Sygnały do zwrócenia:
+- Signal() — hold
+- Signal("enter", "long", tp_pct=0.05, sl_pct=0.02)
+- Signal("exit", "long")
+- Signal(meta={"sl": new_sl_price}) — update SL podczas hold
+
+See also:
+- docs/adr/003-strategybase-signal-api.md (interface)
+- docs/guides/adding-a-strategy.md (TBD — pełen walkthrough)
+- algo_bot/strategies/bghtrend_pullback.py (najbardziej rozbudowany przykład)
+"""
 from __future__ import annotations
 
 from dataclasses import dataclass

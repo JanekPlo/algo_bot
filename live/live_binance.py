@@ -1,4 +1,35 @@
 #!/usr/bin/env python3
+"""
+live/live_binance.py
+
+Live trading runner dla Binance Futures (USDT-M perpetuals). Wczytuje strategię
+przez load_strategy(), pętla: czekaj na zamknięcie świecy → on_bar(df) → executuj
+Signal na Binance przez BinanceFuturesAdapter (CCXT).
+
+Wsparcie dla 3 trybów TP/SL (--tpsl_mode, patrz ADR-004):
+- 'server' — TP+SL na serwerze giełdy (proste, niezawodne, ale knoty)
+- 'local'  — TP+SL lokalnie z mark price (omija knoty, ale brak fallback gdy bot padnie)
+- 'hybrid' — TP server-side, SL lokalnie (kompromis, default)
+
+Recovery:
+- Bot crashuje → restart → wczytuje state z journala → kontynuuje
+- Idempotency: client_order_id deterministycznie z run_id + bar_ts
+- Reconciliation: porównanie equity z giełdy vs equity z journala (faza 4-5)
+
+CLI:
+- python live/live_binance.py --symbol BTC/USDT --timeframe 5m --strategy simple_momentum ...
+- (przyszłość) algo-live --symbol ... (po przeniesieniu do algo_bot.live)
+
+Required env vars (przez python-dotenv z .env):
+- BINANCE_API_KEY_TESTNET / BINANCE_API_SECRET_TESTNET (dla --data_source=testnet)
+- BINANCE_API_KEY / BINANCE_API_SECRET (dla --data_source=mainnet)
+
+See also:
+- docs/adr/004-hybrid-tp-sl-mode.md (rationale trybów TP/SL)
+- docs/adr/003-strategybase-signal-api.md (Signal API którego ten loop konsumuje)
+- docs/guides/live-trading-checklist.md (TBD — pre-flight checklist)
+- algo_bot/telemetry/journal.py (CSV journal który tu używamy)
+"""
 import os, time, argparse, json
 from pathlib import Path
 from dotenv import load_dotenv
