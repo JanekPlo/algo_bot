@@ -1,0 +1,214 @@
+# =============================================================================
+# pyproject.toml — algo_bot
+#
+# Build backend:  hatchling
+# Python:         3.11+
+# Env:            conda env "algo_bot" (patrz environment.yml) — daje Python + TA-Lib
+# Lockfile:       requirements.txt generowany przez pip-tools (make lock)
+# Package layout: src-less, pakiet bezposrednio w algo_bot/ (po flatten)
+#
+# Setup od zera (jednorazowo):
+#   make env           # conda env create -f environment.yml
+#   conda activate algo_bot
+#   make install       # pip install -e ".[dev]"
+#
+# Codzienna praca:
+#   make test          # pytest
+#   make lint          # ruff check
+#   make typecheck     # mypy
+#   make check         # wszystko naraz (CI-style)
+#
+# Po dodaniu/zmianie dependency w [project.dependencies]:
+#   make lock          # regeneruje requirements.txt (lockfile)
+#   make sync          # pip-sync requirements.txt + reinstall pakietu
+# =============================================================================
+
+[build-system]
+requires = ["hatchling>=1.18"]
+build-backend = "hatchling.build"
+
+# === Project metadata (PEP 621) ==============================================
+[project]
+name = "algo_bot"
+version = "0.1.0"
+description = "Quantitative trading framework for crypto futures (RBI methodology)"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [
+    {name = "Janek Plonski", email = "jan.plonski@redge.com"},
+]
+keywords = ["algorithmic-trading", "backtesting", "crypto", "binance", "rbi"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Financial and Insurance Industry",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Office/Business :: Financial :: Investment",
+]
+
+# --- Runtime deps ------------------------------------------------------------
+# TA-Lib NIE jest tutaj — instalowane przez conda-forge (patrz environment.yml).
+# Powod: TA-Lib wymaga systemowego libta-lib (C lib), conda-forge dostarcza oba
+# (lib C + Python bindings) w jednym kroku. Pip-install TA-Lib bez C-libka pada.
+dependencies = [
+    "ccxt>=2.8.58",
+    "pandas>=1.5.0",
+    "numpy>=1.23.0",
+    "backtesting>=0.3.2",
+    "PyYAML>=6.0",
+    "python-dotenv>=1.0.0",
+    "tzdata>=2024.1",
+    "matplotlib>=3.6.0",
+]
+
+# --- Optional / dev deps -----------------------------------------------------
+# Instalowane przez: pip install -e ".[dev]"  (lub make install)
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "ruff>=0.1.0",
+    "mypy>=1.7.0",
+    "pip-tools>=7.3.0",
+    "pre-commit>=3.5.0",
+    "pandas-stubs>=2.0.0",       # mypy potrzebuje stubow dla pandas
+    "types-PyYAML>=6.0.0",       # mypy potrzebuje stubow dla yaml
+]
+
+[project.urls]
+Repository = "https://github.com/JanekPlo/algo_bot"
+Issues     = "https://github.com/JanekPlo/algo_bot/issues"
+
+# --- CLI entries =============================================================
+# Po `pip install -e .` masz globalne komendy w aktywnym conda env.
+# Mapping: nazwa-komendy = "modul.path:funkcja"
+#
+# TODO (fazy C-F): dodac kolejne wpisy gdy refaktorujemy/tworzymy modul:
+#   algo-fetch     = "algo_bot.fetch_data:main"     (juz ma argparse, brakuje tylko main())
+#   algo-process   = "algo_bot.process_data:main"   (j.w.)
+#   algo-live      = "algo_bot.live:main"           (po przeniesieniu live/ do algo_bot.live)
+#   algo-walkforward = "algo_bot.engine.walkforward:main"  (po decyzji F)
+[project.scripts]
+algo-backtest = "algo_bot.engine.backtester:main"
+algo-sweep    = "algo_bot.engine.sweep:main"
+
+# === Hatchling =================================================================
+[tool.hatch.build.targets.wheel]
+packages = ["algo_bot"]
+
+# === Ruff (lint + format) ====================================================
+# Zastepuje: black + isort + flake8 + pyupgrade (jeden tool, jedna konfig)
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+extend-exclude = ["notebooks/*"]   # notebooki maja wlasne zasady (jupytext)
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "F",      # pyflakes (undefined names, unused imports)
+    "W",      # pycodestyle warnings
+    "I",      # isort (import order)
+    "B",      # flake8-bugbear (likely bugs)
+    "UP",     # pyupgrade (modernize syntax)
+    "SIM",    # flake8-simplify (idiomatic)
+    "RUF",    # ruff-specific
+    "C4",     # flake8-comprehensions
+    "PIE",    # flake8-pie
+]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+    "B008",   # do not perform function call in argument defaults (legitimate w argparse)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py"          = ["F401", "F403"]    # pozwol na re-exports
+"algo_bot/indicators/__init__.py" = ["F401", "F403"]
+"tests/**/*.py"        = ["B011"]             # asserts w testach OK
+"notebooks/**/*.py"    = ["E402"]             # imports nie zawsze na gorze
+
+[tool.ruff.lint.isort]
+known-first-party = ["algo_bot"]
+combine-as-imports = true
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+docstring-code-format = true
+
+# === Mypy (type checker, strict-on-new-modules) ==============================
+# Polityka: legacy luzny, nowy kod (risk, walkforward, metrics) — pelny strict.
+# Jane Street vibe bez tygodnia refaktoru legacy.
+[tool.mypy]
+python_version = "3.11"
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unreachable = true
+strict_equality = true
+explicit_package_bases = true
+ignore_missing_imports = true     # backtesting.py i ccxt nie maja stubow
+
+# Default: lenient (legacy modules — bedziemy progresywnie typizowac)
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+warn_return_any = false
+
+# Strict per modul — pelny rygor tylko na nowy kod (fazy 1+)
+[[tool.mypy.overrides]]
+module = [
+    "algo_bot.risk.*",                # cala risk module (decyzja E)
+    "algo_bot.engine.walkforward",    # decyzja F
+    "algo_bot.metrics",               # decyzja D
+]
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+no_implicit_optional = true
+warn_unused_ignores = true
+warn_return_any = true
+
+# Tlumi bledy z bibliotek bez stubow
+[[tool.mypy.overrides]]
+module = [
+    "backtesting.*",
+    "ccxt.*",
+    "talib.*",
+    "dotenv.*",
+]
+ignore_errors = true
+ignore_missing_imports = true
+
+# === Pytest =================================================================
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+pythonpath = ["."]
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--tb=short",
+]
+markers = [
+    "slow: testy wolne (deselect z '-m \"not slow\"')",
+    "integration: wymaga zewnetrznych serwisow (network, plikow)",
+    "live: testy zwiazane z live tradingiem (testnet)",
+]
+
+# === Coverage ===============================================================
+[tool.coverage.run]
+source = ["algo_bot"]
+omit = [
+    "*/tests/*",
+    "*/scripts/*",
+    "*/notebooks/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]

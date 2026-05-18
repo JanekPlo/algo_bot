@@ -1,35 +1,45 @@
 # =============================================================================
-# requirements.txt — runtime dependencies dla algo_bot
-# Dev tooling (ruff, mypy, pytest-cov, pre-commit) trafi do pyproject.toml
-# w sekcji [project.optional-dependencies] po decyzji B.
+# requirements.txt — UWAGA: ten plik jest TERAZ generowany przez pip-tools.
 #
-# WAZNE: TA-Lib wymaga systemowej biblioteki libta-lib PRZED `pip install`:
-#   Ubuntu/WSL:  sudo apt install -y libta-lib-dev      (lub kompilacja ze zrodel)
-#   macOS:       brew install ta-lib
-#   Windows:     uzyc whl z https://github.com/cgohlke/talib-build/releases
+# NIE EDYTUJ RECZNIE. Zrodlem prawdy dla dependencies jest pyproject.toml.
+#
+# Aby zregenerowac po zmianie pyproject.toml:
+#   make lock     # = pip-compile --extra dev --output-file=requirements.txt pyproject.toml
+#
+# Aby zainstalowac dokladnie te wersje (deterministic install):
+#   make sync     # = pip-sync requirements.txt + pip install -e . --no-deps
+#
+# UWAGA: TA-Lib NIE bedzie w lockfile — instalowane przez conda-forge
+# (patrz environment.yml). `make sync` instaluje tylko pip-deps; TA-Lib
+# jest juz w conda env.
+#
+# Ten plik zawiera obecnie STARA recznie utrzymywana liste (fallback przed
+# pierwszym `make lock`). Po `make install` i `make lock` zostanie nadpisany
+# precyzyjnym lockfile z transitive deps i version-hashes.
 # =============================================================================
 
-# --- Core: ingestion + processing ---
-ccxt>=2.8.58            # exchange API client (Binance/Bybit OHLCV + execution)
+# --- LEGACY fallback (do regeneracji przez `make lock`) ----------------------
+# Patrz pyproject.toml [project.dependencies] / [project.optional-dependencies]
+# dla zrodla prawdy.
+
+# Core data
+ccxt>=2.8.58
 pandas>=1.5.0
 numpy>=1.23.0
 
-# --- Backtesting engine + indicators ---
-backtesting>=0.3.2      # https://kernc.github.io/backtesting.py/
-TA-Lib>=0.4.24          # wymaga systemowego libta-lib, patrz naglowek
+# Backtesting
+backtesting>=0.3.2
+# TA-Lib instalowane przez conda-forge, nie tutaj
 
-# --- Config + env ---
-PyYAML>=6.0             # poprawiona nazwa (poprzednio bledne 'yaml')
-python-dotenv>=1.0.0    # ladowanie .env w live_binance.py
+# Config + env
+PyYAML>=6.0
+python-dotenv>=1.0.0
 
-# --- Time zones (Europe/Warsaw w live_binance) ---
-tzdata>=2024.1          # potrzebne dla zoneinfo na Windowsie
+# Time zones
+tzdata>=2024.1
 
-# --- Visualization (notebooks + research) ---
-matplotlib>=3.6.0       # poprawiona nazwa (poprzednio literowka 'tmatplotlib')
+# Viz
+matplotlib>=3.6.0
 
-# --- Testing ---
+# Testing
 pytest>=7.4.0
-
-# UWAGA: usunieto 'distlib>=0.3.6' (brak uzycia w kodzie, prawdopodobnie przypadek).
-# Jesli pamietasz po co to bylo, dodaj z powrotem + komentarz dlaczego.
