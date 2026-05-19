@@ -25,16 +25,17 @@ Faza 5: Production na VPS              → 1-2 tyg.
 **Cel:** repo jest porządne, dependencies dzialaja, mamy CI, mamy spójny system konfiguracji i wynik backtestu jest powtarzalny co do bitu.
 
 **Deliverables:**
-- [ ] Naprawiony `requirements.txt` (literówki: `tmatplotlib`, `yaml` → `PyYAML`; dodać `python-dotenv`, `backtesting`, `TA-Lib` wymaga osobnej instalacji systemowej — opisać w README)
-- [ ] `pyproject.toml` z editable install (`pip install -e .`), żeby porzucić `sys.path.insert` w skryptach
-- [ ] `Makefile` z komendami: `make fetch`, `make backtest`, `make sweep`, `make live`, `make test`
-- [ ] Risk management module (`src/risk/limits.py`): max drawdown stop, max concurrent positions, daily loss limit, position sizing oparty o ryzyko (% equity per trade, nie sztywny USDT)
-- [ ] Walk-forward analyzer (`src/engine/walkforward.py`) — out-of-sample, train/test split z rolowaniem okna
-- [ ] Standardowe metryki risk-adjusted (Sharpe, Sortino, Calmar, MAR, profit factor, recovery time) w wynikach backtestu — jeden moduł `src/metrics.py`
+- [x] Naprawiony `requirements.txt` (literówki: `tmatplotlib`, `yaml` → `PyYAML`; dodano `python-dotenv`, `tzdata`)
+- [x] `pyproject.toml` z editable install (`pip install -e .`), hatchling backend, ruff + mypy config
+- [x] `Makefile` z komendami: `make env`, `make install`, `make test`, `make lint`, `make format`, `make typecheck`
+- [x] Strukturę katalogów wyrównać: `algo_bot/` bezpośrednio w roocie repo (`src/` → `algo_bot/`, usunięto `sys.path` hacki)
+- [x] `environment.yml` (conda: Python 3.11, ta-lib z conda-forge)
+- [ ] Risk management module (`algo_bot/risk/limits.py`): max drawdown stop, max concurrent positions, daily loss limit, position sizing oparty o ryzyko (% equity per trade, nie sztywny USDT)
+- [ ] Walk-forward analyzer (`algo_bot/engine/walkforward.py`) — out-of-sample, train/test split z rolowaniem okna
+- [ ] Standardowe metryki risk-adjusted (Sharpe, Sortino, Calmar, MAR, profit factor, recovery time) — `algo_bot/metrics.py`
 - [ ] CI (GitHub Actions): pytest + ruff + mypy na każdym PR
 - [ ] Pre-commit hooks: ruff + black + isort + pytest na strategicznych testach
 - [ ] Logging zamiast `print` w całym kodzie (structured logs z `loguru` albo stdlib `logging`)
-- [ ] Strukturę katalogów wyrównać: `algo_bot/` → bezpośrednio w roocie repo (obecnie zagnieżdżone w `trading/backtesting/algo_bot/`)
 
 **Kryteria sukcesu:**
 - `make test` zielony lokalnie i na CI
@@ -183,4 +184,4 @@ Faza 5: Production na VPS              → 1-2 tyg.
 
 ---
 
-*Dokument żywy. Po każdej fazie aktualizujemy kryteria i decyzje. Wersja: 0.1 — 2026-05-11.*
+*Dokument żywy. Po każdej fazie aktualizujemy kryteria i decyzje. Wersja: 0.2 — 2026-05-19.*
