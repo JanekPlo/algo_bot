@@ -28,22 +28,29 @@ See also:
 - docs/guides/running-sweep.md (TBD)
 - ROADMAP fasa 2 (walk-forward MVP)
 """
+
 from __future__ import annotations
 
-import os, sys, json, math, random, csv, hashlib, itertools, importlib
+import csv
+import importlib
+import itertools
+import json
+import os
+import random
+from collections.abc import Iterable
 from dataclasses import is_dataclass
 from datetime import datetime
-from typing import Any, Dict, List, Iterable, Tuple, Optional
+from typing import Any
 
 import pandas as pd
+
 try:
     import yaml  # optional
 except Exception:
     yaml = None
 
 # używamy istniejącego backtestera jako silnika
-from algo_bot.engine.backtester import run_backtest, save_outputs, run_id as make_run_id
-from algo_bot.strategy_base import StrategyBase
+from algo_bot.engine.backtester import run_backtest, run_id as make_run_id, save_outputs
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, os.pardir))
 EXP_DIR = os.path.join(PROJECT_ROOT, "results", "experiments")
@@ -56,14 +63,15 @@ INDEX_CSV = os.path.join(EXP_DIR, "index.csv")
 def resolve_strategy_class(name: str):
     m = importlib.import_module(f"algo_bot.strategies.{name}")
     if hasattr(m, "Strategy"):
-        return getattr(m, "Strategy")
+        return m.Strategy
     # legacy CamelCase fallback
     cls_name = "".join(p.capitalize() for p in name.split("_"))
     if hasattr(m, cls_name):
         return getattr(m, cls_name)
     raise AttributeError(f"algo_bot.strategies.{name} must expose Strategy (or {cls_name})")
 
-def coerce_params(StratClass, params_dict: Dict[str, Any]) -> Dict[str, Any]:
+
+def coerce_params(StratClass, params_dict: dict[str, Any]) -> dict[str, Any]:
     """
     Zwraca dict przefiltrowany do pól ParamSchema (jeśli jest),
     żeby przypadkowe klucze nie wysadzały strategii.
@@ -80,12 +88,13 @@ def coerce_params(StratClass, params_dict: Dict[str, Any]) -> Dict[str, Any]:
 # ------------------------------
 # Param space parsing
 # ------------------------------
-def _product_dict(items: Dict[str, List[Any]]) -> Iterable[Dict[str, Any]]:
+def _product_dict(items: dict[str, list[Any]]) -> Iterable[dict[str, Any]]:
     keys = list(items.keys())
     for values in itertools.product(*[items[k] for k in keys]):
-        yield dict(zip(keys, values))
+        yield dict(zip(keys, values, strict=True))
 
-def _sample_from_spec(spec: Dict[str, Any], rng: random.Random) -> Dict[str, Any]:
+
+def _sample_from_spec(spec: dict[str, Any], rng: random.Random) -> dict[str, Any]:
     """
     Random search sampler. Spec elementy:
       {"type":"int","min":5,"max":25}
@@ -108,10 +117,10 @@ def _sample_from_spec(spec: Dict[str, Any], rng: random.Random) -> Dict[str, Any
         return rng.choice(vals)
     raise ValueError(f"Unsupported random spec: {spec}")
 
-def expand_param_space(mode: str,
-                       space: Dict[str, Any],
-                       n_samples: int = 50,
-                       seed: int = 42) -> Iterable[Dict[str, Any]]:
+
+def expand_param_space(
+    mode: str, space: dict[str, Any], n_samples: int = 50, seed: int = 42
+) -> Iterable[dict[str, Any]]:
     """
     mode='grid':  space = {"short":[5,9,13], "long":[21,34], ...}
     mode='random': space = {"short":{"type":"int","min":5,"max":25}, ...}
@@ -135,10 +144,9 @@ def expand_param_space(mode: str,
 # ------------------------------
 # Walk-forward splitter (opcjonalny)
 # ------------------------------
-def gen_walk_forward_windows(df: pd.DataFrame,
-                             train_bars: int,
-                             test_bars: int,
-                             step_bars: Optional[int] = None) -> List[Tuple[pd.Timestamp, pd.Timestamp]]:
+def gen_walk_forward_windows(
+    df: pd.DataFrame, train_bars: int, test_bars: int, step_bars: int | None = None
+) -> list[tuple[pd.Timestamp, pd.Timestamp]]:
     """
     Zwraca listę (start, end) dla okien TEST (to te, które testujemy).
     Train przyjmujemy: [start_train, end_train], ale do run_backtest podajemy tylko zakres TEST.
@@ -151,7 +159,7 @@ def gen_walk_forward_windows(df: pd.DataFrame,
     i = train_bars
     while i + test_bars <= len(idx):
         start_test = idx[i]
-        end_test   = idx[i + test_bars - 1]
+        end_test = idx[i + test_bars - 1]
         windows.append((start_test, end_test))
         i += step_bars
     return windows
@@ -161,12 +169,23 @@ def gen_walk_forward_windows(df: pd.DataFrame,
 # Metrics pick
 # ------------------------------
 KEEP_KEYS = [
-    "Start", "End", "Duration", "Return [%]", "Return (Ann.) [%]",
-    "Sharpe Ratio", "Sortino Ratio", "Max. Drawdown [%]", "SQN",
-    "Win Rate [%]", "Avg. Trade", "Trades", "Exposure Time [%]"
+    "Start",
+    "End",
+    "Duration",
+    "Return [%]",
+    "Return (Ann.) [%]",
+    "Sharpe Ratio",
+    "Sortino Ratio",
+    "Max. Drawdown [%]",
+    "SQN",
+    "Win Rate [%]",
+    "Avg. Trade",
+    "Trades",
+    "Exposure Time [%]",
 ]
 
-def extract_metrics(stats: Dict[str, Any]) -> Dict[str, Any]:
+
+def extract_metrics(stats: dict[str, Any]) -> dict[str, Any]:
     d = {}
     for k in KEEP_KEYS:
         if k in stats:
@@ -182,7 +201,7 @@ def extract_metrics(stats: Dict[str, Any]) -> Dict[str, Any]:
 # ------------------------------
 # Index writer
 # ------------------------------
-def append_index_row(row: Dict[str, Any]) -> None:
+def append_index_row(row: dict[str, Any]) -> None:
     os.makedirs(EXP_DIR, exist_ok=True)
     write_header = not os.path.exists(INDEX_CSV)
     with open(INDEX_CSV, "a", newline="") as f:
@@ -197,21 +216,28 @@ def append_index_row(row: Dict[str, Any]) -> None:
 # ------------------------------
 def parse_args():
     import argparse
+
     ap = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-    ap.add_argument("--strategy", required=True, help="nazwa modułu w strategies/, np. bghtrend_pullback")
+    ap.add_argument(
+        "--strategy", required=True, help="nazwa modułu w strategies/, np. bghtrend_pullback"
+    )
     ap.add_argument("--symbols", nargs="+", required=True, help="np. BTC/USDT ETH/USDT")
     ap.add_argument("--timeframes", nargs="+", required=True, help="np. 5m 15m 1h")
     ap.add_argument("--start", required=True, help="YYYY-MM-DD")
     ap.add_argument("--end", required=True, help="YYYY-MM-DD")
 
     # param space – dwie drogi
-    ap.add_argument("--space_json", default=None,
-                    help="JSON z definicją przestrzeni (patrz README). Jeśli podasz, nadpisuje --space_file.")
-    ap.add_argument("--space_file", default=None,
-                    help="Ścieżka do .json/.yaml z przestrzenią parametrów.")
+    ap.add_argument(
+        "--space_json",
+        default=None,
+        help="JSON z definicją przestrzeni (patrz README). Jeśli podasz, nadpisuje --space_file.",
+    )
+    ap.add_argument(
+        "--space_file", default=None, help="Ścieżka do .json/.yaml z przestrzenią parametrów."
+    )
 
-    ap.add_argument("--mode", choices=["grid","random"], default="grid")
+    ap.add_argument("--mode", choices=["grid", "random"], default="grid")
     ap.add_argument("--n_samples", type=int, default=50, help="dla random")
     ap.add_argument("--seed", type=int, default=42)
 
@@ -222,17 +248,19 @@ def parse_args():
     ap.add_argument("--spread_bps", type=float, default=None)
     ap.add_argument("--slippage_bps", type=float, default=None)
     ap.add_argument("--funding_csv", default=None)
-    ap.add_argument("--funding_mode", choices=["events","accrual"], default=None)
+    ap.add_argument("--funding_mode", choices=["events", "accrual"], default=None)
 
     # walk-forward (opcjonalnie)
-    ap.add_argument("--wf_train_bars", type=int, default=None, help="jeśli podane – włącza walk-forward")
+    ap.add_argument(
+        "--wf_train_bars", type=int, default=None, help="jesli podane - wlacza walk-forward"
+    )
     ap.add_argument("--wf_test_bars", type=int, default=None)
     ap.add_argument("--wf_step_bars", type=int, default=None)
 
     return ap.parse_args()
 
 
-def load_space_from_any(args) -> Tuple[str, Dict[str, Any], int, int]:
+def load_space_from_any(args) -> tuple[str, dict[str, Any], int, int]:
     """
     Zwraca (mode, space, n_samples, seed)
     """
@@ -244,7 +272,7 @@ def load_space_from_any(args) -> Tuple[str, Dict[str, Any], int, int]:
         space = json.loads(args.space_json)
     elif args.space_file:
         ext = os.path.splitext(args.space_file)[1].lower()
-        with open(args.space_file, "r") as f:
+        with open(args.space_file) as f:
             if ext in (".yaml", ".yml"):
                 if yaml is None:
                     raise SystemExit("Zainstaluj pyyaml lub użyj JSON")
@@ -270,7 +298,7 @@ def main():
     # wczytaj/rozszerz przestrzeń parametrów
     mode, space_raw, n_samples, seed = load_space_from_any(args)
     # oczyść klucze wg ParamSchema
-    space_clean: Dict[str, Any] = {}
+    space_clean: dict[str, Any] = {}
     if mode == "grid":
         for k, lst in space_raw.items():
             # k: lista wartości
@@ -293,10 +321,24 @@ def main():
                 # weź dane, wyznacz okna testowe (tylko indeksy; właściwy run robi backtester)
                 # backtester sam czyta CSV – tutaj tylko budujemy okna na potrzeby pętli
                 # minimalny parser dat:
-                data_path = os.path.join(PROJECT_ROOT, "bot_data", "processed", f"binance_{sym.replace('/','')}_{tf}.csv")
-                df_tmp = pd.read_csv(data_path, parse_dates=["datetime"]).set_index("datetime").sort_index()
-                df_tmp = df_tmp[(df_tmp.index >= pd.to_datetime(args.start)) & (df_tmp.index <= pd.to_datetime(args.end))]
-                wf_windows = gen_walk_forward_windows(df_tmp, args.wf_train_bars, args.wf_test_bars, args.wf_step_bars)
+                data_path = os.path.join(
+                    PROJECT_ROOT,
+                    "bot_data",
+                    "processed",
+                    f"binance_{sym.replace('/', '')}_{tf}.csv",
+                )
+                df_tmp = (
+                    pd.read_csv(data_path, parse_dates=["datetime"])
+                    .set_index("datetime")
+                    .sort_index()
+                )
+                df_tmp = df_tmp[
+                    (df_tmp.index >= pd.to_datetime(args.start))
+                    & (df_tmp.index <= pd.to_datetime(args.end))
+                ]
+                wf_windows = gen_walk_forward_windows(
+                    df_tmp, args.wf_train_bars, args.wf_test_bars, args.wf_step_bars
+                )
 
             for p in combos:
                 job_i += 1
@@ -319,9 +361,15 @@ def main():
                         slippage_bps=args.slippage_bps,
                         spread_bps=args.spread_bps,
                         # funding opcjonalnie – backtester sam rozpozna None:
-                        **({"funding_csv": args.funding_csv, "funding_mode": args.funding_mode} if args.funding_csv else {})
+                        **(
+                            {"funding_csv": args.funding_csv, "funding_mode": args.funding_mode}
+                            if args.funding_csv
+                            else {}
+                        ),
                     )
-                    outdir = save_outputs(rid, sym, tf, args.strategy, p_clean, stats, equity, trades)
+                    outdir = save_outputs(
+                        rid, sym, tf, args.strategy, p_clean, stats, equity, trades
+                    )
                     row = {
                         "created_at": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
                         "run_id": rid,
@@ -336,9 +384,7 @@ def main():
                     append_index_row(row)
                 else:
                     # walk-forward: lecimy po oknach TEST
-                    k = 0
-                    for (tstart, tend) in wf_windows:
-                        k += 1
+                    for k, (tstart, tend) in enumerate(wf_windows, start=1):
                         rid = make_run_id(args.strategy, sym, tf, {**p_clean, "_wf": k})
                         stats, equity, trades = run_backtest(
                             symbol=sym,
@@ -352,9 +398,15 @@ def main():
                             trade_on_close=args.trade_on_close,
                             slippage_bps=args.slippage_bps,
                             spread_bps=args.spread_bps,
-                            **({"funding_csv": args.funding_csv, "funding_mode": args.funding_mode} if args.funding_csv else {})
+                            **(
+                                {"funding_csv": args.funding_csv, "funding_mode": args.funding_mode}
+                                if args.funding_csv
+                                else {}
+                            ),
                         )
-                        outdir = save_outputs(rid, sym, tf, args.strategy, p_clean, stats, equity, trades)
+                        outdir = save_outputs(
+                            rid, sym, tf, args.strategy, p_clean, stats, equity, trades
+                        )
                         row = {
                             "created_at": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
                             "run_id": rid,
@@ -377,4 +429,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-#BGH APPROVED
+# BGH APPROVED

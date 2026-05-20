@@ -10,16 +10,16 @@ Zachowane (legacy) – żeby nic nie pękło w istniejącym kodzie:
 - init_exchange, fetch_ohlcv, fetch_and_save_ohlcv, batch_fetch_symbols,
   list_csv_files, load_csv_ohlcv, load_all_csv_ohlcv, resample_ohlcv
 """
+
 from __future__ import annotations
 
 import os
 import time
 from pathlib import Path
-from typing import List, Dict, Optional, Any, Tuple
+from typing import Any
 
-import pandas as pd
 import ccxt
-
+import pandas as pd
 
 # === ŚCIEŻKI ===
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -123,9 +123,9 @@ def load_processed(
     timeframe: str,
     *,
     exchange: str = "binance",
-    features: Optional[List[str]] = None,
-    start: Optional[str] = None,
-    end: Optional[str] = None,
+    features: list[str] | None = None,
+    start: str | None = None,
+    end: str | None = None,
 ) -> pd.DataFrame:
     """
     Wczytuje PROCESSED (UTC index). Obsługuje oba warianty: z kolumną 'datetime'/'ts' albo z indeksem datetime.
@@ -143,8 +143,8 @@ def load_processed(
     path = get_processed_path(symbol, timeframe, exchange)
     if not path.exists():
         # fallbacki nazw (legacy): BTC_USDT-5m.csv, binance_BTC_USDT_5m.csv, itp.
-        legacy1 = PROC_DIR / f"{symbol.replace('/','_')}-{timeframe}.csv"
-        legacy2 = PROC_DIR / f"{exchange}_{symbol.replace('/','_')}_{timeframe}.csv"
+        legacy1 = PROC_DIR / f"{symbol.replace('/', '_')}-{timeframe}.csv"
+        legacy2 = PROC_DIR / f"{exchange}_{symbol.replace('/', '_')}_{timeframe}.csv"
         candidates = [p for p in [legacy1, legacy2] if p.exists()]
         if not candidates:
             raise FileNotFoundError(f"Processed file not found: {path}")
@@ -203,55 +203,54 @@ def count_missing_bars(df: pd.DataFrame, timeframe: str) -> int:
 
 # === LEGACY: init/fetch/raw ===
 def init_exchange(
-    exchange_name: str,
-    api_key: Optional[str] = None,
-    secret: Optional[str] = None,
-    **kwargs: Any
+    exchange_name: str, api_key: str | None = None, secret: str | None = None, **kwargs: Any
 ) -> ccxt.Exchange:
     """[LEGACY] Inicjalizacja giełdy CCXT (używaj fetch_data.py do pobierania wsadowego)."""
     if not hasattr(ccxt, exchange_name):
         raise ValueError(f"Nieznana giełda CCXT: {exchange_name}")
     exch_cls = getattr(ccxt, exchange_name)
-    return exch_cls({'apiKey': api_key, 'secret': secret, **kwargs})
+    return exch_cls({"apiKey": api_key, "secret": secret, **kwargs})
 
 
 def fetch_ohlcv(
     exchange: ccxt.Exchange,
     symbol: str,
-    timeframe: str = '1h',
-    since: Optional[int] = None,
+    timeframe: str = "1h",
+    since: int | None = None,
     limit: int = 1000,
-    params: Optional[Dict[str, Any]] = None
+    params: dict[str, Any] | None = None,
 ) -> pd.DataFrame:
     """[LEGACY] Paginacja OHLCV – preferuj teraz src/fetch_data.py."""
     all_bars = []
     while True:
-        bars = exchange.fetch_ohlcv(symbol, timeframe=timeframe, since=since, limit=limit, params=params or {})
+        bars = exchange.fetch_ohlcv(
+            symbol, timeframe=timeframe, since=since, limit=limit, params=params or {}
+        )
         if not bars:
             break
         all_bars.extend(bars)
         since = bars[-1][0] + 1
         time.sleep(exchange.rateLimit / 1000)
-    df = pd.DataFrame(all_bars, columns=['timestamp','Open','High','Low','Close','Volume'])
-    df['datetime'] = pd.to_datetime(df['timestamp'], unit='ms', utc=True)
-    return df.set_index('datetime').drop(columns=['timestamp']).sort_index()
+    df = pd.DataFrame(all_bars, columns=["timestamp", "Open", "High", "Low", "Close", "Volume"])
+    df["datetime"] = pd.to_datetime(df["timestamp"], unit="ms", utc=True)
+    return df.set_index("datetime").drop(columns=["timestamp"]).sort_index()
 
 
 def fetch_and_save_ohlcv(
     exchange: ccxt.Exchange,
     symbol: str,
     timeframe: str,
-    since: Optional[int],
+    since: int | None,
     limit: int,
     output_dir: str,
-    filename: Optional[str] = None,
-    params: Optional[Dict[str, Any]] = None
+    filename: str | None = None,
+    params: dict[str, Any] | None = None,
 ) -> str:
     """[LEGACY] Pobiera OHLCV i zapisuje do CSV – rekomendowany fetch_data.py."""
     df = fetch_ohlcv(exchange, symbol, timeframe, since, limit, params)
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
-    safe_symbol = symbol.replace('/', '_')
+    safe_symbol = symbol.replace("/", "_")
     fname = filename or f"{safe_symbol}-{timeframe}.csv"
     path = out / fname
     df.to_csv(path)
@@ -260,46 +259,46 @@ def fetch_and_save_ohlcv(
 
 def batch_fetch_symbols(
     exchange: ccxt.Exchange,
-    symbols: List[str],
+    symbols: list[str],
     timeframe: str,
-    since: Optional[int],
+    since: int | None,
     limit: int,
     output_dir: str,
-    params: Optional[Dict[str, Any]] = None
-) -> Dict[str, str]:
+    params: dict[str, Any] | None = None,
+) -> dict[str, str]:
     """[LEGACY] Batch pobieranie CSV – rekomendowany fetch_data.py."""
-    results: Dict[str, str] = {}
+    results: dict[str, str] = {}
     for sym in symbols:
         try:
-            path = fetch_and_save_ohlcv(exchange, sym, timeframe, since, limit, output_dir, None, params)
+            path = fetch_and_save_ohlcv(
+                exchange, sym, timeframe, since, limit, output_dir, None, params
+            )
             results[sym] = path
         except Exception as e:
             print(f"Błąd pobierania {sym}: {e}")
     return results
 
 
-def list_csv_files(directory: str) -> List[str]:
+def list_csv_files(directory: str) -> list[str]:
     """Lista plików CSV w katalogu."""
     d = Path(directory)
     return [str(d / f) for f in os.listdir(d) if f.lower().endswith(".csv")]
 
 
 def load_csv_ohlcv(
-    path: str,
-    datetime_col: str = 'datetime',
-    cols_mapping: Optional[Dict[str, str]] = None
+    path: str, datetime_col: str = "datetime", cols_mapping: dict[str, str] | None = None
 ) -> pd.DataFrame:
     """
     [LEGACY] Wczytywanie dowolnego CSV OHLCV.
     Zwraca index=UTC datetime + kolumny OHLCV.
     """
     df = pd.read_csv(path, parse_dates=[datetime_col])
-    df = df.rename(columns={datetime_col: 'datetime'})
+    df = df.rename(columns={datetime_col: "datetime"})
     if cols_mapping:
         df = df.rename(columns=cols_mapping)
-    df['datetime'] = pd.to_datetime(df['datetime'], utc=True)
-    df = df.set_index('datetime').sort_index()
-    expected = ['Open','High','Low','Close','Volume']
+    df["datetime"] = pd.to_datetime(df["datetime"], utc=True)
+    df = df.set_index("datetime").sort_index()
+    expected = ["Open", "High", "Low", "Close", "Volume"]
     missing = set(expected) - set(df.columns)
     if missing:
         raise ValueError(f"Brakujące kolumny OHLCV {missing} w {path}")
@@ -308,12 +307,10 @@ def load_csv_ohlcv(
 
 
 def load_all_csv_ohlcv(
-    directory: str,
-    datetime_col: str = 'datetime',
-    cols_mapping: Optional[Dict[str, str]] = None
-) -> Dict[str, pd.DataFrame]:
+    directory: str, datetime_col: str = "datetime", cols_mapping: dict[str, str] | None = None
+) -> dict[str, pd.DataFrame]:
     """[LEGACY] Batch load CSV."""
-    data: Dict[str, pd.DataFrame] = {}
+    data: dict[str, pd.DataFrame] = {}
     for path in list_csv_files(directory):
         symbol = os.path.splitext(os.path.basename(path))[0]
         data[symbol] = load_csv_ohlcv(path, datetime_col, cols_mapping)
@@ -321,9 +318,7 @@ def load_all_csv_ohlcv(
 
 
 def resample_ohlcv(
-    df: pd.DataFrame,
-    timeframe: str,
-    how: Optional[Dict[str, str]] = None
+    df: pd.DataFrame, timeframe: str, how: dict[str, str] | None = None
 ) -> pd.DataFrame:
     """
     Resampling OHLCV na inny interwał (pandas).
@@ -331,6 +326,6 @@ def resample_ohlcv(
     if timeframe not in TF_PANDAS:
         raise ValueError(f"Unsupported target timeframe: {timeframe}")
     if how is None:
-        how = {'Open':'first','High':'max','Low':'min','Close':'last','Volume':'sum'}
+        how = {"Open": "first", "High": "max", "Low": "min", "Close": "last", "Volume": "sum"}
     df_r = df.resample(TF_PANDAS[timeframe]).agg(how)
     return df_r.dropna()

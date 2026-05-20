@@ -1,8 +1,13 @@
-# src/exchange/binance_ws.py
-import json, threading, time
+# scripts/binance_ws.py
+import contextlib
+import json
+import threading
+import time
+
 from websocket import WebSocketApp  # pip install websocket-client
 
 WS_URL = "wss://stream.binance.com:9443/stream"
+
 
 class BinanceWS:
     def __init__(self, symbols, stream="kline_1m", on_msg=None):
@@ -19,8 +24,11 @@ class BinanceWS:
         if self.on_msg:
             self.on_msg(json.loads(message))
 
-    def _on_error(self, ws, err): print("[WS ERROR]", err)
-    def _on_close(self, *a): print("[WS CLOSED]")
+    def _on_error(self, ws, err):
+        print("[WS ERROR]", err)
+
+    def _on_close(self, *a):
+        print("[WS CLOSED]")
 
     def start(self):
         def run():
@@ -37,11 +45,11 @@ class BinanceWS:
                 except Exception as e:
                     print("[WS RECONNECT]", e)
                 time.sleep(2)  # backoff
+
         t = threading.Thread(target=run, daemon=True)
         t.start()
 
     def stop(self):
         self._stop = True
-        try:
+        with contextlib.suppress(Exception):
             self.ws.close()
-        except: pass

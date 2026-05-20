@@ -18,6 +18,7 @@ See also:
 - docs/adr/003-strategybase-signal-api.md
 - algo_bot/strategy_base.py (StrategyBase + Signal)
 """
+
 from __future__ import annotations
 
 import importlib
@@ -36,7 +37,7 @@ def load_strategy(name: str, params: dict[str, Any]) -> StrategyBase:
     if not hasattr(mod, "Strategy"):
         raise ImportError(f"algo_bot.strategies.{name} nie eksportuje klasy Strategy")
 
-    Strat = getattr(mod, "Strategy")
+    Strat = mod.Strategy
     if not issubclass(Strat, StrategyBase):
         raise TypeError(f"algo_bot.strategies.{name}.Strategy nie dziedziczy po StrategyBase")
 

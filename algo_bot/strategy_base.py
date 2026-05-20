@@ -25,12 +25,13 @@ See also:
 - docs/reference/modules/strategy-base.md (TBD — deep reference)
 - docs/concepts/glossary.md (Signal, hold/enter/exit semantics)
 """
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, fields, is_dataclass
 from types import SimpleNamespace
-from typing import Any, Optional, Type
+from typing import Any
 
 import pandas as pd
 
@@ -45,12 +46,13 @@ class Signal:
     - tp/sl:  jeśli None, runner użyje globalnych ustawień (np. --tp_pct/--sl_pct)
     - meta:   dowolne dodatki do logów / journala (np. wartości wskaźników)
     """
-    action: Optional[str] = None
-    side:   Optional[str] = None
-    size:   Optional[float] = None
-    tp_pct: Optional[float] = None
-    sl_pct: Optional[float] = None
-    meta:   Optional[dict[str, Any]] = None
+
+    action: str | None = None
+    side: str | None = None
+    size: float | None = None
+    tp_pct: float | None = None
+    sl_pct: float | None = None
+    meta: dict[str, Any] | None = None
 
 
 class StrategyBase(ABC):
@@ -60,7 +62,8 @@ class StrategyBase(ABC):
       - definiuje ParamSchema (opcjonalnie; dataclass),
       - implementuje required_features() oraz on_bar(df) -> Signal.
     """
-    ParamSchema: Optional[Type] = None  # np. dataclass z parametrami
+
+    ParamSchema: type | None = None  # np. dataclass z parametrami
 
     def __init__(self, params: dict[str, Any] | Any = None) -> None:
         """
@@ -109,6 +112,6 @@ class StrategyBase(ABC):
     # ----- małe udogodnienia -----
 
     @property
-    def side(self) -> Optional[str]:
+    def side(self) -> str | None:
         """Jeśli w parametrach jest 'side', można do niego wygodnie sięgnąć jak dotąd w live."""
         return getattr(self.p, "side", None)

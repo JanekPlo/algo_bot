@@ -30,20 +30,21 @@ See also:
 - docs/adr/005-backtesting-py-mvp-engine.md (rationale silnika)
 - docs/reference/modules/engine-backtester.md (TBD)
 """
+
 from __future__ import annotations
 
-import os
-import json
+import contextlib
 import hashlib
 import importlib
+import json
+import os
 from dataclasses import is_dataclass
-from datetime import datetime, timezone
-from typing import Any, Dict, Tuple, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 import numpy as np
 import pandas as pd
-from backtesting import Backtest
-from backtesting import Strategy as BTStrategy
+from backtesting import Backtest, Strategy as BTStrategy
 
 from algo_bot.strategy_base import StrategyBase
 
@@ -56,12 +57,12 @@ OUT_DIR = os.path.join(PROJECT_ROOT, "results", "backtests")
 # Utils
 # ------------------------------
 def now_utc_str() -> str:
-    return datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    return datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
 
 
-def run_id(strategy: str, symbol: str, timeframe: str, params: Dict[str, Any]) -> str:
+def run_id(strategy: str, symbol: str, timeframe: str, params: dict[str, Any]) -> str:
     h = hashlib.sha1(json.dumps(params, sort_keys=True).encode()).hexdigest()[:8]
-    return f"{now_utc_str()}_{strategy}_{symbol.replace('/','')}_{timeframe}_{h}"
+    return f"{now_utc_str()}_{strategy}_{symbol.replace('/', '')}_{timeframe}_{h}"
 
 
 def ensure_dir(path: str) -> None:
@@ -99,16 +100,18 @@ def resolve_strategy_class(name: str):
     module = importlib.import_module(f"algo_bot.strategies.{name}")
 
     if hasattr(module, "Strategy"):
-        return getattr(module, "Strategy")
+        return module.Strategy
 
     class_name = "".join(part.capitalize() for part in name.split("_"))
     if hasattr(module, class_name):
         return getattr(module, class_name)
 
-    raise AttributeError(f"Module algo_bot.strategies.{name} doesn't expose class Strategy or {class_name}")
+    raise AttributeError(
+        f"Module algo_bot.strategies.{name} doesn't expose class Strategy or {class_name}"
+    )
 
 
-def coerce_params(StratClass, params_dict: Dict[str, Any]) -> Any:
+def coerce_params(StratClass, params_dict: dict[str, Any]) -> Any:
     """
     Jeśli strategia ma ParamSchema (dataclass), zwróć instancję tej dataclass.
     W przeciwnym razie zwróć zwykły dict (legacy).
@@ -124,7 +127,9 @@ def coerce_params(StratClass, params_dict: Dict[str, Any]) -> Any:
 # ------------------------------
 # Microstructure helpers (post-run adjustment, zostawiamy hook)
 # ------------------------------
-def apply_micro_price(base_price: float, side: str, spread_bps: float, slippage_bps: float) -> float:
+def apply_micro_price(
+    base_price: float, side: str, spread_bps: float, slippage_bps: float
+) -> float:
     half = (spread_bps or 0.0) / 2.0 / 1e4
     slip = (slippage_bps or 0.0) / 1e4
     if side == "buy":
@@ -136,11 +141,13 @@ def apply_micro_price(base_price: float, side: str, spread_bps: float, slippage_
     return float(px)
 
 
-def adjust_trades_df(trades: pd.DataFrame,
-                     spread_bps: Optional[float],
-                     slippage_bps: Optional[float],
-                     symbol: str,
-                     timeframe: str) -> pd.DataFrame:
+def adjust_trades_df(
+    trades: pd.DataFrame,
+    spread_bps: float | None,
+    slippage_bps: float | None,
+    symbol: str,
+    timeframe: str,
+) -> pd.DataFrame:
     if trades is None or trades.empty:
         return trades
 
@@ -180,10 +187,7 @@ def adjust_trades_df(trades: pd.DataFrame,
         [_adj(p, "buy") for p in t["ExitPrice"]],
     )
 
-    if "Size" in t.columns:
-        qty = t["Size"].astype(float).abs()
-    else:
-        qty = 1.0
+    qty = t["Size"].astype(float).abs() if "Size" in t.columns else 1.0
 
     t["PnL_adj"] = np.where(
         t["side"] == "long",
@@ -204,6 +208,7 @@ def make_bt_wrapper(StratClass, params_obj):
     może aktualizować te poziomy. Konflikt TP&SL na tej samej świecy rozstrzygamy
     z priorytetem TP (lub wg meta['tp_has_priority'] jeśli strategia poda).
     """
+
     class Wrapped(BTStrategy):
         trade_on_close = getattr(params_obj, "trade_on_close", False)
 
@@ -212,11 +217,11 @@ def make_bt_wrapper(StratClass, params_obj):
             self._has_df = hasattr(self.data, "df")
 
             # stan egzekucyjny wrappera
-            self._pos_side = None           # 'long'/'short'/None — lustrzane do strategii
-            self._sl = None                 # float
-            self._tp = None                 # float
-            self._trail = None              # float
-            self._tp_first = True           # domyślnie TP ma priorytet
+            self._pos_side = None  # 'long'/'short'/None — lustrzane do strategii
+            self._sl = None  # float
+            self._tp = None  # float
+            self._trail = None  # float
+            self._tp_first = True  # domyślnie TP ma priorytet
             # jeśli strategia ma w ParamSchema tp_has_priority – przejmij:
             tp_pref = getattr(params_obj, "tp_has_priority", None)
             if tp_pref is not None:
@@ -228,13 +233,15 @@ def make_bt_wrapper(StratClass, params_obj):
                 return self.data.df.iloc[:n].copy()
             # fallback: zbuduj df ręcznie
             idx = pd.RangeIndex(n)
-            vol = self.data.Volume[:n] if hasattr(self.data, "Volume") else [0]*n
+            vol = self.data.Volume[:n] if hasattr(self.data, "Volume") else [0] * n
             return pd.DataFrame(
-                {"Open":  self.data.Open[:n],
-                 "High":  self.data.High[:n],
-                 "Low":   self.data.Low[:n],
-                 "Close": self.data.Close[:n],
-                 "Volume": vol},
+                {
+                    "Open": self.data.Open[:n],
+                    "High": self.data.High[:n],
+                    "Low": self.data.Low[:n],
+                    "Close": self.data.Close[:n],
+                    "Volume": vol,
+                },
                 index=idx,
             )
 
@@ -244,15 +251,17 @@ def make_bt_wrapper(StratClass, params_obj):
                 return None
             if side == "long":
                 hit_tp = high >= self._tp
-                hit_sl = low  <= self._sl
+                hit_sl = low <= self._sl
             else:  # short
-                hit_tp = low  <= self._tp
+                hit_tp = low <= self._tp
                 hit_sl = high >= self._sl
 
             if hit_tp and hit_sl:
                 return "tp" if self._tp_first else "sl"
-            if hit_tp: return "tp"
-            if hit_sl: return "sl"
+            if hit_tp:
+                return "tp"
+            if hit_sl:
+                return "sl"
             return None
 
         # zamknięcie po konkretnej cenie (żeby PnL był „czysty”)
@@ -274,18 +283,18 @@ def make_bt_wrapper(StratClass, params_obj):
                     if "sl" in sig.meta and sig.meta["sl"] is not None:
                         # zacieśniaj – nie oddalaj
                         if self._pos_side == "long":
-                            self._sl = max(self._sl or -float('inf'), float(sig.meta["sl"]))
+                            self._sl = max(self._sl or -float("inf"), float(sig.meta["sl"]))
                         else:
-                            self._sl = min(self._sl or float('inf'), float(sig.meta["sl"]))
+                            self._sl = min(self._sl or float("inf"), float(sig.meta["sl"]))
                     if "tp" in sig.meta and sig.meta["tp"] is not None:
                         self._tp = float(sig.meta["tp"])
                     if "trail" in sig.meta and sig.meta["trail"] is not None:
                         # trail też traktujemy jako sugestię do SL
                         tr = float(sig.meta["trail"])
                         if self._pos_side == "long":
-                            self._sl = max(self._sl or -float('inf'), tr)
+                            self._sl = max(self._sl or -float("inf"), tr)
                         else:
-                            self._sl = min(self._sl or float('inf'), tr)
+                            self._sl = min(self._sl or float("inf"), tr)
                     if "tp_has_priority" in sig.meta:
                         self._tp_first = bool(sig.meta["tp_has_priority"])
 
@@ -310,19 +319,23 @@ def make_bt_wrapper(StratClass, params_obj):
                 if sig.action == "exit":
                     px = float(df["Close"].iloc[-1]) if self.trade_on_close else None
                     self._close_at(px) if px is not None else self.position.close()
-                    self._pos_side = None; self._sl = self._tp = self._trail = None
+                    self._pos_side = None
+                    self._sl = self._tp = self._trail = None
                     return
 
                 # 2) intrabar check: TP/SL na tej świecy po High/Low
-                h = float(df["High"].iloc[-1]); l = float(df["Low"].iloc[-1])
-                which = self._same_bar_hit(self._pos_side, h, l)
+                h = float(df["High"].iloc[-1])
+                lo = float(df["Low"].iloc[-1])
+                which = self._same_bar_hit(self._pos_side, h, lo)
                 if which == "tp":
                     self._close_at(self._tp)
-                    self._pos_side = None; self._sl = self._tp = self._trail = None
+                    self._pos_side = None
+                    self._sl = self._tp = self._trail = None
                     return
                 if which == "sl":
                     self._close_at(self._sl)
-                    self._pos_side = None; self._sl = self._tp = self._trail = None
+                    self._pos_side = None
+                    self._sl = self._tp = self._trail = None
                     return
 
                 # 3) inaczej: trwaj, nic nie rób (poziomy już zaktualizowane)
@@ -362,7 +375,6 @@ def make_bt_wrapper(StratClass, params_obj):
     return Wrapped
 
 
-
 # ------------------------------
 # Backtest runner
 # ------------------------------
@@ -370,7 +382,7 @@ def run_backtest(
     symbol: str,
     timeframe: str,
     strategy: str,
-    params: Dict[str, Any],
+    params: dict[str, Any],
     start: str | None = None,
     end: str | None = None,
     cash: float = 100_000.0,
@@ -379,7 +391,7 @@ def run_backtest(
     slippage_bps: float | None = None,
     spread_bps: float | None = None,
     unit_scale: float | None = None,
-) -> Tuple[Dict[str, Any], pd.DataFrame, pd.DataFrame]:
+) -> tuple[dict[str, Any], pd.DataFrame, pd.DataFrame]:
     """
     Zwraca: (stats_raw, equity_df, trades_df_exec_adjusted)
     """
@@ -416,12 +428,9 @@ def run_backtest(
     # 5a) Exclusive orders — dla DCA/pyramiding pozwól na wielokrotne pozycje w tym samym kierunku
     exclusive = True
     if issubclass(StratClass, StrategyBase):
-        try:
-            allow_pyr = getattr(params_obj, "allow_pyramiding", None)
-            if allow_pyr is True:
+        with contextlib.suppress(Exception):
+            if getattr(params_obj, "allow_pyramiding", None) is True:
                 exclusive = False
-        except Exception:
-            pass
 
     bt = Backtest(
         df,
@@ -459,8 +468,8 @@ def save_outputs(
     symbol: str,
     timeframe: str,
     strategy: str,
-    params_in: Dict[str, Any],
-    stats: Dict[str, Any],
+    params_in: dict[str, Any],
+    stats: dict[str, Any],
     equity: pd.DataFrame,
     trades: pd.DataFrame,
 ) -> str:
@@ -505,11 +514,18 @@ def save_outputs(
 # ------------------------------
 def parse_args():
     import argparse
+
     ap = argparse.ArgumentParser()
     ap.add_argument("--symbol", required=True, help="np. BTC/USDT")
     ap.add_argument("--timeframe", required=True, help="np. 5m, 1h, 4h")
-    ap.add_argument("--strategy", required=True, help="nazwa modułu w strategies/, np. xtrender_pullback")
-    ap.add_argument("--params", default="{}", help="JSON z parametrami strategii (dla StrategyBase: ParamSchema)")
+    ap.add_argument(
+        "--strategy", required=True, help="nazwa modułu w strategies/, np. xtrender_pullback"
+    )
+    ap.add_argument(
+        "--params",
+        default="{}",
+        help="JSON z parametrami strategii (dla StrategyBase: ParamSchema)",
+    )
     ap.add_argument("--start", default=None)
     ap.add_argument("--end", default=None)
     ap.add_argument("--cash", type=float, default=100_000.0)
@@ -517,8 +533,12 @@ def parse_args():
     ap.add_argument("--trade_on_close", action="store_true")
     ap.add_argument("--slippage_bps", type=float, default=None)
     ap.add_argument("--spread_bps", type=float, default=None)
-    ap.add_argument("--unit_scale", type=float, default=None,
-                    help="Opcjonalny mnożnik cen (np. 0.001 → 1 jednostka = 0.001 instrumentu)")
+    ap.add_argument(
+        "--unit_scale",
+        type=float,
+        default=None,
+        help="Opcjonalny mnożnik cen (np. 0.001 → 1 jednostka = 0.001 instrumentu)",
+    )
     return ap.parse_args()
 
 
@@ -527,7 +547,7 @@ def main():
     try:
         params = json.loads(args.params)
     except Exception as e:
-        raise SystemExit(f"Niepoprawny JSON w --params: {e}")
+        raise SystemExit(f"Niepoprawny JSON w --params: {e}") from e
 
     rid = run_id(args.strategy, args.symbol, args.timeframe, params)
 

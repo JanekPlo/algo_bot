@@ -1,34 +1,39 @@
 #!/usr/bin/env python3
-from __future__ import annotations
-
 """
-process_data.py – standaryzuje RAW → PROCESSED
+algo_bot/process_data.py - standaryzuje RAW -> PROCESSED.
+
 - RAW: bot_data/raw/BTC_USDT-5m.csv (kolumny: ts(ms) + datetime(UTC) + OHLCV; legacy: 'timestamp' w s)
 - PROCESSED: bot_data/processed/binance_<SYMBOL>_<TF>.csv
-  • index = UTC datetime
-  • kolumny: Open,High,Low,Close,Volume (+ opcjonalne featury)
+  - index = UTC datetime
+  - kolumny: Open,High,Low,Close,Volume (+ opcjonalne featury)
 
 Walidacja:
-- sprawdzamy siatkę czasu wg TF; jeśli braków > 0.5% → błąd
-- wypełnienie braków (≤0.5%): Close→Open, High/Low = max/min z O/C, Volume=0
+- sprawdzamy siatke czasu wg TF; jesli brakow > 0.5% -> blad
+- wypelnienie brakow (<=0.5%): Close->Open, High/Low = max/min z O/C, Volume=0
 
-Użycie:
+Uzycie:
   # jeden plik RAW
-  python3 src/process_data.py bot_data/raw/BTC_USDT-5m.csv
+  python3 -m algo_bot.process_data bot_data/raw/BTC_USDT-5m.csv
 
   # batch na wszystkie RAW-5m
-  for f in bot_data/raw/*-5m.csv; do python3 src/process_data.py "$f"; done
+  for f in bot_data/raw/*-5m.csv; do python3 -m algo_bot.process_data "$f"; done
+
+Public API:
+- main() - CLI entry (po dodaniu do [project.scripts] zostanie algo-process)
+- process_file(path) - przetwarza pojedynczy plik raw -> processed
 """
+from __future__ import annotations
 
 import argparse
 from pathlib import Path
-from typing import Dict, Any, Tuple
+from typing import Any
 
 import pandas as pd
 
 # --- opcjonalne featury (TA-Lib) ---
 try:
     import talib
+
     _HAS_TALIB = True
 except Exception:
     _HAS_TALIB = False
@@ -41,7 +46,7 @@ RAW_DIR = Path("bot_data/raw")
 PROC_DIR = Path("bot_data/processed")
 
 
-def parse_legacy_name(raw_path: Path) -> Tuple[str, str]:
+def parse_legacy_name(raw_path: Path) -> tuple[str, str]:
     """
     BTC_USDT-5m.csv -> ('BTCUSDT','5m')
     """
@@ -73,7 +78,9 @@ def _ensure_ts_datetime(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def validate_and_fill(df: pd.DataFrame, timeframe: str, max_missing_ratio=DEFAULT_MAX_MISSING_RATIO) -> pd.DataFrame:
+def validate_and_fill(
+    df: pd.DataFrame, timeframe: str, max_missing_ratio=DEFAULT_MAX_MISSING_RATIO
+) -> pd.DataFrame:
     step = TF_MS[timeframe]
     df = df.sort_values("ts").drop_duplicates(subset=["ts"])
 
@@ -85,7 +92,9 @@ def validate_and_fill(df: pd.DataFrame, timeframe: str, max_missing_ratio=DEFAUL
     miss_ratio = len(missing) / max(1, len(list(full_index)))
 
     if miss_ratio > max_missing_ratio:
-        raise ValueError(f"Too many missing bars ({miss_ratio:.3%}) — aborting. Missing count={len(missing)}")
+        raise ValueError(
+            f"Too many missing bars ({miss_ratio:.3%}) — aborting. Missing count={len(missing)}"
+        )
 
     if missing:
         filler = pd.DataFrame({"ts": missing})
@@ -94,10 +103,10 @@ def validate_and_fill(df: pd.DataFrame, timeframe: str, max_missing_ratio=DEFAUL
 
         # wypełnianie wg spec:
         merged["Close"] = merged["Close"].ffill()
-        merged["Open"]  = merged["Open"].fillna(merged["Close"].shift(1))
-        merged["High"]  = merged["High"].fillna(merged[["Open", "Close"]].max(axis=1))
-        merged["Low"]   = merged["Low"].fillna(merged[["Open", "Close"]].min(axis=1))
-        merged["Volume"]= merged["Volume"].fillna(0.0)
+        merged["Open"] = merged["Open"].fillna(merged["Close"].shift(1))
+        merged["High"] = merged["High"].fillna(merged[["Open", "Close"]].max(axis=1))
+        merged["Low"] = merged["Low"].fillna(merged[["Open", "Close"]].min(axis=1))
+        merged["Volume"] = merged["Volume"].fillna(0.0)
 
         df = merged
 
@@ -109,7 +118,7 @@ def processed_filename(symbol_no_slash: str, timeframe: str) -> Path:
     return PROC_DIR / f"binance_{symbol_no_slash}_{timeframe}.csv"
 
 
-def compute_features(df: pd.DataFrame, feature_cfg: Dict[str, Any] | None) -> pd.DataFrame:
+def compute_features(df: pd.DataFrame, feature_cfg: dict[str, Any] | None) -> pd.DataFrame:
     """
     Opcjonalne featury. Jeśli TA-Lib brak – pomiń grzecznie.
     feature_cfg (przykład):
@@ -119,7 +128,7 @@ def compute_features(df: pd.DataFrame, feature_cfg: Dict[str, Any] | None) -> pd
     if not feature_cfg:
         return df
     if not _HAS_TALIB:
-        print("[process] TA-Lib not available – skipping features")
+        print("[process] TA-Lib not available - skipping features")
         return df
 
     for feat in feature_cfg:
@@ -137,8 +146,11 @@ def compute_features(df: pd.DataFrame, feature_cfg: Dict[str, Any] | None) -> pd
     return df
 
 
-def process_file(raw_path: Path, feature_cfg: Dict[str, Any] | None = None,
-                 max_missing_ratio: float = DEFAULT_MAX_MISSING_RATIO) -> Path:
+def process_file(
+    raw_path: Path,
+    feature_cfg: dict[str, Any] | None = None,
+    max_missing_ratio: float = DEFAULT_MAX_MISSING_RATIO,
+) -> Path:
     """
     Przetwarza pojedynczy RAW → PROCESSED (z walidacją i ewentualnym fill braków).
     Zwraca ścieżkę wyjściową.
@@ -160,8 +172,11 @@ def process_file(raw_path: Path, feature_cfg: Dict[str, Any] | None = None,
             raise ValueError(f"Missing column '{c}' in RAW {raw_path}")
 
     # walidacja + fill braków
-    df = validate_and_fill(df[["ts", "datetime", "Open", "High", "Low", "Close", "Volume"]],
-                           timeframe, max_missing_ratio=max_missing_ratio)
+    df = validate_and_fill(
+        df[["ts", "datetime", "Open", "High", "Low", "Close", "Volume"]],
+        timeframe,
+        max_missing_ratio=max_missing_ratio,
+    )
 
     # Trzymaj kolumnę 'datetime' (UTC) w PROCESSED, żeby loader backtestera mógł ją sparsować
     df["datetime"] = pd.to_datetime(df["datetime"], utc=True)
@@ -173,7 +188,11 @@ def process_file(raw_path: Path, feature_cfg: Dict[str, Any] | None = None,
     out = processed_filename(symbol, timeframe)
     cols_order = [
         "datetime",
-        "Open", "High", "Low", "Close", "Volume",
+        "Open",
+        "High",
+        "Low",
+        "Close",
+        "Volume",
     ] + [c for c in df.columns if c not in ["datetime", "Open", "High", "Low", "Close", "Volume"]]
     df[cols_order].to_csv(out, index=False)
     print(f"[process] Wrote PROCESSED → {out}  rows={len(df)}")
@@ -183,8 +202,12 @@ def process_file(raw_path: Path, feature_cfg: Dict[str, Any] | None = None,
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("raw_path", nargs="?", help="np. bot_data/raw/BTC_USDT-5m.csv")
-    ap.add_argument("--max-missing-ratio", type=float, default=DEFAULT_MAX_MISSING_RATIO,
-                    help="Dopuszczalny udział braków (domyślnie 0.005 = 0.5%)")
+    ap.add_argument(
+        "--max-missing-ratio",
+        type=float,
+        default=DEFAULT_MAX_MISSING_RATIO,
+        help="Dopuszczalny udział braków (domyślnie 0.005 = 0.5%)",
+    )
     # Prosto: na razie bez YAML – featury można dopchnąć później
     ap.add_argument("--features-json", help="Opcjonalny JSON z listą featurów", default=None)
     args = ap.parse_args()
@@ -192,10 +215,13 @@ def main():
     feature_cfg = None
     if args.features_json:
         import json
+
         feature_cfg = json.loads(args.features_json)
 
     if args.raw_path:
-        process_file(Path(args.raw_path), feature_cfg=feature_cfg, max_missing_ratio=args.max_missing_ratio)
+        process_file(
+            Path(args.raw_path), feature_cfg=feature_cfg, max_missing_ratio=args.max_missing_ratio
+        )
     else:
         # batch: wszystkie RAW
         files = sorted(RAW_DIR.glob("*.csv"))

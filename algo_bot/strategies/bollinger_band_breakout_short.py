@@ -8,15 +8,17 @@ Rola pliku w szkielecie:
 
 Parametry domyślne można nadpisać przy optymalizacji.
 """
+
 import talib
 from backtesting import Strategy
 
+
 class BollingerBandBreakoutShort(Strategy):
     # Parametry strategii (można optymalizować)
-    window = 21         # okno do obliczeń Bollinger Bands
-    num_std = 2.0       # liczba odchyleń standardowych
+    window = 21  # okno do obliczeń Bollinger Bands
+    num_std = 2.0  # liczba odchyleń standardowych
     take_profit = 0.05  # zysk docelowy 5%
-    stop_loss = 0.03    # stop loss 3%
+    stop_loss = 0.03  # stop loss 3%
 
     def init(self):
         """
@@ -24,11 +26,7 @@ class BollingerBandBreakoutShort(Strategy):
         self.I() rejestruje wskaźnik i aktualizuje przy każdym wywołaniu next().
         """
         self.upper, self.middle, self.lower = self.I(
-            talib.BBANDS,
-            self.data.Close,
-            self.window,
-            self.num_std,
-            self.num_std
+            talib.BBANDS, self.data.Close, self.window, self.num_std, self.num_std
         )
 
     def next(self):
@@ -39,7 +37,4 @@ class BollingerBandBreakoutShort(Strategy):
         """
         price = self.data.Close[-1]
         if not self.position and price < self.lower[-1]:
-            self.sell(
-                sl=price * (1 + self.stop_loss),
-                tp=price * (1 - self.take_profit)
-            )
+            self.sell(sl=price * (1 + self.stop_loss), tp=price * (1 - self.take_profit))

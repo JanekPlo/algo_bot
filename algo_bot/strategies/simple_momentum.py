@@ -2,9 +2,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+
 import pandas as pd
 
-from algo_bot.strategy_base import StrategyBase, Signal
+from algo_bot.strategy_base import Signal, StrategyBase
 
 name = "simple_momentum"
 
@@ -13,7 +14,7 @@ name = "simple_momentum"
 class SimpleMomentumParams:
     short: int = 10
     long: int = 30
-    side: str = "short"     # 'long' | 'short' | 'both'
+    side: str = "short"  # 'long' | 'short' | 'both'
     trade_on_close: bool = True
     tp_pct: float | None = None
     sl_pct: float | None = None
@@ -30,16 +31,16 @@ class Strategy(StrategyBase):
         if len(df) < max(self.p.short, self.p.long) + 2:
             return Signal()  # hold
 
-        s = df["Close"].rolling(self.p.short).mean()
-        l = df["Close"].rolling(self.p.long).mean()
-        s_prev, s_now = s.iloc[-2], s.iloc[-1]
-        l_prev, l_now = l.iloc[-2], l.iloc[-1]
+        short_ma = df["Close"].rolling(self.p.short).mean()
+        long_ma = df["Close"].rolling(self.p.long).mean()
+        s_prev, s_now = short_ma.iloc[-2], short_ma.iloc[-1]
+        l_prev, l_now = long_ma.iloc[-2], long_ma.iloc[-1]
 
         # crossy
-        enter_long  = (s_prev <= l_prev) and (s_now > l_now)
-        exit_long   = (s_prev >= l_prev) and (s_now < l_now)
+        enter_long = (s_prev <= l_prev) and (s_now > l_now)
+        exit_long = (s_prev >= l_prev) and (s_now < l_now)
         enter_short = (s_prev >= l_prev) and (s_now < l_now)
-        exit_short  = (s_prev <= l_prev) and (s_now > l_now)
+        exit_short = (s_prev <= l_prev) and (s_now > l_now)
 
         # priorytet: enter przed exit (lub odwrotnie — zgodnie z Twoją polityką)
         if self.p.side in ("long", "both") and enter_long:
@@ -53,4 +54,6 @@ class Strategy(StrategyBase):
             return Signal("exit", "short")
 
         return Signal()  # hold
+
+
 # --- IGNORE ---

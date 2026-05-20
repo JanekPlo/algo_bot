@@ -2,15 +2,12 @@
 from __future__ import annotations
 
 import argparse
-import math
 import time
-from datetime import datetime, timezone
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Optional, Iterable, List
 
 import ccxt
 import pandas as pd
-
 
 # === Konfiguracja kroków czasowych (ms) ===
 TF_MS = {
@@ -57,7 +54,7 @@ def ensure_parent(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
 
 
-def last_ts_from_file(path: Path) -> Optional[int]:
+def last_ts_from_file(path: Path) -> int | None:
     """
     Zwraca ostatni ts (ms) z istniejącego pliku RAW.
     Obsługuje też legacy kolumnę 'timestamp' (sekundy).
@@ -82,7 +79,7 @@ def last_ts_from_file(path: Path) -> Optional[int]:
 
 def backoff_sleep(attempt: int) -> None:
     """Łagodny backoff (max 30s)."""
-    time.sleep(min(30.0, 1.6 ** attempt))
+    time.sleep(min(30.0, 1.6**attempt))
 
 
 def fetch_ohlcv_batches(
@@ -90,9 +87,9 @@ def fetch_ohlcv_batches(
     symbol: str,
     timeframe: str,
     since_ms: int,
-    until_ms: Optional[int] = None,
+    until_ms: int | None = None,
     limit: int = 1000,
-) -> Iterable[List[List[float]]]:
+) -> Iterable[list[list[float]]]:
     """
     Generator batchy OHLCV (z retry) od 'since_ms' do 'until_ms' (jeśli podane).
     """
@@ -110,7 +107,7 @@ def fetch_ohlcv_batches(
                 ohlcv = ex.fetch_ohlcv(symbol, timeframe=timeframe, since=cursor, limit=limit)
                 break
             except (ccxt.NetworkError, ccxt.DDoSProtection, ccxt.ExchangeNotAvailable) as e:
-                print(f"[fetch] WARN {type(e).__name__}: {e} (retry {i+1}/6)")
+                print(f"[fetch] WARN {type(e).__name__}: {e} (retry {i + 1}/6)")
                 backoff_sleep(i)
         if ohlcv is None:
             # ostatnia próba – jeśli nadal None, rzuć wyjątek
@@ -168,14 +165,20 @@ def _save_append(path: Path, new_df: pd.DataFrame) -> None:
 
 # === Main CLI ===
 def main():
-    ap = argparse.ArgumentParser(description="Pobiera OHLCV do RAW (z resume) – Binance Futures")
+    ap = argparse.ArgumentParser(description="Pobiera OHLCV do RAW (z resume) - Binance Futures")
     ap.add_argument("symbol", help="np. BTC/USDT, BTC_USDT lub BTCUSDT")
     ap.add_argument("timeframe", choices=list(TF_MS.keys()))
     ap.add_argument("--start", required=True, help="Początek zakresu w UTC, np. 2024-01-01")
     ap.add_argument("--end", help="Koniec zakresu w UTC (opcjonalnie), np. 2024-06-30")
-    ap.add_argument("--limit", type=int, default=1000, help="Limit świec na jeden request (domyślnie 1000)")
-    ap.add_argument("--exchange", default="binance", choices=["binance"], help="Na razie wspieramy binance")
-    ap.add_argument("--market", default="future", choices=["future", "spot"], help="Typ rynku dla CCXT")
+    ap.add_argument(
+        "--limit", type=int, default=1000, help="Limit świec na jeden request (domyślnie 1000)"
+    )
+    ap.add_argument(
+        "--exchange", default="binance", choices=["binance"], help="Na razie wspieramy binance"
+    )
+    ap.add_argument(
+        "--market", default="future", choices=["future", "spot"], help="Typ rynku dla CCXT"
+    )
     args = ap.parse_args()
 
     symbol = to_ccxt_symbol(args.symbol)
@@ -192,10 +195,12 @@ def main():
 
     # CCXT client
     if args.exchange == "binance":
-        ex = ccxt.binance({
-            "enableRateLimit": True,
-            "options": {"defaultType": "future" if args.market == "future" else "spot"},
-        })
+        ex = ccxt.binance(
+            {
+                "enableRateLimit": True,
+                "options": {"defaultType": "future" if args.market == "future" else "spot"},
+            }
+        )
     else:
         raise NotImplementedError("Tylko binance na tę chwilę")
 

@@ -1,14 +1,12 @@
 from __future__ import annotations
 
+import math
 import os
 from dataclasses import dataclass
-from typing import Optional
 
 import pandas as pd
-import math
 
-from algo_bot.strategy_base import StrategyBase, Signal
-
+from algo_bot.strategy_base import Signal, StrategyBase
 
 name = "dca_btc"
 
@@ -23,15 +21,15 @@ class DCAParams:
     start_offset: int = 0
 
     # Fear & Greed
-    fng_mode: str = "off"          # 'off' | 'filter' | 'scale'
+    fng_mode: str = "off"  # 'off' | 'filter' | 'scale'
     fng_path: str = "bot_data/aux/crypto_fear_greed.csv"
-    fng_buy_max: int = 50           # dla 'filter': kupuj tylko gdy index <= fng_buy_max
+    fng_buy_max: int = 50  # dla 'filter': kupuj tylko gdy index <= fng_buy_max
 
     # Uproszczony long-only spot
     side: str = "long"
     trade_on_close: bool = True
-    tp_pct: Optional[float] = None
-    sl_pct: Optional[float] = None
+    tp_pct: float | None = None
+    sl_pct: float | None = None
 
     # Jeśli korzystasz z unit_scale w backtesterze (np. 0.001), włącz zaokrąglenie do całkowitych 'udziałów'.
     round_to_int_shares: bool = False
@@ -44,13 +42,13 @@ class Strategy(StrategyBase):
 
     # state
     _bar_i: int = 0
-    _fng_series: Optional[pd.Series] = None
+    _fng_series: pd.Series | None = None
 
     @staticmethod
     def required_features() -> set[str]:
         return {"Close"}
 
-    def _load_fng(self) -> Optional[pd.Series]:
+    def _load_fng(self) -> pd.Series | None:
         try:
             # ścieżka względem katalogu projektu
             proj_root = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
@@ -73,7 +71,7 @@ class Strategy(StrategyBase):
         self._bar_i = 0
         self._fng_series = self._load_fng()
 
-    def _fng_value_for(self, ts: pd.Timestamp) -> Optional[int]:
+    def _fng_value_for(self, ts: pd.Timestamp) -> int | None:
         if self._fng_series is None or self._fng_series.empty:
             return None
         d = pd.Timestamp(ts).tz_convert("UTC").normalize()
@@ -130,7 +128,7 @@ class Strategy(StrategyBase):
         # Jeśli ceny zostały przeskalowane (unit_scale) i chcesz unikać ułamkowych udziałów,
         # można wymusić zakup co najmniej 1 całkowitej jednostki.
         if self.p.round_to_int_shares:
-            size_units = max(1, int(math.floor(size_units + 1e-9)))
+            size_units = max(1, math.floor(size_units + 1e-9))
 
         return Signal(
             action="enter",

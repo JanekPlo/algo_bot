@@ -17,9 +17,11 @@ Parametry:
 - atr_multiplier: mnożnik ATR dla trailing stop (2.0)
 - trade_on_close: wykonanie zleceń na zamknięciu świecy
 """
+
+import talib
 from backtesting import Strategy
 from backtesting.lib import crossover
-import talib
+
 
 class ShortTrendFollowing(Strategy):
     fast_window = 50
@@ -40,13 +42,15 @@ class ShortTrendFollowing(Strategy):
             self.data.Close,
             fastperiod=self.macd_fast,
             slowperiod=self.macd_slow,
-            signalperiod=self.macd_signal
+            signalperiod=self.macd_signal,
         )
         # Ta-lambda to hack, by I() przyjęło wektor
         self.macd_line = self.I(lambda x: macd_line, self.data.Close)
         self.macd_signal = self.I(lambda x: macd_signal, self.data.Close)
 
-        self.atr = self.I(talib.ATR, self.data.High, self.data.Low, self.data.Close, self.atr_window)
+        self.atr = self.I(
+            talib.ATR, self.data.High, self.data.Low, self.data.Close, self.atr_window
+        )
 
     def next(self):
         price = self.data.Close[-1]

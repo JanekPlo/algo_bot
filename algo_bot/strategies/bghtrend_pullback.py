@@ -37,16 +37,17 @@ See also:
 - docs/reference/modules/strategy-bghtrend-pullback.md (TBD — deep walkthrough)
 - ROADMAP faza 2 (walk-forward MVP na tej strategii)
 """
+
 from __future__ import annotations
+
 from dataclasses import dataclass
-from typing import Tuple
 
 import numpy as np
 import pandas as pd
 
-from algo_bot.strategy_base import StrategyBase, Signal
+from algo_bot.indicators import atr, ema, xtrender_components
+from algo_bot.strategy_base import Signal, StrategyBase
 
-from algo_bot.indicators import ema, rsi, t3, atr, xtrender_components
 
 # =========================
 # Paramy
@@ -55,43 +56,43 @@ from algo_bot.indicators import ema, rsi, t3, atr, xtrender_components
 class XtrenderPullbackParams:
     # Trend / EMA
     ema_fast: int = 21
-    ema_mid:  int = 89
+    ema_mid: int = 89
     ema_slow: int = 200
 
     # Slope filter (znormalizowany)
-    slope_mode: str = "pct"          # 'pct' | 'zscore'
+    slope_mode: str = "pct"  # 'pct' | 'zscore'
     slope_lookback: int = 34
-    slope_thr_mid: float = 5e-5      # progi dla 'pct' (per bar)
+    slope_thr_mid: float = 5e-5  # progi dla 'pct' (per bar)
     slope_thr_slow: float = 3e-5
-    zscore_window: int = 100         # dla 'zscore', rolling okno
+    zscore_window: int = 100  # dla 'zscore', rolling okno
 
     # Pullback
     pullback_lookback: int = 15
     pullback_atr_len: int = 14
     pullback_atr_mult: float = 0.15  # ile ATR to „blisko EMA89”
     entry_max_atr_mult: float = 0.75
-    require_rebound: bool = True     # świeca odbicia (Close vs Close[-1], powrót nad/pod EMA21)
+    require_rebound: bool = True  # świeca odbicia (Close vs Close[-1], powrót nad/pod EMA21)
 
     # Xtrender
     short_l1: int = 5
     short_l2: int = 20
     short_l3: int = 15
-    long_l1:  int = 20
-    long_l2:  int = 15
-    t3_len:   int = 5
-    t3_b:     float = 0.7
-    deadzone: float = 3.0            # martwa strefa wokół 0
+    long_l1: int = 20
+    long_l2: int = 15
+    t3_len: int = 5
+    t3_b: float = 0.7
+    deadzone: float = 3.0  # martwa strefa wokół 0
 
     # SL/TP/Trail
     rr_target: float = 1.5
-    sl_atr_mult: float = 0.5         # SL = EMA89 ± 0.5*ATR
-    trail_atr_mult: float = 2.0      # ATR-trail
-    tp_has_priority: bool = True     # jeśli w tej samej świecy TP i SL
+    sl_atr_mult: float = 0.5  # SL = EMA89 ± 0.5*ATR
+    trail_atr_mult: float = 2.0  # ATR-trail
+    tp_has_priority: bool = True  # jeśli w tej samej świecy TP i SL
 
     # Zarządzanie pozycją
-    stale_max_bars: int = 40         # timeout (~10h na 15m), używany gdy brak momentum (xtr deadzone)
-    cooldown_bars: int = 10           # przerwa po SL
-    side: str = "both"               # 'long'|'short'|'both'
+    stale_max_bars: int = 40  # timeout (~10h na 15m), używany gdy brak momentum (xtr deadzone)
+    cooldown_bars: int = 10  # przerwa po SL
+    side: str = "both"  # 'long'|'short'|'both'
 
     # kosmetyka API
     trade_on_close: bool = True
@@ -152,12 +153,12 @@ class Strategy(StrategyBase):
             return False
 
         if self.p.slope_mode == "zscore":
-            s89  = self._slope_zscore(em, L, self.p.zscore_window)
+            s89 = self._slope_zscore(em, L, self.p.zscore_window)
             s200 = self._slope_zscore(es, L, self.p.zscore_window)
             thr89 = self.p.slope_thr_mid
             thr200 = self.p.slope_thr_slow
         else:  # 'pct'
-            s89  = self._slope_pct(em, L)
+            s89 = self._slope_pct(em, L)
             s200 = self._slope_pct(es, L)
             thr89 = self.p.slope_thr_mid
             thr200 = self.p.slope_thr_slow
@@ -167,7 +168,9 @@ class Strategy(StrategyBase):
         else:
             return (s89 <= -thr89) and (s200 <= -thr200)
 
-    def _pullback_seen(self, df: pd.DataFrame, ema89: pd.Series, atr_s: pd.Series, side: str) -> bool:
+    def _pullback_seen(
+        self, df: pd.DataFrame, ema89: pd.Series, atr_s: pd.Series, side: str
+    ) -> bool:
         look = self.p.pullback_lookback
         win = df.iloc[-look:]
         e89 = ema89.iloc[-look:]
@@ -194,20 +197,26 @@ class Strategy(StrategyBase):
     def _entry_distance_ok(self, close: float, ema89_now: float, atr_now: float) -> bool:
         """Sprawdza, czy odległość wejścia od EMA89 nie jest zbyt duża (w ATR)."""
         k = float(self.p.entry_max_atr_mult)
-        return abs(close - ema89_now) <= k * max(1e-9,atr_now)
-
+        return abs(close - ema89_now) <= k * max(1e-9, atr_now)
 
     def _xtr_ok(self, x_long: pd.Series, side: str) -> bool:
-        val = float(x_long.iloc[-1]); dz = self.p.deadzone
+        val = float(x_long.iloc[-1])
+        dz = self.p.deadzone
         return (val > dz) if side == "long" else (val < -dz)
 
     def _in_profit(self, last_close: float) -> bool:
         if self._entry_price is None or self._pos_side is None:
             return False
-        return (last_close > self._entry_price) if self._pos_side == "long" else (last_close < self._entry_price)
+        return (
+            (last_close > self._entry_price)
+            if self._pos_side == "long"
+            else (last_close < self._entry_price)
+        )
 
     # ---------- targets ----------
-    def _compute_sl_tp(self, entry: float, ema89_now: float, atr_now: float, side: str) -> Tuple[float, float]:
+    def _compute_sl_tp(
+        self, entry: float, ema89_now: float, atr_now: float, side: str
+    ) -> tuple[float, float]:
         pad = self.p.sl_atr_mult * atr_now
         if side == "long":
             sl = ema89_now - pad
@@ -226,7 +235,7 @@ class Strategy(StrategyBase):
         if self._pos_side == "long":
             new_trail = last_close - step
             self._trail = max(self._trail or -np.inf, new_trail)
-            self._sl = max(self._sl, self._trail)      # zacieśniaj, nie poszerzaj
+            self._sl = max(self._sl, self._trail)  # zacieśniaj, nie poszerzaj
         else:
             new_trail = last_close + step
             self._trail = min(self._trail or np.inf, new_trail)
@@ -237,15 +246,17 @@ class Strategy(StrategyBase):
             return None
         if side == "long":
             hit_tp = high >= self._tp
-            hit_sl = low  <= self._sl
+            hit_sl = low <= self._sl
         else:
-            hit_tp = low  <= self._tp
+            hit_tp = low <= self._tp
             hit_sl = high >= self._sl
 
         if hit_tp and hit_sl:
             return "tp" if self.p.tp_has_priority else "sl"
-        if hit_tp: return "tp"
-        if hit_sl: return "sl"
+        if hit_tp:
+            return "tp"
+        if hit_sl:
+            return "sl"
         return None
 
     # ---------- state ----------
@@ -272,21 +283,31 @@ class Strategy(StrategyBase):
 
     # ---------- main ----------
     def on_bar(self, df: pd.DataFrame) -> Signal:
-        need = max(self.p.ema_slow, self.p.long_l1 if hasattr(self.p, "long_l1") else 20,
-                   self.p.short_l2 if hasattr(self.p, "short_l2") else 20, 60)
+        need = max(
+            self.p.ema_slow,
+            self.p.long_l1 if hasattr(self.p, "long_l1") else 20,
+            self.p.short_l2 if hasattr(self.p, "short_l2") else 20,
+            60,
+        )
         if len(df) < need + 5:
             return Signal()
 
-        o, h, l, c = df["Open"], df["High"], df["Low"], df["Close"]
+        h, lo, c = df["High"], df["Low"], df["Close"]
 
-        ema21  = ema(c, self.p.ema_fast)
-        ema89  = ema(c, self.p.ema_mid)
+        ema21 = ema(c, self.p.ema_fast)
+        ema89 = ema(c, self.p.ema_mid)
         ema200 = ema(c, self.p.ema_slow)
-        atr_s  = atr(df, self.p.pullback_atr_len)
+        atr_s = atr(df, self.p.pullback_atr_len)
 
-        x_short, x_long, x_t3, up_dot, down_dot = xtrender_components(
-            c, self.p.short_l1, self.p.short_l2, self.p.short_l3,
-            self.p.long_l1, self.p.long_l2, self.p.t3_len, self.p.t3_b
+        _x_short, x_long, _x_t3, up_dot, down_dot = xtrender_components(
+            c,
+            self.p.short_l1,
+            self.p.short_l2,
+            self.p.short_l3,
+            self.p.long_l1,
+            self.p.long_l2,
+            self.p.t3_len,
+            self.p.t3_b,
         )
 
         # cooldown po SL
@@ -296,7 +317,7 @@ class Strategy(StrategyBase):
 
         # ===== EXIT (pierwszeństwo) =====
         if self._pos_side is not None:
-            c_now, h_now, l_now = float(c.iloc[-1]), float(h.iloc[-1]), float(l.iloc[-1])
+            c_now, h_now, l_now = float(c.iloc[-1]), float(h.iloc[-1]), float(lo.iloc[-1])
 
             # trail po Average True Range
             self._update_trailing(c_now, float(atr_s.iloc[-1]))
@@ -304,68 +325,87 @@ class Strategy(StrategyBase):
             # same-bar TP/SL (po aktualizacji trail/SL)
             hit = self._same_bar_hit(h_now, l_now, self._pos_side)
             if hit == "tp":
-                side = self._pos_side; self._reset_pos()
+                side = self._pos_side
+                self._reset_pos()
                 return Signal("exit", side, meta={"reason": "tp_hit"})
             if hit == "sl":
-                side = self._pos_side; self._reset_pos()
+                side = self._pos_side
+                self._reset_pos()
                 self._cooldown_left = max(self._cooldown_left, self.p.cooldown_bars)
                 return Signal("exit", side, meta={"reason": "sl_hit"})
 
             # „kropki” T3 jako wyjście tylko na zysku
             if self._in_profit(c_now):
                 if self._pos_side == "long" and bool(down_dot.iloc[-1]):
-                    side = self._pos_side; self._reset_pos()
+                    side = self._pos_side
+                    self._reset_pos()
                     return Signal("exit", side, meta={"reason": "xtrender_peak"})
                 if self._pos_side == "short" and bool(up_dot.iloc[-1]):
-                    side = self._pos_side; self._reset_pos()
+                    side = self._pos_side
+                    self._reset_pos()
                     return Signal("exit", side, meta={"reason": "xtrender_trough"})
 
             # timeout w chopie (stale-exit): brak momentum + limit barów
             self._bars_in_trade += 1
-            if self._bars_in_trade >= self.p.stale_max_bars and abs(float(x_long.iloc[-1])) <= self.p.deadzone:
-                side = self._pos_side; self._reset_pos()
+            if (
+                self._bars_in_trade >= self.p.stale_max_bars
+                and abs(float(x_long.iloc[-1])) <= self.p.deadzone
+            ):
+                side = self._pos_side
+                self._reset_pos()
                 return Signal("exit", side, meta={"reason": "time_limit"})
 
             # brak wyjścia – raportuj meta (dla runnera/backtestera pod egzekucję)
-            return Signal("hold", self._pos_side, meta={"sl": self._sl, "tp": self._tp, "trail": self._trail})
+            return Signal(
+                "hold", self._pos_side, meta={"sl": self._sl, "tp": self._tp, "trail": self._trail}
+            )
 
         # ===== ENTRY =====
         if self._cooldown_left > 0:
             return Signal()  # pauza po SL
 
         # LONG
-        if self.p.side in ("long", "both"):
-            if self._trend_ok(ema21, ema89, ema200, "long") \
-               and self._pullback_seen(df, ema89, atr_s, "long") \
-               and self._rebound_ok(c, ema21, "long") \
-               and self._xtr_ok(x_long, "long"):
-
-                entry = float(c.iloc[-1]); e89 = float(ema89.iloc[-1]); a = float(atr_s.iloc[-1])
-                # nowy filtr: odległość wejścia od EMA89 nie może być zbyt duża (w ATR)
-                if not self._entry_distance_ok(entry, e89, a):
-                    return Signal()
-                sl, tp = self._compute_sl_tp(entry, e89, a, "long")
-                self._set_pos("long", entry, sl, tp, a)
-                return Signal("enter", "long", meta={"sl": sl, "tp": tp, "trail_atr_mult": self.p.trail_atr_mult})
+        if (
+            self.p.side in ("long", "both")
+            and self._trend_ok(ema21, ema89, ema200, "long")
+            and self._pullback_seen(df, ema89, atr_s, "long")
+            and self._rebound_ok(c, ema21, "long")
+            and self._xtr_ok(x_long, "long")
+        ):
+            entry = float(c.iloc[-1])
+            e89 = float(ema89.iloc[-1])
+            a = float(atr_s.iloc[-1])
+            # nowy filtr: odleglosc wejscia od EMA89 nie moze byc zbyt duza (w ATR)
+            if not self._entry_distance_ok(entry, e89, a):
+                return Signal()
+            sl, tp = self._compute_sl_tp(entry, e89, a, "long")
+            self._set_pos("long", entry, sl, tp, a)
+            return Signal(
+                "enter",
+                "long",
+                meta={"sl": sl, "tp": tp, "trail_atr_mult": self.p.trail_atr_mult},
+            )
 
         # SHORT
-        if self.p.side in ("short", "both"):
-            if self._trend_ok(ema21, ema89, ema200, "short") \
-               and self._pullback_seen(df, ema89, atr_s, "short") \
-               and self._rebound_ok(c, ema21, "short") \
-               and self._xtr_ok(x_long, "short"):
-
-                entry = float(c.iloc[-1]); e89 = float(ema89.iloc[-1]); a = float(atr_s.iloc[-1])
-                # nowy filtr: odległość wejścia od EMA89 nie może być zbyt duża (w ATR)
-                if not self._entry_distance_ok(entry, e89, a):
-                    return Signal()
-                sl, tp = self._compute_sl_tp(entry, e89, a, "short")
-                self._set_pos("short", entry, sl, tp, a)
-                return Signal("enter", "short", meta={"sl": sl, "tp": tp, "trail_atr_mult": self.p.trail_atr_mult})
+        if (
+            self.p.side in ("short", "both")
+            and self._trend_ok(ema21, ema89, ema200, "short")
+            and self._pullback_seen(df, ema89, atr_s, "short")
+            and self._rebound_ok(c, ema21, "short")
+            and self._xtr_ok(x_long, "short")
+        ):
+            entry = float(c.iloc[-1])
+            e89 = float(ema89.iloc[-1])
+            a = float(atr_s.iloc[-1])
+            # nowy filtr: odleglosc wejscia od EMA89 nie moze byc zbyt duza (w ATR)
+            if not self._entry_distance_ok(entry, e89, a):
+                return Signal()
+            sl, tp = self._compute_sl_tp(entry, e89, a, "short")
+            self._set_pos("short", entry, sl, tp, a)
+            return Signal(
+                "enter",
+                "short",
+                meta={"sl": sl, "tp": tp, "trail_atr_mult": self.p.trail_atr_mult},
+            )
 
         return Signal()  # hold
-
-
-
-
-

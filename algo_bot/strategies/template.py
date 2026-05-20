@@ -24,12 +24,14 @@ See also:
 - docs/guides/adding-a-strategy.md (TBD — pełen walkthrough)
 - algo_bot/strategies/bghtrend_pullback.py (najbardziej rozbudowany przykład)
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
+
 import pandas as pd
 
-from algo_bot.strategy_base import StrategyBase, Signal
+from algo_bot.strategy_base import Signal, StrategyBase
 
 name = "template"
 
@@ -37,7 +39,7 @@ name = "template"
 @dataclass
 class TemplateParams:
     lookback: int = 50
-    side: str = "both"     # 'long'|'short'|'both'
+    side: str = "both"  # 'long'|'short'|'both'
     tp_pct: float | None = None
     sl_pct: float | None = None
 
@@ -62,12 +64,10 @@ class Strategy(StrategyBase):
         ret = df["Close"].pct_change(self.p.lookback).iloc[-1]
 
         if self.p.side in ("long", "both") and ret > 0:
-            return Signal(action="enter", side="long",
-                          tp_pct=self.p.tp_pct, sl_pct=self.p.sl_pct)
+            return Signal(action="enter", side="long", tp_pct=self.p.tp_pct, sl_pct=self.p.sl_pct)
 
         if self.p.side in ("short", "both") and ret < 0:
-            return Signal(action="enter", side="short",
-                          tp_pct=self.p.tp_pct, sl_pct=self.p.sl_pct)
+            return Signal(action="enter", side="short", tp_pct=self.p.tp_pct, sl_pct=self.p.sl_pct)
 
         # przykładowy exit: odwrócenie momentum
         if self.p.side in ("long", "both") and ret < 0:

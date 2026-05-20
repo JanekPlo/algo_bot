@@ -1,5 +1,5 @@
 # algo_bot/strategy/ema_cross.py
-import pandas as pd
+
 
 class EMACross:
     def __init__(self, fast=9, slow=21):
@@ -18,9 +18,12 @@ class EMACross:
         # zamknęła się świeca?
         if k["x"]:
             row = {
-                "open": float(k["o"]), "high": float(k["h"]),
-                "low": float(k["l"]), "close": float(k["c"]),
-                "volume": float(k["v"]), "close_time": int(k["T"])
+                "open": float(k["o"]),
+                "high": float(k["h"]),
+                "low": float(k["l"]),
+                "close": float(k["c"]),
+                "volume": float(k["v"]),
+                "close_time": int(k["T"]),
             }
             df.loc[len(df)] = row
             df["ema_fast"] = df["close"].ewm(span=self.fast, adjust=False).mean()
@@ -30,7 +33,7 @@ class EMACross:
             if len(df) < self.slow + 5:
                 return None
             f_prev, s_prev = df["ema_fast"].iloc[-2], df["ema_slow"].iloc[-2]
-            f_now,  s_now  = df["ema_fast"].iloc[-1], df["ema_slow"].iloc[-1]
+            f_now, s_now = df["ema_fast"].iloc[-1], df["ema_slow"].iloc[-1]
             if f_prev <= s_prev and f_now > s_now:
                 return "BUY"
             if f_prev >= s_prev and f_now < s_now:

@@ -121,6 +121,12 @@ select = [
 ignore = [
     "E501",   # line too long (handled by formatter)
     "B008",   # do not perform function call in argument defaults (legitimate w argparse)
+    # Polskie znaki interpunkcyjne (en-dash, em-dash) sa legitimate w polskim tekscie.
+    # W docstringach i komentarzach nie ma confusion z hyphen-minus, wiec uciszamy.
+    "RUF002", # ambiguous unicode w docstringach
+    "RUF003", # ambiguous unicode w komentarzach
+    # RUF001 (ambiguous w IDENTIFIERS) NIE jest ignorowane — gdyby byl gdzies '–' w
+    # nazwie zmiennej to bug, naprawiamy recznie.
 ]
 
 [tool.ruff.lint.per-file-ignores]

@@ -1,5 +1,6 @@
-import requests
 import pandas as pd
+import requests
+
 
 def fetch_historical_fear_greed(limit=2700):
     """
@@ -23,6 +24,7 @@ def fetch_historical_fear_greed(limit=2700):
     df["FearGreedIndex"] = df["FearGreedIndex"].astype(int)
 
     return df
+
 
 # Fetch data
 historical_data = fetch_historical_fear_greed()
