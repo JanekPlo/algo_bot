@@ -327,5 +327,5 @@ def resample_ohlcv(
         raise ValueError(f"Unsupported target timeframe: {timeframe}")
     if how is None:
         how = {"Open": "first", "High": "max", "Low": "min", "Close": "last", "Volume": "sum"}
-    df_r = df.resample(TF_PANDAS[timeframe]).agg(how)
+    df_r = df.resample(TF_PANDAS[timeframe]).agg(how)  # type: ignore[arg-type]
     return df_r.dropna()

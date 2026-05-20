@@ -22,6 +22,7 @@ Public API:
 - main() - CLI entry (po dodaniu do [project.scripts] zostanie algo-process)
 - process_file(path) - przetwarza pojedynczy plik raw -> processed
 """
+
 from __future__ import annotations
 
 import argparse
@@ -118,7 +119,7 @@ def processed_filename(symbol_no_slash: str, timeframe: str) -> Path:
     return PROC_DIR / f"binance_{symbol_no_slash}_{timeframe}.csv"
 
 
-def compute_features(df: pd.DataFrame, feature_cfg: dict[str, Any] | None) -> pd.DataFrame:
+def compute_features(df: pd.DataFrame, feature_cfg: list[dict[str, Any]] | None) -> pd.DataFrame:
     """
     Opcjonalne featury. Jeśli TA-Lib brak – pomiń grzecznie.
     feature_cfg (przykład):
@@ -135,12 +136,13 @@ def compute_features(df: pd.DataFrame, feature_cfg: dict[str, Any] | None) -> pd
         ftype = str(feat.get("type", "")).upper()
         params = feat.get("params", {}) or {}
         if ftype == "BBANDS":
-            upper, mid, lower = talib.BBANDS(df["Close"], **params)
+            # TA-Lib stuby oczekuja ndarray, pandas.Series tez dziala runtime
+            upper, mid, lower = talib.BBANDS(df["Close"], **params)  # type: ignore[arg-type]
             df["BB_upper"] = upper
             df["BB_middle"] = mid
             df["BB_lower"] = lower
         elif ftype == "RSI":
-            df["RSI"] = talib.RSI(df["Close"], **params)
+            df["RSI"] = talib.RSI(df["Close"], **params)  # type: ignore[arg-type]
         else:
             print(f"[process] Unknown feature type: {ftype} (skip)")
     return df

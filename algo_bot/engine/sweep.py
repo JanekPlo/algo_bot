@@ -46,8 +46,8 @@ import pandas as pd
 
 try:
     import yaml  # optional
-except Exception:
-    yaml = None
+except ImportError:
+    yaml = None  # type: ignore[assignment]
 
 # używamy istniejącego backtestera jako silnika
 from algo_bot.engine.backtester import run_backtest, run_id as make_run_id, save_outputs
@@ -71,7 +71,7 @@ def resolve_strategy_class(name: str):
     raise AttributeError(f"algo_bot.strategies.{name} must expose Strategy (or {cls_name})")
 
 
-def coerce_params(StratClass, params_dict: dict[str, Any]) -> dict[str, Any]:
+def coerce_params(StratClass, params_dict: dict[str, Any] | None) -> dict[str, Any]:
     """
     Zwraca dict przefiltrowany do pól ParamSchema (jeśli jest),
     żeby przypadkowe klucze nie wysadzały strategii.
@@ -94,7 +94,7 @@ def _product_dict(items: dict[str, list[Any]]) -> Iterable[dict[str, Any]]:
         yield dict(zip(keys, values, strict=True))
 
 
-def _sample_from_spec(spec: dict[str, Any], rng: random.Random) -> dict[str, Any]:
+def _sample_from_spec(spec: dict[str, Any], rng: random.Random) -> Any:
     """
     Random search sampler. Spec elementy:
       {"type":"int","min":5,"max":25}

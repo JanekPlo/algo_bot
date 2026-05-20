@@ -33,11 +33,7 @@ import csv
 import json
 from datetime import UTC, datetime
 from pathlib import Path
-
-try:
-    from zoneinfo import ZoneInfo  # py>=3.9
-except Exception:
-    from backports.zoneinfo import ZoneInfo  # pip install backports.zoneinfo tzdata
+from zoneinfo import ZoneInfo  # py>=3.11 (project requires-python)
 
 
 class Journal:

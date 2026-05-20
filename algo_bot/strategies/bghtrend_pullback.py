@@ -235,11 +235,11 @@ class Strategy(StrategyBase):
         if self._pos_side == "long":
             new_trail = last_close - step
             self._trail = max(self._trail or -np.inf, new_trail)
-            self._sl = max(self._sl, self._trail)  # zacieśniaj, nie poszerzaj
+            self._sl = max(self._sl or -np.inf, self._trail)  # zacieśniaj, nie poszerzaj
         else:
             new_trail = last_close + step
             self._trail = min(self._trail or np.inf, new_trail)
-            self._sl = min(self._sl, self._trail)
+            self._sl = min(self._sl or np.inf, self._trail)
 
     def _same_bar_hit(self, high: float, low: float, side: str) -> str | None:
         if self._tp is None or self._sl is None:

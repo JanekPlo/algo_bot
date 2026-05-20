@@ -38,13 +38,9 @@ import os
 import time
 from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo  # py>=3.11
 
 from dotenv import load_dotenv
-
-try:
-    from zoneinfo import ZoneInfo
-except Exception:
-    from backports.zoneinfo import ZoneInfo  # pip install backports.zoneinfo tzdata
 
 from algo_bot.engine.exchanges.binance_adapter import BinanceFuturesAdapter
 from algo_bot.strategy_loader import load_strategy
