@@ -246,9 +246,18 @@ Po dodaniu UNC folder do projektu, w trakcie sesji:
 
 ### Git workflow
 
-**SSH deploy key** żyje po stronie WSL (`~/.ssh/algo_bot_deploy`). Sandbox w `closeout` kopiuje go do `/tmp/algo_bot_deploy`, ustawia `chmod 600`, exportuje `GIT_SSH_COMMAND="ssh -i /tmp/algo_bot_deploy -o IdentitiesOnly=yes"`, robi `git push origin master`. User nie musi otwierać WSL terminala w trakcie sesji.
+**Sandbox bash nie działa gdy workspace folder jest UNC.** Próba `cd /sessions/<id>/mnt/algo_bot/` z poziomu sandboxa pada z `UNC paths are not supported` — i to blokuje **wszystkie** wywołania bash w sesji, nawet te nie dotyczące UNC mountu (bo sandbox root sam zawiera UNC mount). Wszystkie operacje shellowe (`git`, `make check`, `pytest`, `ruff`, `mypy`) wykonuje user w WSL terminalu, **nie** Claude w sandboxie.
 
-**User ze swojej strony** robi `git pull` w WSL kiedy chce mieć aktualne repo lokalnie (np. przed pracą w PyCharm Remote-WSL albo VS Code z extension WSL). Conda env operuje na tym samym katalogu — zero kopiowania.
+**Workflow per session:**
+- **W trakcie sesji** — Claude edytuje pliki przez Read/Write/Edit. Te toole nie idą przez sandbox bash, tylko przez Windows API → UNC → WSL FS. Stąd działają niezależnie od ograniczenia bash.
+- **Closeout** — Claude przygotowuje commit message + listę komend do skopiowania (`git add ...`, `git commit -m "..."`, `git push origin master`).
+- **User** wykonuje commit + push w WSL terminalu, potwierdza w czacie że push poszedł. Sesja się zamyka.
+
+**SSH key i git remote** — konfigurujesz raz po stronie WSL (`~/.ssh/config` z aliasem dla GitHub deploy key, albo `GIT_SSH_COMMAND` w `.bashrc`). Klucz prywatny NIE leży w repo (`.ssh/` w `.gitignore`).
+
+**Pull** — robisz w WSL ręcznie gdy chcesz mieć aktualne repo lokalnie (np. przed pracą w PyCharm Remote-WSL albo VS Code z extension WSL). Conda env operuje na tym samym katalogu — zero kopiowania.
+
+**Rozważana w przyszłości alternatywa:** jeśli sandbox bash stałby się kluczowy (np. automated CI in-session, container Docker dla make check), wtedy repo można przenieść na NTFS-side (`~/Documents/Claude/Projects/algo_bot`) i sandbox uzyska pełną funkcjonalność. Cena: NTFS line endings + permissions diffy w git, conda env operuje przez `/mnt/c/...` (wolniej niż native ext4), spacje w ścieżce nadrzędnej (`Documents\Claude\Projects\`). Decyzja odłożona do faktycznej potrzeby — obecny workflow "Claude edytuje, user commituje" jest akceptowalny.
 
 ### Conda + TA-Lib
 
