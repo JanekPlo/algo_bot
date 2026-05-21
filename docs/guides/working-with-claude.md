@@ -204,4 +204,86 @@ Closeout checklist:
 
 ---
 
-*Wersja: 0.1 — 2026-05-21. Dokument żywy — aktualizujemy gdy rytm pracy się zmieni (np. wejście w Fazę 2 wymaga dorzucenia sekcji o sesjach research).*
+## Setup techniczny — jak Cowork widzi repo
+
+Sekcja dla każdej nowej sesji Claude'a: gdzie żyje repo, jak je czytasz, jak pushujesz, czego unikać. Bez tego pierwsze 30 minut sesji idzie na rozpoznanie środowiska.
+
+### Lokalizacja repo
+
+**Kanoniczna ścieżka:** `~/quant_projects/algo_bot` po stronie WSL (Ubuntu, native ext4 FS).
+
+Dla Cowork (Windows desktop) ta sama lokalizacja jest dostępna jako UNC: `\\wsl.localhost\ubuntu\home\janek\quant_projects\algo_bot`. WSL2 wystawia ten share automatycznie — nic nie trzeba konfigurować poza zainstalowanym WSL2.
+
+**Dlaczego WSL native, nie NTFS:**
+- Conda env `algo_bot` jest w WSL i operuje na repo bez tłumaczeń line endings / permissions
+- TA-Lib z conda-forge linkuje się natywnie z `libta-lib.so` po stronie Linuxa
+- Git ma normalne POSIX permissions, brak fałszywych diffów z `core.fileMode`
+- Brak ryzyka spacji w ścieżce (Windows ma `Documents\Claude\Projects\...`, WSL ma czysty home)
+
+Kopiowanie repo na NTFS-side było wcześniej rozważane jako workaround dla "UNC paths are not supported", ale **nie jest potrzebne** — patrz sekcja "Setup nowego projektu Cowork" niżej.
+
+### Setup nowego projektu Cowork (jednorazowo)
+
+Cowork desktop ma pojęcie "Project" (lewy górny dropdown). Każdy projekt ma własną listę **workspace folders** (mountów) i własny **memory dir**. Workspace folders są project-scoped — zostają między sesjami tego samego projektu, ale nie krzyżują się między projektami.
+
+**Konfiguracja projektu algo_bot:**
+
+1. Cowork → menu projektów → New Project → nazwa: `algo_bot`
+2. Project settings → Connect folder → w polu adresu wpisz: `\\wsl.localhost\ubuntu\home\janek\quant_projects\algo_bot`
+   - Windows file picker akceptuje UNC paths jeśli wpisać je w pasek górny eksploratora
+   - Cowork weryfikuje że folder istnieje i dodaje go jako persistent mount
+3. Project instructions — wklej zwięzły opis projektu (workspace folder, mindset, język, conventions). Wzór: patrz repo `docs/guides/working-with-claude.md` (sekcja "Project instructions template" — TODO dorobić jako appendix).
+
+Od tego momentu **każda nowa sesja w projekcie algo_bot dostaje UNC mount automatycznie**. Nie trzeba dodawać foldera ręcznie per sesję.
+
+### Jak Cowork montuje repo w runtime
+
+Po dodaniu UNC folder do projektu, w trakcie sesji:
+
+- **Read/Write/Edit** widzą repo jako ścieżkę UNC `\\wsl.localhost\ubuntu\home\janek\quant_projects\algo_bot\<path>` — działa normalnie, file IO przez WSL2 share.
+- **Sandbox bash** widzi to samo repo jako linuxowy mount `/sessions/<id>/mnt/algo_bot/<path>`. Można tam odpalać `git status`, `git log`, `cat`, `grep`, ale nie `make check` z conda env (sandbox nie ma własnego conda — patrz sekcja "Conda + TA-Lib").
+- Mount jest read+write — sandbox może modyfikować pliki i commitować.
+
+### Git workflow
+
+**SSH deploy key** żyje po stronie WSL (`~/.ssh/algo_bot_deploy`). Sandbox w `closeout` kopiuje go do `/tmp/algo_bot_deploy`, ustawia `chmod 600`, exportuje `GIT_SSH_COMMAND="ssh -i /tmp/algo_bot_deploy -o IdentitiesOnly=yes"`, robi `git push origin master`. User nie musi otwierać WSL terminala w trakcie sesji.
+
+**User ze swojej strony** robi `git pull` w WSL kiedy chce mieć aktualne repo lokalnie (np. przed pracą w PyCharm Remote-WSL albo VS Code z extension WSL). Conda env operuje na tym samym katalogu — zero kopiowania.
+
+### Conda + TA-Lib
+
+Conda env `algo_bot` siedzi w WSL (`~/miniconda3/envs/algo_bot/`). TA-Lib zainstalowany z conda-forge (wymaga systemowego `libta-lib.so` którego conda-forge dostarcza razem z pythonowym bindingiem).
+
+Sandbox Cowork **nie ma własnego conda** — `make check`, `pytest`, `ruff`, `mypy` musisz odpalać:
+- albo w WSL terminalu ręcznie (`cd ~/quant_projects/algo_bot && make check`)
+- albo z sandboxa przez `wsl.exe -d Ubuntu bash -lc "..."` jeśli sandbox umie wywołać `wsl.exe` (do zweryfikowania per sesja)
+
+Alternatywa rozważana post-MVP: container Docker z conda env + TA-Lib, żeby sandbox `docker run` był self-contained bez zależności od WSL. Decyzja odłożona — obecny setup wystarcza dla fazy 1-2.
+
+### Decyzja workflow gdy nowa sesja nie ma dostępu
+
+Symptomy:
+- `request_cowork_directory` na UNC → "UNC paths are not supported"
+- `Read` na UNC → "outside session's connected folders"
+- Sandbox bash stuck na UNC paths
+
+**Pierwsza diagnoza:** sprawdź w Cowork UI w którym projekcie jesteś. Jeśli folder algo_bot nie jest w workspace folders tego projektu, sesja go nie widzi — to nie błąd UNC, tylko brak mountu.
+
+**Rozwiązanie:**
+1. **Najczęstsze (90%):** otworzyłeś sesję w niewłaściwym projekcie. Wróć do projektu `algo_bot` (lewy górny dropdown) i zacznij nową sesję tam. UNC folder jest do niego podpięty na stałe — natychmiast działa.
+2. **Jeśli projekt algo_bot nie ma workspace folder UNC dodanego:** Project settings → Connect folder → wpisz `\\wsl.localhost\ubuntu\home\janek\quant_projects\algo_bot`. Patrz "Setup nowego projektu Cowork" wyżej.
+3. **Tool `request_cowork_directory` w Claude'd nie umie dodać UNC** — to ograniczenie tego konkretnego tool calla, nie samego Cowork. Workspace foldery dodajesz **w UI Cowork**, nie przez Claude'a. Jeśli Claude próbuje wywołać `request_cowork_directory` z UNC i pada — zignoruj, dodaj ręcznie w UI.
+
+**Fallback (rzadko potrzebny):** jeśli z jakiegoś powodu UNC nie działa nawet po prawidłowym setupie projektu — Claude pisze do `outputs/`, user kopiuje do repo ręcznie i commituje w WSL. Strata: brak strukturalnego edytowania (Read pokazuje stale state, Edit nie ma punktu odniesienia). Używać tylko jako emergency, nie jako stały workflow.
+
+### Czego unikamy
+
+- **Mieszanie writerów na repo** — w jednym momencie pisze albo sandbox Cowork, albo user w WSL terminalu, nigdy oba naraz. Inaczej dostajesz fałszywe zmiany w `git status` i merge conflicts na niezacommitowanej pracy.
+- **Klonowanie repo w lokalizacji ze spacjami** (np. `~/Documents/Some Folder With Spaces/algo_bot/`) — niektóre toole pythonowe (TA-Lib build, conda activate scripts) miewają problemy ze spacjami. Czysta ścieżka `~/quant_projects/algo_bot` jest bezpieczna.
+- **Commitowanie SSH key** — `.ssh/` powinno być w `.gitignore` (sprawdź). Klucz prywatny żyje w `~/.ssh/`, nie w repo.
+- **Hardkodowane UNC paths w kodzie** — gdy edytujemy skrypt który ma ścieżkę typu `\\wsl.localhost\...` albo `C:\...`, audytujemy go i wymieniamy na portable ścieżki względne albo zmienne środowiskowe.
+- **Pracowanie w projekcie "Strona internetowa digitalalchemy" nad algo_bot** — to są dwa różne repa z różnym kontekstem, project instructions i memory. Mieszanie ich daje rozjazd memory i wolniejszy kickoff każdej sesji.
+
+---
+
+*Wersja: 0.3 — 2026-05-21. Dokument żywy — aktualizujemy gdy rytm pracy się zmieni (np. wejście w Fazę 2 wymaga dorzucenia sekcji o sesjach research) albo gdy zmienimy setup techniczny (np. przejście na Docker container dla sandboxa).*
