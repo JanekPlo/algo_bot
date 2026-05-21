@@ -9,7 +9,8 @@ Nowy w projekcie? Idź w tej kolejności:
 1. **[Getting Started](guides/getting-started.md)** — setup od zera (conda env, install, weryfikacja)
 2. **[Daily Workflow](guides/daily-workflow.md)** — co robisz codziennie (komendy, cykl edit → test → commit)
 3. **[Makefile Cheatsheet](guides/makefile-cheatsheet.md)** — każdy `make <target>` wytłumaczony
-4. **[Package Overview](reference/package-overview.md)** — co siedzi w którym katalogu
+4. **[Working with Claude](guides/working-with-claude.md)** — jak współpracować z Claudem (Cowork) na tym projekcie: sesje robocze, mózg-Claude, kickoff/closeout
+5. **[Package Overview](reference/package-overview.md)** — co siedzi w którym katalogu
 
 ## Struktura docs
 
@@ -51,6 +52,7 @@ docs/
 │   ├── getting-started.md             # setup od zera
 │   ├── daily-workflow.md              # codzienne komendy + cykl
 │   ├── makefile-cheatsheet.md         # każdy make target
+│   ├── working-with-claude.md         # workflow Cowork: sesje + mózg-Claude
 │   ├── adding-a-strategy.md           # (TBD — faza 2)
 │   ├── running-backtest.md            # (TBD — faza 2)
 │   ├── running-sweep.md               # (TBD — faza 2)
@@ -103,6 +105,7 @@ Pliki oznaczone `(TBD ...)` będą dodane w odpowiednich fazach/po odpowiednich 
 | docs/guides/getting-started.md | ⧗ |
 | docs/guides/daily-workflow.md | ⧗ |
 | docs/guides/makefile-cheatsheet.md | ⧗ |
+| docs/guides/working-with-claude.md | ✓ |
 | docs/reference/package-overview.md | ⧗ |
 | docs/concepts/glossary.md | ⧗ |
 
