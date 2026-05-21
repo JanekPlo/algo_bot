@@ -17,6 +17,7 @@ Format: lekki, oparty na propozycji [Michael Nygard'a](https://cognitect.com/blo
 | [003](003-strategybase-signal-api.md) | StrategyBase + Signal — unified API dla backtest+live | Accepted (retroactive) | pre-2026-05 | 0 |
 | [004](004-hybrid-tp-sl-mode.md) | Hybrid TP/SL — server/local/hybrid mode w live | Accepted (retroactive) | pre-2026-05 | 0 |
 | [005](005-backtesting-py-mvp-engine.md) | backtesting.py jako silnik backtestowy MVP | Accepted (retroactive) | pre-2026-05 | 0 |
+| [006](006-logging-strategy.md) | Logging — stdlib logging z JSON file handler | Accepted | 2026-05-21 | 1 |
 
 ## Polityka
 

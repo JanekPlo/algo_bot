@@ -46,7 +46,10 @@ import numpy as np
 import pandas as pd
 from backtesting import Backtest, Strategy as BTStrategy
 
+from algo_bot.log import get_logger, setup_logging
 from algo_bot.strategy_base import StrategyBase
+
+logger = get_logger(__name__)
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, os.pardir))
 RAW_DIR = os.path.join(PROJECT_ROOT, "bot_data", "processed")
@@ -505,7 +508,7 @@ def save_outputs(
     equity.to_csv(os.path.join(out_dir, "equity.csv"), index=True)
     trades.to_csv(os.path.join(out_dir, "trades.csv"), index=False)
 
-    print(f"[OK] Wyniki zapisane w: {out_dir}")
+    logger.info("Wyniki backtestu zapisane", extra={"out_dir": out_dir, "run_id": rid})
     return out_dir
 
 
@@ -543,6 +546,8 @@ def parse_args():
 
 
 def main():
+    # Inicjalizacja loggera (ADR-006): konsola + rotating JSON file w logs/algo_bot.log.
+    setup_logging()
     args = parse_args()
     try:
         params = json.loads(args.params)

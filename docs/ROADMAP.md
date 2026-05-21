@@ -34,7 +34,7 @@ Faza 5: Production na VPS              → 1-2 tyg.
 - [] Risk management module (`algo_bot/risk/limits.py`): max drawdown stop, max concurrent positions, daily loss limit, position sizing oparty o ryzyko (% equity per trade) — **decyzja E**
 - [ ] Walk-forward analyzer (`algo_bot/engine/walkforward.py`) — out-of-sample, train/test split z rolowaniem okna — **decyzja F**
 - [ ] Standardowe metryki risk-adjusted (Sharpe, Sortino, Calmar, MAR, profit factor, recovery time) — `algo_bot/metrics.py` — **decyzja D**
-- [ ] Logging framework + setup (`algo_bot/log.py`) zamiast `print` w całym kodzie — **decyzja C**
+- [x] Logging framework + setup (`algo_bot/log.py`) zamiast `print` w całym kodzie — **decyzja C** — **DONE 2026-05-21** (ADR-006; retrofit `live/live_binance.py` + `algo_bot/engine/backtester.py` w tej sesji, pozostałe pliki w follow-up)
 - [ ] CI (GitHub Actions): `make check` na każdym PR/push
 - [ ] Pre-commit hooks: `.pre-commit-config.yaml` z ruff + mypy
 - [ ] Cleanup po decyzjach: `executor.py` FIXME (broken `optimize_backtest`), `tests/test_backtest.py` sygnatura

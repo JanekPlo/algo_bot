@@ -167,6 +167,7 @@ warn_return_any = false
 # obowiazywac. Mozna by przeniesc te bloki do PR ktore tworza dany modul.
 [[tool.mypy.overrides]]
 module = [
+    "algo_bot.log",                   # decyzja C (ADR-006)
     "algo_bot.risk.*",                # decyzja E
     "algo_bot.engine.walkforward",    # decyzja F
     "algo_bot.metrics",               # decyzja D

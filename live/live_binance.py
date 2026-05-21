@@ -11,6 +11,10 @@ Wsparcie dla 3 trybów TP/SL (--tpsl_mode, patrz ADR-004):
 - 'local'  — TP+SL lokalnie z mark price (omija knoty, ale brak fallback gdy bot padnie)
 - 'hybrid' — TP server-side, SL lokalnie (kompromis, default)
 
+Logowanie (ADR-006):
+- Konsola (stderr): plain format, Europe/Warsaw timestamp — czytelne dla człowieka
+- File (JSON, rotowany): results/live/<run_id>/algo_bot.log — machine-readable
+
 Recovery:
 - Bot crashuje → restart → wczytuje state z journala → kontynuuje
 - Idempotency: client_order_id deterministycznie z run_id + bar_ts
@@ -27,6 +31,7 @@ Required env vars (przez python-dotenv z .env):
 See also:
 - docs/adr/004-hybrid-tp-sl-mode.md (rationale trybów TP/SL)
 - docs/adr/003-strategybase-signal-api.md (Signal API którego ten loop konsumuje)
+- docs/adr/006-logging-strategy.md (logger setup, JSON format)
 - docs/guides/live-trading-checklist.md (TBD — pre-flight checklist)
 - algo_bot/telemetry/journal.py (CSV journal który tu używamy)
 """
@@ -43,12 +48,11 @@ from zoneinfo import ZoneInfo  # py>=3.11
 from dotenv import load_dotenv
 
 from algo_bot.engine.exchanges.binance_adapter import BinanceFuturesAdapter
+from algo_bot.log import get_logger, setup_logging
 from algo_bot.strategy_loader import load_strategy
 from algo_bot.telemetry.journal import Journal
 
-
-def ts() -> str:
-    return datetime.now(ZoneInfo("Europe/Warsaw")).strftime("%Y-%m-%d %H:%M:%S")
+logger = get_logger(__name__)
 
 
 def wait_for_next_close(
@@ -66,7 +70,7 @@ def wait_for_next_close(
             if ts_last != last_ts:
                 return ts_last
         except Exception as e:
-            print(f"[{ts()}] WARN kline (retry): {e}", flush=True)
+            logger.warning("Błąd kline (retry za 1s)", extra={"error": str(e)})
             time.sleep(1)
 
 
@@ -113,6 +117,10 @@ def main():
 
     args = ap.parse_args()
 
+    # run_id i logger setup PRZED inicjalizacją giełdy — żeby błędy connect/auth też trafiły do logu.
+    run_id = args.run_id or default_run_id(args.strategy, args.symbol, args.timeframe)
+    setup_logging(log_dir=Path("results/live") / run_id)
+
     load_dotenv(Path(__file__).resolve().parents[1] / ".env")
     key = os.getenv("BINANCE_FUTURES_API_KEY_TESTNET", "").strip()
     sec = os.getenv("BINANCE_FUTURES_API_SECRET_TESTNET", "").strip()
@@ -145,17 +153,23 @@ def main():
     strat_params = json.loads(args.params)
     strat = load_strategy(args.strategy, strat_params)
 
-    # run_id + dzienniczek
-    run_id = args.run_id or default_run_id(args.strategy, args.symbol, args.timeframe)
+    # dzienniczek
     journal = Journal(run_id, base_dir="results/live")
     trade_seq = 0
     current = None  # aktualny trade: dict z entry
 
-    print("== Live Strategy on Binance Futures TESTNET ==", flush=True)
-    print(
-        f"run_id={run_id} Symbol={args.symbol} TF={args.timeframe} "
-        f"strat={args.strategy} params={args.params} size={args.size_usdt} lev={args.leverage}",
-        flush=True,
+    logger.info("== Live Strategy on Binance Futures TESTNET ==")
+    logger.info(
+        "Start sesji live",
+        extra={
+            "run_id": run_id,
+            "symbol": args.symbol,
+            "timeframe": args.timeframe,
+            "strategy": args.strategy,
+            "params": args.params,
+            "size_usdt": args.size_usdt,
+            "leverage": args.leverage,
+        },
     )
 
     # bootstrap
@@ -213,7 +227,7 @@ def main():
     try:
         ex_trade.exchange.cancel_all_orders(args.symbol)
     except Exception as e:
-        print(f"[{ts()}] WARN cancel_all_orders (startup): {e}", flush=True)
+        logger.warning("cancel_all_orders (startup) nieudane", extra={"error": str(e)})
 
     # resume: jeśli jest pozycja, odśwież TPSL wg trybu i zapisz ENTRY do journalu
     pos0 = ex_trade.fetch_positions(args.symbol)
@@ -249,12 +263,12 @@ def main():
                         tp_pct=args.tp_pct,
                         sl_pct=args.sl_pct,
                     )
-                    msg = "TPSL(server)"
+                    tpsl_msg = "TPSL(server)"
                 elif args.tpsl_mode == "hybrid":
                     ex_trade.set_tpsl(
                         args.symbol, side0, entry_price=entry_price, tp_pct=args.tp_pct, sl_pct=None
                     )
-                    msg = "TP(server), SL(local)"
+                    tpsl_msg = "TP(server), SL(local)"
                 else:
                     ex_trade.set_tpsl(
                         args.symbol,
@@ -263,15 +277,20 @@ def main():
                         tp_pct=None,
                         sl_pct=args.cat_sl_pct,
                     )
-                    msg = f"Catastrophic SL(server) {args.cat_sl_pct * 100:.1f}%"
-                print(
-                    f"[{ts()}] Resume: position={pos0:.6f} ({side0}) — {msg} & journaled",
-                    flush=True,
+                    tpsl_msg = f"Catastrophic SL(server) {args.cat_sl_pct * 100:.1f}%"
+                logger.info(
+                    "Resume: wczytano pozycję z giełdy",
+                    extra={
+                        "position": pos0,
+                        "side": side0,
+                        "tpsl_mode": args.tpsl_mode,
+                        "tpsl_detail": tpsl_msg,
+                    },
                 )
             except Exception as e:
-                print(f"[{ts()}] WARN TPSL (resume): {e}", flush=True)
+                logger.warning("TPSL (resume) nieudane", extra={"error": str(e)})
         else:
-            print(f"[{ts()}] Resume: brak realnej pozycji (pomijam journal resume)", flush=True)
+            logger.info("Resume: brak realnej pozycji (pomijam journal resume)")
 
     # pierwszy snapshot
     try:
@@ -304,8 +323,11 @@ def main():
         sig = strat.on_bar(ohlcv)
 
         pos = ex_trade.fetch_positions(args.symbol)
-        side_txt = "(short)" if pos < 0 else "(long)" if pos > 0 else "(flat)"
-        print(f"[{ts()}] signal={sig}, position={pos:.6f} {side_txt}", flush=True)
+        side_txt = "short" if pos < 0 else "long" if pos > 0 else "flat"
+        logger.info(
+            "Tick: sygnał + pozycja",
+            extra={"signal": str(sig), "position": pos, "side": side_txt},
+        )
 
         # snapshot co świecę
         try:
@@ -357,9 +379,11 @@ def main():
             current = None
             try:
                 ex_trade.exchange.cancel_all_orders(args.symbol)
-                print(f"[{ts()}] cancel_all_orders done (tpsl_server_filled)", flush=True)
+                logger.info("cancel_all_orders OK (tpsl_server_filled)")
             except Exception as e:
-                print(f"[{ts()}] WARN cancel_all_orders (server_filled): {e}", flush=True)
+                logger.warning(
+                    "cancel_all_orders (server_filled) nieudane", extra={"error": str(e)}
+                )
             prev_pos = pos
             continue  # uniknij podwójnej logiki w tej iteracji
 
@@ -384,7 +408,7 @@ def main():
                 try:
                     order = ex_trade.create_market(args.symbol, side_close, qty, reduce_only=True)
                 except Exception as ee:
-                    print(f"[{ts()}] ERR CLOSE(local): {ee}", flush=True)
+                    logger.error("CLOSE (local TP/SL) nieudany", extra={"error": str(ee)})
                 else:
                     avg_exit = float(
                         order.get("average") or order.get("info", {}).get("avgPrice") or px or 0.0
@@ -407,9 +431,11 @@ def main():
                     current = None
                     try:
                         ex_trade.exchange.cancel_all_orders(args.symbol)
-                        print(f"[{ts()}] cancel_all_orders done (local {reason})", flush=True)
+                        logger.info("cancel_all_orders OK", extra={"reason": f"local {reason}"})
                     except Exception as ce:
-                        print(f"[{ts()}] WARN cancel_all_orders (local): {ce}", flush=True)
+                        logger.warning(
+                            "cancel_all_orders (local) nieudane", extra={"error": str(ce)}
+                        )
                 prev_pos = pos
                 continue
 
@@ -419,7 +445,7 @@ def main():
             try:
                 ex_trade.exchange.cancel_all_orders(args.symbol)
             except Exception as e:
-                print(f"[{ts()}] WARN cancel_all_orders (pre-entry): {e}", flush=True)
+                logger.warning("cancel_all_orders (pre-entry) nieudane", extra={"error": str(e)})
 
             px = last_px or _get_price(args.price_feed)
             price_ref = px * 0.995
@@ -432,22 +458,28 @@ def main():
             try:
                 order = ex_trade.create_market(args.symbol, side_exec, qty, reduce_only=False)
             except Exception as e:
-                print(f"[{ts()}] ERR OPEN: {e}", flush=True)
+                logger.error("OPEN nieudany", extra={"error": str(e), "side": side_exec})
                 prev_pos = pos
                 continue
 
             oid = order.get("id") or order.get("info", {}).get("orderId")
             avg = float(order.get("average") or order.get("info", {}).get("avgPrice") or px or 0.0)
-            print(
-                f"[{ts()}] OPENED {side_exec.upper()} qty={qty} {args.symbol} id={oid} avg={avg}",
-                flush=True,
+            logger.info(
+                "Pozycja otwarta",
+                extra={
+                    "side": side_exec,
+                    "qty": qty,
+                    "symbol": args.symbol,
+                    "order_id": oid,
+                    "avg_price": avg,
+                },
             )
 
             pos_now = ex_trade.fetch_positions(args.symbol)
-            print(
-                f"[{ts()}] position_now={pos_now:.6f} "
-                f"{'(short)' if pos_now < 0 else '(long)' if pos_now > 0 else '(flat)'}",
-                flush=True,
+            position_side = "short" if pos_now < 0 else "long" if pos_now > 0 else "flat"
+            logger.info(
+                "Pozycja po otwarciu",
+                extra={"position_now": pos_now, "side": position_side},
             )
 
             # ENTRY -> journal
@@ -480,9 +512,9 @@ def main():
                         tp_pct=args.tp_pct,
                         sl_pct=args.sl_pct,
                     )
-                    print(
-                        f"[{ts()}] TPSL(server) tp={args.tp_pct * 100:.1f}% sl={args.sl_pct * 100:.1f}%",
-                        flush=True,
+                    logger.info(
+                        "TPSL(server) ustawione",
+                        extra={"tp_pct": args.tp_pct, "sl_pct": args.sl_pct},
                     )
                 elif args.tpsl_mode == "hybrid":
                     ex_trade.set_tpsl(
@@ -492,7 +524,7 @@ def main():
                         tp_pct=args.tp_pct,
                         sl_pct=None,
                     )
-                    print(f"[{ts()}] TP(server) set; SL(local)", flush=True)
+                    logger.info("TP(server) ustawione; SL(local) aktywny")
                 else:
                     ex_trade.set_tpsl(
                         args.symbol,
@@ -501,11 +533,12 @@ def main():
                         tp_pct=None,
                         sl_pct=args.cat_sl_pct,
                     )
-                    print(
-                        f"[{ts()}] Catastrophic SL(server) {args.cat_sl_pct * 100:.1f}%", flush=True
+                    logger.info(
+                        "Catastrophic SL(server) ustawione",
+                        extra={"cat_sl_pct": args.cat_sl_pct},
                     )
             except Exception as e:
-                print(f"[{ts()}] WARN TPSL: {e}", flush=True)
+                logger.warning("TPSL nieudane", extra={"error": str(e)})
 
         # EXIT (sygnał)
         elif sig == "exit" and abs(pos) > 0:
@@ -517,16 +550,22 @@ def main():
             try:
                 order = ex_trade.create_market(args.symbol, side_close, close_qty, reduce_only=True)
             except Exception as e:
-                print(f"[{ts()}] ERR CLOSE: {e}", flush=True)
+                logger.error("CLOSE nieudany", extra={"error": str(e), "side": side_close})
                 prev_pos = pos
                 continue
             oid = order.get("id") or order.get("info", {}).get("orderId")
             avg_exit = float(
                 order.get("average") or order.get("info", {}).get("avgPrice") or last_px or 0.0
             )
-            print(
-                f"[{ts()}] CLOSED {side_close.upper()} qty={close_qty} {args.symbol} id={oid} (reduceOnly) avg={avg_exit}",
-                flush=True,
+            logger.info(
+                "Pozycja zamknięta (reduceOnly)",
+                extra={
+                    "side": side_close,
+                    "qty": close_qty,
+                    "symbol": args.symbol,
+                    "order_id": oid,
+                    "avg_price": avg_exit,
+                },
             )
 
             if current is None:
@@ -550,10 +589,7 @@ def main():
                         current["entry_price"],
                     )
                 else:
-                    print(
-                        f"[{ts()}] EXIT: brak current i brak realnej pozycji — pomijam journal",
-                        flush=True,
-                    )
+                    logger.warning("EXIT: brak current i brak realnej pozycji — pomijam journal")
 
             if current is not None:
                 entry = current["entry_price"]
@@ -577,9 +613,9 @@ def main():
 
             try:
                 ex_trade.exchange.cancel_all_orders(args.symbol)
-                print(f"[{ts()}] cancel_all_orders done (post-exit)", flush=True)
+                logger.info("cancel_all_orders OK (post-exit)")
             except Exception as e:
-                print(f"[{ts()}] WARN cancel_all_orders (post-exit): {e}", flush=True)
+                logger.warning("cancel_all_orders (post-exit) nieudane", extra={"error": str(e)})
 
         prev_pos = pos  # na koniec iteracji
 
@@ -589,7 +625,10 @@ if __name__ == "__main__":
     import sys
 
     def _graceful_exit(*_):
-        print(f"[{ts()}] Stopped (signal).", flush=True)
+        # Emergency exit — print zamiast loggera bo signal może przyjść zanim setup_logging()
+        # zostanie wywołane. Bezpieczeństwo > spójność formatu.
+        stamp = datetime.now(ZoneInfo("Europe/Warsaw")).strftime("%Y-%m-%d %H:%M:%S")
+        print(f"[{stamp}] Stopped (signal).", flush=True)
         sys.exit(0)
 
     signal.signal(signal.SIGINT, _graceful_exit)  # Ctrl+C

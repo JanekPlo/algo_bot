@@ -150,7 +150,7 @@ def compute_features(df: pd.DataFrame, feature_cfg: list[dict[str, Any]] | None)
 
 def process_file(
     raw_path: Path,
-    feature_cfg: dict[str, Any] | None = None,
+    feature_cfg: list[dict[str, Any]] | None = None,
     max_missing_ratio: float = DEFAULT_MAX_MISSING_RATIO,
 ) -> Path:
     """

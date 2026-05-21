@@ -23,9 +23,17 @@ Sekcje na każdą wersję:
 - Decyzje fazy 1 podjęte: layout (flatten + algo_bot package), Python 3.11, hatchling, conda env + pip-tools, ruff, mypy strict-on-new
 - Konwencja docstring: Google style
 - ROADMAP.md zaktualizowany o docs strand w każdej fazie
+- **Decyzja C (ADR-006) — logging framework**: `algo_bot/log.py` ze `setup_logging()` (idempotentne) + `get_logger()` + `JsonFormatter`. Konsola (plain, Europe/Warsaw) + rotating file (JSON, UTC, 10 MB × 5 backupów). Zero zewnętrznych dep, stdlib `logging`. Third-party libs (ccxt, urllib3) wyciszone do WARNING.
+- Testy `tests/test_log.py` — idempotency setupu, caplog widzi info/warning/exception, JsonFormatter emituje walidny JSON z extra fields. Bez mocków (mindset reguła #3).
+- mypy strict-on-new override dla `algo_bot.log` w `pyproject.toml`
 
 ### Changed
 - Konwencja pisania docs — synchronicznie z kodem (każde public API change = update docs)
+- **`live/live_binance.py`** — retrofit 27 `print()` → `logger.info/warning/error` z `extra={...}` dla strukturalnych pól (symbol, side, qty, order_id, run_id, error). Usunięta funkcja `ts()` (timestamp teraz w formatterze). `_graceful_exit` zostawiony jako `print` (emergency exit, niezależny od loggera). Log file: `results/live/<run_id>/algo_bot.log`.
+- **`algo_bot/engine/backtester.py`** — retrofit `print("[OK] Wyniki zapisane...")` → `logger.info(..., extra={"out_dir": ..., "run_id": ...})`. `main()` wywołuje `setup_logging()` na entry point.
+
+### Fixed
+- `algo_bot/process_data.py:process_file` — wyrównana sygnatura `feature_cfg: dict[str, Any] | None` → `list[dict[str, Any]] | None` (zgodnie z `compute_features` i docstringiem, który zawsze opisywał listę featurów). Pre-existing bug wykryty incydentalnie przy `make typecheck` podczas Decyzji C. Czysto annotation, runtime bez zmiany.
 
 ---
 
