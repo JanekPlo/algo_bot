@@ -46,7 +46,9 @@ docs/
 │   ├── 002-pyproject-hatchling-stack.md
 │   ├── 003-strategybase-signal-api.md
 │   ├── 004-hybrid-tp-sl-mode.md
-│   └── 005-backtesting-py-mvp-engine.md
+│   ├── 005-backtesting-py-mvp-engine.md
+│   ├── 006-logging-strategy.md
+│   └── 007-risk-adjusted-metrics.md
 │
 ├── guides/                            # how-to (zorientowane na zadanie)
 │   ├── getting-started.md             # setup od zera
@@ -63,9 +65,10 @@ docs/
 │
 ├── reference/                         # encyklopedia (info-oriented)
 │   ├── package-overview.md            # tree z opisami
-│   ├── modules/                       # (TBD — per moduł)
+│   ├── modules/                       # per-moduł deep reference
+│   │   └── metrics.md                 # ADR-007 — algo_bot.metrics
 │   ├── config-reference.md            # (TBD — YAML schemas)
-│   └── metrics-reference.md           # (TBD — po decyzji D)
+│   └── metrics-reference.md           # (TBD — interpretacja metryk w summary.json)
 │
 └── concepts/                          # narrative explanations
     ├── glossary.md                    # terminologia

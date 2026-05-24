@@ -33,7 +33,7 @@ Faza 5: Production na VPS              → 1-2 tyg.
 - [x] Konfiguracja ruff (lint + format) i mypy (strict-on-new) w pyproject.toml — **DONE 2026-05-14**
 - [ ] Risk management module (`algo_bot/risk/limits.py`): max drawdown stop, max concurrent positions, daily loss limit, position sizing oparty o ryzyko (% equity per trade) — **decyzja E**
 - [ ] Walk-forward analyzer (`algo_bot/engine/walkforward.py`) — out-of-sample, train/test split z rolowaniem okna — **decyzja F**
-- [ ] Standardowe metryki risk-adjusted (Sharpe, Sortino, Calmar, MAR, profit factor, recovery time) — `algo_bot/metrics.py` — **decyzja D**
+- [x] Standardowe metryki risk-adjusted (Sharpe, Sortino, Calmar, MAR, profit factor, recovery time) — `algo_bot/metrics.py` — **decyzja D** — **DONE 2026-05-22** (ADR-007; pure functions + `MetricsSummary` dataclass + `summarize()`; log returns wewnętrznie, Calmar i MAR osobno, edge cases → NaN + warning)
 - [x] Logging framework + setup (`algo_bot/log.py`) zamiast `print` w całym kodzie — **decyzja C** — **DONE 2026-05-21** (ADR-006; retrofit `live/live_binance.py` + `algo_bot/engine/backtester.py` w tej sesji, pozostałe pliki w follow-up)
 - [ ] Logging retrofit follow-up (ADR-006): `algo_bot/executor.py` (po fixie FIXME), `algo_bot/fetch_data.py`, `algo_bot/process_data.py`, `algo_bot/engine/sweep.py`, `algo_bot/engine/exchanges/binance_adapter.py` → `get_logger(__name__)` + strukturalne `extra={...}`
 - [ ] CI (GitHub Actions): `make check` na każdym PR/push
