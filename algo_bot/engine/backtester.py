@@ -6,9 +6,11 @@ Główny silnik backtestowy algo_bot. Wrapper na backtesting.py adaptujący
 StrategyBase API (on_bar -> Signal) do BTStrategy z backtesting.py.
 
 Public API:
-- run_backtest(symbol, timeframe, strategy, params, ...) -> (stats, equity_df, trades_df)
+- run_backtest(symbol, timeframe, strategy, params, ..., data=None) -> (stats, equity_df, trades_df)
     Pojedynczy backtest. Zwraca metryki + equity curve + log transakcji
     (z opcjonalnymi mikrostructure adjustments dla slippage/spread).
+    Opcjonalny ``data`` pozwala wstrzyknąć pre-loaded OHLCV DataFrame (testy
+    deterministyczne, walk-forward per fold) zamiast ładowania z CSV.
 - save_outputs(rid, symbol, timeframe, strategy, params_in, stats, equity, trades) -> str
     Zapisuje wyniki do results/backtests/<run_id>/{summary.json, params.json, equity.csv, trades.csv}.
 - run_id(strategy, symbol, timeframe, params) -> str
@@ -37,8 +39,9 @@ import contextlib
 import hashlib
 import importlib
 import json
+import math
 import os
-from dataclasses import is_dataclass
+from dataclasses import asdict, is_dataclass
 from datetime import UTC, datetime
 from typing import Any
 
@@ -47,6 +50,14 @@ import pandas as pd
 from backtesting import Backtest, Strategy as BTStrategy
 
 from algo_bot.log import get_logger, setup_logging
+from algo_bot.metrics import MetricsSummary, summarize
+from algo_bot.risk import (
+    RiskLimitBreached,
+    RiskLimits,
+    check_all,
+    init_state,
+    update_state,
+)
 from algo_bot.strategy_base import StrategyBase
 
 logger = get_logger(__name__)
@@ -204,12 +215,19 @@ def adjust_trades_df(
 # ------------------------------
 # Wrapper do backtesting.py z egzekucją SL/TP/Trailing + cooldown
 # ------------------------------
-def make_bt_wrapper(StratClass, params_obj):
+def make_bt_wrapper(StratClass, params_obj, risk_limits: RiskLimits | None = None):
     """
     Wrapper StrategyBase -> backtesting.py, z egzekucją SL/TP/traila na podstawie meta.
     Oczekuje, że strategia w meta przekaże: sl, tp, trail (opcjonalnie) oraz że na hold
     może aktualizować te poziomy. Konflikt TP&SL na tej samej świecy rozstrzygamy
     z priorytetem TP (lub wg meta['tp_has_priority'] jeśli strategia poda).
+
+    Risk module hook (ADR-008): gdy ``risk_limits`` jest podany, wrapper na początku
+    każdego ``next()`` aktualizuje ``RiskState`` i woła ``check_all``. Na breach
+    zamyka otwartą pozycję po Close ostatniego bara (forced exit) i podnosi
+    ``RiskLimitBreached`` — łapane przez ``run_backtest`` i serializowane jako
+    ``stats["_risk_breach"]``. ``risk_limits=None`` (default) → brak hook'a,
+    backward-compatible.
     """
 
     class Wrapped(BTStrategy):
@@ -229,6 +247,11 @@ def make_bt_wrapper(StratClass, params_obj):
             tp_pref = getattr(params_obj, "tp_has_priority", None)
             if tp_pref is not None:
                 self._tp_first = bool(tp_pref)
+
+            # Risk module state — lazy init przy pierwszym wywołaniu next()
+            # (potrzebujemy timestamp pierwszego bara, niedostępny w init()).
+            self._risk_limits = risk_limits
+            self._risk_state = None  # type: ignore[assignment]
 
         def _current_df(self) -> pd.DataFrame:
             n = len(self.data.Close)
@@ -277,6 +300,57 @@ def make_bt_wrapper(StratClass, params_obj):
 
         def next(self):
             df = self._current_df()
+
+            # === Risk module gate (ADR-008) ===
+            # Sprawdzamy PRZED logiką strategii: jeśli equity przekroczyło DD/daily
+            # loss/positions cap, zamykamy pozycję i podnosimy RiskLimitBreached.
+            if self._risk_limits is not None:
+                bar_ts = (
+                    df.index[-1]
+                    if isinstance(df.index, pd.DatetimeIndex)
+                    else (pd.Timestamp.utcnow())
+                )
+                equity_now = float(self.equity)
+
+                if self._risk_state is None:
+                    # Pierwszy bar — inicjalizujemy state startowym equity
+                    self._risk_state = init_state(
+                        equity_start=equity_now, ts=bar_ts, limits=self._risk_limits
+                    )
+                else:
+                    self._risk_state = update_state(
+                        state=self._risk_state,
+                        equity_now=equity_now,
+                        ts=bar_ts,
+                        open_positions=int(bool(self.position)),
+                        limits=self._risk_limits,
+                    )
+
+                breach = check_all(
+                    state=self._risk_state,
+                    equity_now=equity_now,
+                    ts=bar_ts,
+                    limits=self._risk_limits,
+                )
+                if breach is not None:
+                    logger.warning(
+                        "Risk limit breached — halting backtest",
+                        extra={
+                            "kind": breach.kind,
+                            "value": breach.value,
+                            "threshold": breach.threshold,
+                            "ts": str(breach.ts),
+                        },
+                    )
+                    # Forced exit: zamknij otwartą pozycję po cenie Close bara,
+                    # żeby trades.csv zawierał ekspozycję końcową.
+                    if self.position:
+                        close_px = float(df["Close"].iloc[-1])
+                        self._close_at(close_px)
+                        self._pos_side = None
+                        self._sl = self._tp = self._trail = None
+                    raise RiskLimitBreached(breach)
+
             sig = self._algo.on_bar(df)
 
             # --- aktualizacja/egzekucja gdy mamy pozycję ---
@@ -394,12 +468,37 @@ def run_backtest(
     slippage_bps: float | None = None,
     spread_bps: float | None = None,
     unit_scale: float | None = None,
+    data: pd.DataFrame | None = None,
+    risk_limits: RiskLimits | None = None,
 ) -> tuple[dict[str, Any], pd.DataFrame, pd.DataFrame]:
     """
     Zwraca: (stats_raw, equity_df, trades_df_exec_adjusted)
+
+    Args:
+        data: Opcjonalny pre-loaded DataFrame z OHLCV (Open/High/Low/Close/Volume,
+            DatetimeIndex). Gdy podany — pomija ``load_ohlcv_csv`` i używa
+            wstrzykniętych danych. Używane przez (a) testy deterministyczne
+            (bez wymogu pliku CSV w bot_data/processed/) i (b) walk-forward
+            (Decyzja F) który wstrzykuje slice'y per fold. Argumenty ``symbol``
+            i ``timeframe`` w tej ścieżce służą tylko do metadanych (run_id,
+            mikrostructure adjustment, save_outputs).
+        risk_limits: Opcjonalna konfiguracja limitów ryzyka (ADR-008). Gdy
+            podana, wrapper sprawdza max DD / daily loss / max positions na
+            każdym barze; breach kończy run i wpisuje detale do
+            ``stats["_risk_breach"]``. ``None`` (default) → brak gate'ów,
+            backward-compatible z poprzednim API.
     """
-    # 1) Dane
-    df = load_ohlcv_csv(symbol, timeframe)
+    # 1) Dane — albo wstrzyknięte z zewnątrz, albo ładowane z bot_data/processed/
+    if data is not None:
+        df = data.copy()
+        # Wymagamy DatetimeIndex i kolumn OHLCV (kontrakt jak load_ohlcv_csv)
+        need = {"Open", "High", "Low", "Close", "Volume"}
+        if not need.issubset(df.columns):
+            raise ValueError(f"Wstrzyknięty DataFrame nie ma wymaganych kolumn {need}")
+        if not isinstance(df.index, pd.DatetimeIndex):
+            raise ValueError("Wstrzyknięty DataFrame musi mieć DatetimeIndex")
+    else:
+        df = load_ohlcv_csv(symbol, timeframe)
     if start:
         df = df[df.index >= pd.to_datetime(start, utc=True)]
     if end:
@@ -421,9 +520,16 @@ def run_backtest(
 
     # 4) Adapter (StrategyBase vs legacy)
     if issubclass(StratClass, StrategyBase):
-        BTStrat = make_bt_wrapper(StratClass, params_obj)
+        BTStrat = make_bt_wrapper(StratClass, params_obj, risk_limits=risk_limits)
         run_kwargs = {}
     else:
+        if risk_limits is not None:
+            # Legacy strategies (nie-StrategyBase) nie mają wrappera — risk hook
+            # niedostępny. Łatwiej dorobić niż udawać że działa.
+            logger.warning(
+                "risk_limits ignored — legacy strategy without StrategyBase wrapper",
+                extra={"strategy": strategy},
+            )
         BTStrat = StratClass
         run_kwargs = params_obj
 
@@ -444,10 +550,45 @@ def run_backtest(
         exclusive_orders=exclusive,
     )
 
-    stats = bt.run(**run_kwargs)
+    risk_breach: dict[str, Any] | None = None
+    try:
+        stats = bt.run(**run_kwargs)
+    except RiskLimitBreached as exc:
+        # Risk module zatrzymał run — wyciągamy stats z częściowego stanu.
+        # backtesting.py trzyma `stats` na strategii dopiero po zakończeniu pętli,
+        # więc po przerwaniu wyjątkiem nie mamy pełnego Stats obiektu. Budujemy
+        # minimalne stats ręcznie z bt-żyjącego strategy object (jeśli się da).
+        logger.warning(
+            "Backtest stopped by risk limit",
+            extra={"kind": exc.breach.kind, "value": exc.breach.value},
+        )
+        risk_breach = {
+            "kind": exc.breach.kind,
+            "value": float(exc.breach.value),
+            "threshold": float(exc.breach.threshold),
+            "ts": str(exc.breach.ts),
+            "message": exc.breach.message,
+        }
+        # Fallback stats — sięgamy bezpośrednio do internals backtesting.py.
+        # `bt._results` zostaje ustawione przez `bt.run()` PRZED ewentualnym
+        # wyjątkiem ze strategii nie zawsze; w trudnych przypadkach budujemy
+        # placeholder żeby downstream nie crashował.
+        stats = getattr(bt, "_results", None)
+        if stats is None:
+            stats = pd.Series(
+                {
+                    "Equity Final [$]": float(cash),
+                    "Return [%]": 0.0,
+                    "# Trades": 0,
+                }
+            )
 
     # 6) Equity i raw trades
-    equity = stats._equity_curve.copy()
+    equity = (
+        stats._equity_curve.copy()
+        if hasattr(stats, "_equity_curve")
+        else pd.DataFrame({"Equity": [float(cash)]}, index=[df.index[0]])
+    )
     trades_raw = stats._trades.copy() if hasattr(stats, "_trades") else pd.DataFrame()
 
     # 7) Post-run microstructure adjustment (opcjonalnie)
@@ -463,7 +604,32 @@ def run_backtest(
     if unit_scale is not None and float(unit_scale) != 1.0:
         stats["_scaling"] = {"unit_scale": float(unit_scale)}
 
+    # Risk module breach (ADR-008) — gdy run został zatrzymany przez limit
+    if risk_breach is not None:
+        stats["_risk_breach"] = risk_breach
+
+    # Konfiguracja risk limits jako metadana (zawsze, nawet bez breach)
+    if risk_limits is not None:
+        stats["_risk_limits"] = asdict(risk_limits)
+
     return stats, equity, trades_adj
+
+
+def _metrics_summary_to_json_safe(summary: MetricsSummary) -> dict[str, Any]:
+    """Konwertuje ``MetricsSummary`` do dict-a JSON-safe (NaN/inf → None).
+
+    JSON spec nie pozwala na NaN/Infinity; ``json.dumps(nan)`` wypluwa "NaN"
+    co większość parserów odrzuca. Mapujemy NaN i inf na ``None`` żeby
+    ``summary.json`` był walidowalny przez ``json.loads`` po dowolnej stronie.
+    """
+    raw = asdict(summary)
+    safe: dict[str, Any] = {}
+    for k, v in raw.items():
+        if isinstance(v, float) and (math.isnan(v) or math.isinf(v)):
+            safe[k] = None
+        else:
+            safe[k] = v
+    return safe
 
 
 def save_outputs(
@@ -478,6 +644,24 @@ def save_outputs(
 ) -> str:
     out_dir = os.path.join(OUT_DIR, rid)
     ensure_dir(out_dir)
+
+    # MetricsSummary embed (post-ADR-007 follow-up, ADR-008 §12)
+    # Liczymy summary z equity + trades.PnL gdy mamy dostępne kolumny;
+    # NaN/inf → None dla JSON safety. Wszystko opakowane w try/except
+    # żeby błąd metrics nie wywalił całego save_outputs.
+    try:
+        equity_series = equity["Equity"] if "Equity" in equity.columns else None
+        trades_pnl = None
+        if not trades.empty and "PnL" in trades.columns:
+            trades_pnl = trades["PnL"]
+        if equity_series is not None and len(equity_series) > 1:
+            metrics_summary = summarize(equity=equity_series, trades_pnl=trades_pnl)
+            stats["_metrics_summary"] = _metrics_summary_to_json_safe(metrics_summary)
+    except Exception as e:
+        logger.warning(
+            "Failed to compute MetricsSummary for summary.json",
+            extra={"error": str(e)},
+        )
 
     # summary
     summary = {}
@@ -542,6 +726,34 @@ def parse_args():
         default=None,
         help="Opcjonalny mnożnik cen (np. 0.001 → 1 jednostka = 0.001 instrumentu)",
     )
+    # Risk module flags (ADR-008) — opcjonalne, brak = brak gate'ów (backward compat)
+    ap.add_argument(
+        "--max_dd_pct",
+        type=float,
+        default=None,
+        help="Max drawdown stop jako fraction (np. 0.20 = 20%%). Brak = wyłączone.",
+    )
+    ap.add_argument(
+        "--daily_loss_pct",
+        type=float,
+        default=None,
+        help="Daily loss limit jako fraction (np. 0.05 = 5%%). Brak = wyłączone.",
+    )
+    ap.add_argument(
+        "--risk_per_trade_pct",
+        type=float,
+        default=None,
+        help=(
+            "% equity per trade jako fraction (np. 0.01 = 1%%). Używane przez "
+            "position_size helper — strategia musi go zawołać explicit."
+        ),
+    )
+    ap.add_argument(
+        "--daily_reset_tz",
+        type=str,
+        default="UTC",
+        help="IANA timezone dla daily_loss reset (default UTC).",
+    )
     return ap.parse_args()
 
 
@@ -556,6 +768,20 @@ def main():
 
     rid = run_id(args.strategy, args.symbol, args.timeframe, params)
 
+    # Risk limits z CLI (ADR-008) — None gdy żaden próg nie podany
+    risk_limits = None
+    if (
+        args.max_dd_pct is not None
+        or args.daily_loss_pct is not None
+        or args.risk_per_trade_pct is not None
+    ):
+        risk_limits = RiskLimits(
+            max_drawdown_pct=args.max_dd_pct,
+            daily_loss_pct=args.daily_loss_pct,
+            risk_per_trade_pct=args.risk_per_trade_pct,
+            daily_reset_tz=args.daily_reset_tz,
+        )
+
     stats, equity, trades = run_backtest(
         symbol=args.symbol,
         timeframe=args.timeframe,
@@ -569,6 +795,7 @@ def main():
         slippage_bps=args.slippage_bps,
         spread_bps=args.spread_bps,
         unit_scale=args.unit_scale,
+        risk_limits=risk_limits,
     )
 
     save_outputs(

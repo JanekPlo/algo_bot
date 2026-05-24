@@ -78,7 +78,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, cast
 
 import numpy as np
 import pandas as pd
@@ -155,9 +155,7 @@ def infer_periods_per_year(
         )
         return _DEFAULT_PERIODS_PER_YEAR
 
-    days_per_year = (
-        _DAYS_PER_YEAR_CRYPTO if calendar == "crypto" else _DAYS_PER_YEAR_TRADFI
-    )
+    days_per_year = _DAYS_PER_YEAR_CRYPTO if calendar == "crypto" else _DAYS_PER_YEAR_TRADFI
     return float(pd.Timedelta(days=days_per_year) / median_delta)
 
 
@@ -175,7 +173,10 @@ def log_returns(equity: pd.Series) -> pd.Series:
         Log returns sa additywne w czasie. Standardowa konwencja w quant dla
         Sharpe/Sortino — annualizacja przez ``√n`` jest dokladna, nie aproksymacja.
     """
-    return np.log(equity).diff().dropna()
+    # cast: numpy/pandas stubs widzą np.log(Series) jako ndarray → Any. Runtime
+    # to pd.Series (numpy fall-through dla pandas operands), więc .diff()/.dropna()
+    # są poprawne.
+    return cast(pd.Series, np.log(equity).diff().dropna())
 
 
 def simple_returns(equity: pd.Series) -> pd.Series:
@@ -280,10 +281,16 @@ def sharpe(
         return float("nan")
 
     std = float(rets.std(ddof=1))
-    if std == 0 or math.isnan(std):
+    # Tolerance 1e-12 łapie też "praktycznie zerową" wariancję z floating-point
+    # noise (np. equity rosnący geometrycznie ze stałym log_return — math.exp()
+    # wprowadza ~1e-15 noise w log_returns, std jest niezerowe ale w skali
+    # pikometra; bez tolerance Sharpe wybucha do 10^13). 1e-12 jest na tyle
+    # małe że nie maskuje realnych std (typowe std log_returns dla strategii to
+    # 0.01–0.05 czyli 10 rzędów wielkości wyżej).
+    if math.isnan(std) or std < 1e-12:
         logger.warning(
             "sharpe: zero variance (constant returns) → NaN",
-            extra={"n_returns": len(rets)},
+            extra={"n_returns": len(rets), "std": std},
         )
         return float("nan")
 
@@ -450,7 +457,9 @@ def recovery_time(equity: pd.Series) -> pd.Timedelta:
         )
         return pd.Timedelta.max
 
-    return recovered.index[0] - trough_idx
+    # cast: Index.__getitem__ → Timestamp w runtime; stubs zwracają Any po
+    # arytmetyce Timestamp - Timestamp = Timedelta.
+    return cast(pd.Timedelta, recovered.index[0] - trough_idx)
 
 
 # ============================================================================
@@ -744,7 +753,9 @@ def strategy_correlation(
         return pd.DataFrame(index=df_equity.columns, columns=df_equity.columns, dtype=float)
 
     if on == "log_returns":
-        df_rets = np.log(df_equity).diff().dropna(how="all")
+        # cast: tak samo jak w log_returns — np.log(DataFrame) w runtime
+        # zachowuje pandas, ale stubs widzą ndarray.
+        df_rets = cast(pd.DataFrame, np.log(df_equity)).diff().dropna(how="all")
     else:  # simple_returns
         df_rets = df_equity.pct_change().dropna(how="all")
 
