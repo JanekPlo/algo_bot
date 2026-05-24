@@ -57,9 +57,27 @@ Sekcje na każdą wersję:
 ### Fixed
 - `algo_bot/process_data.py:process_file` — wyrównana sygnatura `feature_cfg: dict[str, Any] | None` → `list[dict[str, Any]] | None` (zgodnie z `compute_features` i docstringiem, który zawsze opisywał listę featurów). Pre-existing bug wykryty incydentalnie przy `make typecheck` podczas Decyzji C. Czysto annotation, runtime bez zmiany.
 
----
+### Tail-end Fazy 1 (sesja wykończeniowa, 2026-05-24)
 
-## [0.1.0] — 2026-05-14
+Domknięcie trzech parked items z ROADMAP Fazy 1: logging retrofit follow-up (ADR-006), `executor.py` FIXME, brakujący `log.md` deep reference. Jedna sesja "wykończeniowa", niskie ryzyko, mechaniczne.
+
+#### Added
+- `docs/reference/modules/log.md` — deep reference dla `algo_bot/log.py` (At a glance, Public API, Conventions, Edge cases, Limitations / Future migration). Wzorzec analogiczny do `metrics.md` i `risk-limits.md`. Domyka lukę zgłoszoną w captain's log 2026-05-24 jako drift #2 (jedyny moduł Fazy 1 bez deep reference).
+- `algo-sweep --log-level {DEBUG,INFO,WARNING,ERROR}` CLI flag — operator może wymusić DEBUG (per-iter detail) lub WARNING (ciche długie sweepy) bez edycji kodu. Default INFO.
+
+#### Changed
+- **Logging retrofit follow-up (ADR-006)** — wszystkie pliki `algo_bot/` używają `from algo_bot.log import get_logger; logger = get_logger(__name__)` z `extra={...}` dla strukturalnych pól. Konwencja level (DEBUG/INFO/WARNING/ERROR/CRITICAL) opisana w `docs/reference/modules/log.md`. Per plik:
+  - `algo_bot/process_data.py` — 5 print() → 2 logger.warning + 1 logger.info (z `extra={out_path, rows, symbol, timeframe}`) + 1 logger.warning + 1 logger.exception. `main()` woła `setup_logging()` na entry.
+  - `algo_bot/fetch_data.py` — 6 print() → 1 logger.warning (retry CCXT z `extra={error_type, retry, max_retries, symbol, timeframe}`) + 1 logger.info (resume from existing file) + 2 logger.info (batch flush) + 1 logger.info (fetch completed) + 1 logger.exception. `main()` woła `setup_logging()`.
+  - `algo_bot/engine/exchanges/binance_adapter.py` — 2 print() → 2 logger.warning z `exc_info=True` (TP/SL order failed; structurally with `extra={symbol, side, tp_price/sl_price}`).
+  - `algo_bot/engine/sweep.py` — 3 print() → 3 logger.info milestones (start sweep, progress co 10 jobów, sweep completed). `main()` woła `setup_logging(level=args.log_level)` z nowym `--log-level` flag.
+  - `algo_bot/funding.py` — 1 print() → 1 logger.info. Plus naprawiony strukturalny bug: cały kod żył na module level (importowanie pliku wykonywało scraping), opakowany teraz w `main()` + `if __name__ == "__main__":`.
+  - `algo_bot/data_loader.py` — 1 print() → 1 logger.exception (legacy `batch_fetch_symbols` per-symbol error handler).
+- Stan po retrofitcie: **zero `print()` w `algo_bot/`** (poza `executor.py` — usunięty patrz niżej).
+
+#### Removed
+- **`algo_bot/executor.py`** — legacy CLI deprecated. Powód: broken since 2026-05-14 flatten (`from algo_bot.backtester import optimize_backtest, run_backtest` → moduł `algo_bot.backtester` nie istnieje; sweep żyje w `algo_bot.engine.sweep`, `optimize_backtest` jako funkcja w ogóle nie istniała w nowej architekturze). Verified: zero referencji w innych modułach (grep `algo_bot.executor`), brak entry `algo-optimize` w `pyproject.toml` (sweep ma własny `algo-sweep`), 10+ dni nikt nie odpalił `python -m algo_bot.executor`. Cleanup, nie decyzja architektoniczna — stąd CHANGELOG entry, nie ADR. Domyka ROADMAP linia 41 (cleanup `executor.py` FIXME).
+- README.md / docs/reference/package-overview.md / docs/ARCHITECTURE.md — usunięte referencje do `executor.py` z file trees i list modułów.
 
 Pierwsza faza foundation. Repo gotowe do pracy nad strategiami z proper toolingiem, layoutem i workflowem.
 

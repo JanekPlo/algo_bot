@@ -79,7 +79,6 @@ algo_bot/                              # repo root (= ten plik)
 │   ├── data_loader.py                 # CSV OHLCV reader/writer
 │   ├── fetch_data.py                  # CCXT → bot_data/raw/*.csv
 │   ├── process_data.py                # raw → processed z featurami
-│   ├── executor.py                    # legacy CLI (FIXME)
 │   ├── funding.py                     # funding rate (perp futures)
 │   ├── engine/
 │   │   ├── backtester.py              # silnik backtestowy (wrapper na backtesting.py)

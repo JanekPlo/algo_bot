@@ -31,6 +31,10 @@ from typing import Any
 
 import pandas as pd
 
+from algo_bot.log import get_logger, setup_logging
+
+logger = get_logger(__name__)
+
 # --- opcjonalne featury (TA-Lib) ---
 try:
     import talib
@@ -129,7 +133,7 @@ def compute_features(df: pd.DataFrame, feature_cfg: list[dict[str, Any]] | None)
     if not feature_cfg:
         return df
     if not _HAS_TALIB:
-        print("[process] TA-Lib not available - skipping features")
+        logger.warning("TA-Lib not available — skipping features")
         return df
 
     for feat in feature_cfg:
@@ -144,7 +148,7 @@ def compute_features(df: pd.DataFrame, feature_cfg: list[dict[str, Any]] | None)
         elif ftype == "RSI":
             df["RSI"] = talib.RSI(df["Close"], **params)  # type: ignore[arg-type]
         else:
-            print(f"[process] Unknown feature type: {ftype} (skip)")
+            logger.warning("Unknown feature type — skipping", extra={"feature_type": ftype})
     return df
 
 
@@ -197,11 +201,16 @@ def process_file(
         "Volume",
     ] + [c for c in df.columns if c not in ["datetime", "Open", "High", "Low", "Close", "Volume"]]
     df[cols_order].to_csv(out, index=False)
-    print(f"[process] Wrote PROCESSED → {out}  rows={len(df)}")
+    logger.info(
+        "Wrote PROCESSED file",
+        extra={"out_path": str(out), "rows": len(df), "symbol": symbol, "timeframe": timeframe},
+    )
     return out
 
 
 def main():
+    # ADR-006: setup_logging na entry point CLI (idempotentne).
+    setup_logging()
     ap = argparse.ArgumentParser()
     ap.add_argument("raw_path", nargs="?", help="np. bot_data/raw/BTC_USDT-5m.csv")
     ap.add_argument(
@@ -228,13 +237,14 @@ def main():
         # batch: wszystkie RAW
         files = sorted(RAW_DIR.glob("*.csv"))
         if not files:
-            print(f"[process] Brak plików RAW w {RAW_DIR}")
+            logger.warning("Brak plików RAW w katalogu wejściowym", extra={"raw_dir": str(RAW_DIR)})
             return
         for p in files:
             try:
                 process_file(p, feature_cfg=feature_cfg, max_missing_ratio=args.max_missing_ratio)
-            except Exception as e:
-                print(f"[process] ERROR {p}: {e}")
+            except Exception:
+                # exc_info=True dorzuca traceback do JSON file handlera (ADR-006)
+                logger.exception("Błąd przetwarzania pliku RAW", extra={"raw_path": str(p)})
 
 
 if __name__ == "__main__":

@@ -37,7 +37,6 @@ algo_bot/
 ├── data_loader.py                     # CSV OHLCV reader/writer + validation
 ├── fetch_data.py                      # CLI: CCXT → bot_data/raw/*.csv
 ├── process_data.py                    # CLI: raw → processed z featurami
-├── executor.py                        # ⚠️ LEGACY (broken imports, do dyskusji)
 ├── funding.py                         # funding rate scraping (perp futures)
 │
 ├── engine/                            # silniki backtestowe
@@ -78,8 +77,7 @@ algo_bot/
 | `data_loader.py` | 336 | Loader dla bot_data: `load_processed`, `count_missing_bars`, `get_processed_path`. Plus legacy: `fetch_ohlcv`, `load_csv_ohlcv`, `resample_ohlcv`. |
 | `fetch_data.py` | 241 | CLI: pobiera OHLCV z giełdy przez CCXT, zapisuje do `bot_data/raw/`. Argparse-based. |
 | `process_data.py` | 213 | CLI: raw → processed z indykatorami (BBANDS, RSI, etc.). Konfig features w `config/config.yaml`. |
-| `executor.py` | 153 | ⚠️ **Legacy CLI** — niespójne z nową architekturą (broken import `from algo_bot.backtester`). FIXME w pliku. Do decyzji: deprecation czy migracja. |
-| `funding.py` | 23 | Helper do pobierania funding rates z Binance (mały scraper). |
+| `funding.py` | 56 | Helper do pobierania funding rates z Binance (mały scraper; CLI: `python -m algo_bot.funding`). |
 
 ### `algo_bot/engine/`
 

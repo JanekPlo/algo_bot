@@ -35,6 +35,7 @@ import csv
 import importlib
 import itertools
 import json
+import logging
 import os
 import random
 from collections.abc import Iterable
@@ -51,6 +52,9 @@ except ImportError:
 
 # używamy istniejącego backtestera jako silnika
 from algo_bot.engine.backtester import run_backtest, run_id as make_run_id, save_outputs
+from algo_bot.log import get_logger, setup_logging
+
+logger = get_logger(__name__)
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, os.pardir))
 EXP_DIR = os.path.join(PROJECT_ROOT, "results", "experiments")
@@ -257,6 +261,15 @@ def parse_args():
     ap.add_argument("--wf_test_bars", type=int, default=None)
     ap.add_argument("--wf_step_bars", type=int, default=None)
 
+    # Logging (ADR-006): wymuszenie poziomu bez edycji kodu (np. DEBUG dla
+    # per-iter szczegółów albo WARNING dla cichych długich sweepów).
+    ap.add_argument(
+        "--log-level",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        default="INFO",
+        help="Poziom logowania dla całego sweepa.",
+    )
+
     return ap.parse_args()
 
 
@@ -293,6 +306,9 @@ def load_space_from_any(args) -> tuple[str, dict[str, Any], int, int]:
 def main():
     args = parse_args()
 
+    # ADR-006: setup_logging na entry point CLI z poziomem z flag'i (idempotentne).
+    setup_logging(level=logging.getLevelName(args.log_level))
+
     StratClass = resolve_strategy_class(args.strategy)
 
     # wczytaj/rozszerz przestrzeń parametrów
@@ -310,7 +326,17 @@ def main():
     combos = list(expand_param_space(mode, space_clean, n_samples=n_samples, seed=seed))
     total_jobs = len(args.symbols) * len(args.timeframes) * len(combos)
 
-    print(f"[SWEEP] strategy={args.strategy} mode={mode} jobs={total_jobs}")
+    logger.info(
+        "Sweep starting",
+        extra={
+            "strategy": args.strategy,
+            "mode": mode,
+            "total_jobs": total_jobs,
+            "n_symbols": len(args.symbols),
+            "n_timeframes": len(args.timeframes),
+            "n_combos": len(combos),
+        },
+    )
 
     job_i = 0
     for sym in args.symbols:
@@ -422,9 +448,18 @@ def main():
                         append_index_row(row)
 
                 if job_i % 10 == 0 or job_i == total_jobs:
-                    print(f"[{job_i}/{total_jobs}] {sym} {tf} params={p_clean}")
+                    logger.info(
+                        "Sweep progress",
+                        extra={
+                            "job_i": job_i,
+                            "total_jobs": total_jobs,
+                            "symbol": sym,
+                            "timeframe": tf,
+                            "params": p_clean,
+                        },
+                    )
 
-    print(f"[DONE] index → {INDEX_CSV}")
+    logger.info("Sweep completed", extra={"index_csv": INDEX_CSV, "total_jobs": total_jobs})
 
 
 if __name__ == "__main__":

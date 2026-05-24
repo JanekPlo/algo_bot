@@ -93,7 +93,6 @@
 | `src/process_data.py` | 213 | Feature engineering, indykatory |
 | `src/strategy_loader.py` | 24 | Dynamiczny import strategii po nazwie |
 | `src/funding.py` | 23 | Funding rate (perp futures) |
-| `src/executor.py` | 153 | CLI wrapping backtester (legacy, może do scalenia z `engine/`) |
 | `src/engine/backtester.py` | 532 | Główny silnik backtestu (adapter `backtesting.py`) |
 | `src/engine/sweep.py` | 352 | Grid + random search po parametrach |
 | `src/engine/exchanges/binance_adapter.py` | 117 | CCXT wrapper na Binance Futures |

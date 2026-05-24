@@ -29,6 +29,10 @@ from typing import Any
 
 import ccxt
 
+from algo_bot.log import get_logger
+
+logger = get_logger(__name__)
+
 
 class BinanceFuturesAdapter:
     def __init__(self, api_key: str, api_secret: str, testnet: bool = True):
@@ -137,8 +141,12 @@ class BinanceFuturesAdapter:
                         },
                     )
                 )
-            except Exception as e:
-                print(f"[set_tpsl] WARN TP: {e}", flush=True)
+            except Exception:
+                logger.warning(
+                    "Failed to set TAKE_PROFIT_MARKET order",
+                    extra={"symbol": symbol, "side": side, "tp_price": tp_price},
+                    exc_info=True,
+                )
 
         # STOP-LOSS
         if sl_pct is not None:
@@ -161,7 +169,11 @@ class BinanceFuturesAdapter:
                         },
                     )
                 )
-            except Exception as e:
-                print(f"[set_tpsl] WARN SL: {e}", flush=True)
+            except Exception:
+                logger.warning(
+                    "Failed to set STOP_MARKET order",
+                    extra={"symbol": symbol, "side": side, "sl_price": sl_price},
+                    exc_info=True,
+                )
 
         return results

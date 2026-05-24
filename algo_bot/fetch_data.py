@@ -9,6 +9,10 @@ from pathlib import Path
 import ccxt
 import pandas as pd
 
+from algo_bot.log import get_logger, setup_logging
+
+logger = get_logger(__name__)
+
 # === Konfiguracja kroków czasowych (ms) ===
 TF_MS = {
     "1m": 60_000,
@@ -107,7 +111,17 @@ def fetch_ohlcv_batches(
                 ohlcv = ex.fetch_ohlcv(symbol, timeframe=timeframe, since=cursor, limit=limit)
                 break
             except (ccxt.NetworkError, ccxt.DDoSProtection, ccxt.ExchangeNotAvailable) as e:
-                print(f"[fetch] WARN {type(e).__name__}: {e} (retry {i + 1}/6)")
+                logger.warning(
+                    "Network error fetching OHLCV — retrying",
+                    extra={
+                        "error_type": type(e).__name__,
+                        "error_msg": str(e),
+                        "retry": i + 1,
+                        "max_retries": 6,
+                        "symbol": symbol,
+                        "timeframe": timeframe,
+                    },
+                )
                 backoff_sleep(i)
         if ohlcv is None:
             # ostatnia próba – jeśli nadal None, rzuć wyjątek
@@ -165,6 +179,8 @@ def _save_append(path: Path, new_df: pd.DataFrame) -> None:
 
 # === Main CLI ===
 def main():
+    # ADR-006: setup_logging na entry point CLI (idempotentne).
+    setup_logging()
     ap = argparse.ArgumentParser(description="Pobiera OHLCV do RAW (z resume) - Binance Futures")
     ap.add_argument("symbol", help="np. BTC/USDT, BTC_USDT lub BTCUSDT")
     ap.add_argument("timeframe", choices=list(TF_MS.keys()))
@@ -211,7 +227,15 @@ def main():
     last_in_file = last_ts_from_file(out_path)
     if last_in_file is not None and last_in_file >= since_ms:
         since_ms = last_in_file + tf_ms
-        print(f"[fetch] Resume from {pd.to_datetime(since_ms, unit='ms', utc=True)}")
+        logger.info(
+            "Resuming fetch from existing file",
+            extra={
+                "resume_from": str(pd.to_datetime(since_ms, unit="ms", utc=True)),
+                "symbol": symbol,
+                "timeframe": tf,
+                "out_path": str(out_path),
+            },
+        )
 
     # Główny loop
     buffers: list[pd.DataFrame] = []
@@ -227,18 +251,32 @@ def main():
                 _save_append(out_path, flush)
                 total_rows += len(flush)
                 buffers = []
-                print(f"[flush] {total_rows} rows written → {out_path}")
+                logger.info(
+                    "Flushed batches to RAW",
+                    extra={"total_rows": total_rows, "out_path": str(out_path)},
+                )
 
         if buffers:
             flush = pd.concat(buffers, ignore_index=True)
             _save_append(out_path, flush)
             total_rows += len(flush)
-            print(f"[flush] {total_rows} rows written → {out_path}")
+            logger.info(
+                "Final flush of buffered batches",
+                extra={"total_rows": total_rows, "out_path": str(out_path)},
+            )
 
-        print(f"[done] RAW saved: {out_path} (rows appended: {total_rows})")
+        logger.info(
+            "RAW fetch completed",
+            extra={
+                "out_path": str(out_path),
+                "rows_appended": total_rows,
+                "symbol": symbol,
+                "timeframe": tf,
+            },
+        )
 
-    except Exception as e:
-        print(f"[error] {e}")
+    except Exception:
+        logger.exception("Fatal error during fetch", extra={"symbol": symbol, "timeframe": tf})
         raise
 
 

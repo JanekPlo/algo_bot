@@ -21,6 +21,10 @@ from typing import Any
 import ccxt
 import pandas as pd
 
+from algo_bot.log import get_logger
+
+logger = get_logger(__name__)
+
 # === ŚCIEŻKI ===
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 RAW_DIR = PROJECT_ROOT / "bot_data" / "raw"
@@ -274,8 +278,8 @@ def batch_fetch_symbols(
                 exchange, sym, timeframe, since, limit, output_dir, None, params
             )
             results[sym] = path
-        except Exception as e:
-            print(f"Błąd pobierania {sym}: {e}")
+        except Exception:
+            logger.exception("Failed to fetch symbol in batch", extra={"symbol": sym})
     return results
 
 

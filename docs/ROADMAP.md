@@ -35,10 +35,10 @@ Faza 5: Production na VPS              → 1-2 tyg.
 - [ ] Walk-forward analyzer (`algo_bot/engine/walkforward.py`) — out-of-sample, train/test split z rolowaniem okna — **decyzja F**
 - [x] Standardowe metryki risk-adjusted (Sharpe, Sortino, Calmar, MAR, profit factor, recovery time) — `algo_bot/metrics.py` — **decyzja D** — **DONE 2026-05-22** (ADR-007; pure functions + `MetricsSummary` dataclass + `summarize()`; log returns wewnętrznie, Calmar i MAR osobno, edge cases → NaN + warning)
 - [x] Logging framework + setup (`algo_bot/log.py`) zamiast `print` w całym kodzie — **decyzja C** — **DONE 2026-05-21** (ADR-006; retrofit `live/live_binance.py` + `algo_bot/engine/backtester.py` w tej sesji, pozostałe pliki w follow-up)
-- [ ] Logging retrofit follow-up (ADR-006): `algo_bot/executor.py` (po fixie FIXME), `algo_bot/fetch_data.py`, `algo_bot/process_data.py`, `algo_bot/engine/sweep.py`, `algo_bot/engine/exchanges/binance_adapter.py` → `get_logger(__name__)` + strukturalne `extra={...}`
+- [x] Logging retrofit follow-up (ADR-006): `algo_bot/fetch_data.py`, `algo_bot/process_data.py`, `algo_bot/engine/sweep.py`, `algo_bot/engine/exchanges/binance_adapter.py`, `algo_bot/funding.py`, `algo_bot/data_loader.py` → `get_logger(__name__)` + strukturalne `extra={...}` — **DONE 2026-05-24** (sesja wykończeniowa; `executor.py` deprecated zamiast retrofit; `algo-sweep --log-level` dodany; zero `print()` zostało w `algo_bot/`)
 - [ ] CI (GitHub Actions): `make check` na każdym PR/push
 - [ ] Pre-commit hooks: `.pre-commit-config.yaml` z ruff + mypy
-- [ ] Cleanup po decyzjach: `executor.py` FIXME (broken `optimize_backtest`) — pozostaje. `tests/test_backtest.py` sygnatura **naprawiona w sesji Decyzji E (2026-05-24)**: nowy smoke test z syntetycznym OHLCV (deterministyczny, bez wymogu pliku) + integration test gated na obecność CSV.
+- [x] Cleanup po decyzjach — **DONE 2026-05-24** (`executor.py` deprecated w sesji wykończeniowej — broken since flatten, 0 referencji, sweep ma własny `algo-sweep`; `tests/test_backtest.py` sygnatura naprawiona w sesji Decyzji E).
 - [ ] CLI entries: `algo-fetch`, `algo-process` (po dodaniu `main()` w odpowiednich modułach)
 
 **Deliverables (docs):**
@@ -51,7 +51,7 @@ Faza 5: Production na VPS              → 1-2 tyg.
 - [x] `README.md` (root) update — entry point pod docs/ — **DONE 2026-05-14**
 - [x] Per-file header docstrings w 10 kluczowych plikach pakietu — **DONE 2026-05-14**
 - [ ] ADR-006..010 per każda nowa decyzja w fazie 1 (logging, metrics, risk, walk-forward, CI/pre-commit)
-- [ ] `docs/reference/modules/<modul>.md` dla każdego NOWEGO modułu (risk, walkforward, metrics, log) — deep reference
+- [ ] `docs/reference/modules/<modul>.md` dla każdego NOWEGO modułu — deep reference. Stan: `metrics.md` (Decyzja D), `risk-limits.md` (Decyzja E), `log.md` (sesja wykończeniowa 2026-05-24). Brakuje: `walkforward.md` (czeka na Decyzję F).
 - [x] `docs/concepts/risk-management.md` — **DONE 2026-05-24** (Decyzja E; thin Phase 1 deliverable, rozbudowywany w Fazie 4 do `risk-management-production.md`). `walk-forward.md` (po F), `microstructure.md` — TBD.
 
 **Kryteria sukcesu:**
