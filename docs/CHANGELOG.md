@@ -18,6 +18,10 @@ Sekcje na każdą wersję:
 ## [Unreleased]
 
 ### Added
+- GitHub Actions workflow `.github/workflows/check.yml` running `make check` on pull requests and pushes to `master`
+- `.pre-commit-config.yaml` with standard file hygiene hooks plus Ruff lint/format hooks
+- CLI entry `algo-fetch` for `algo_bot.fetch_data:main`
+- CLI entry `algo-process` for `algo_bot.process_data:main`
 - `docs/guides/working-with-claude.md` — konwencja pracy z Claudem (Cowork): model "jedna sesja per deliverable" z kickoff/closeout protokołem, rola mózg-Claude (weekly audit + pre-flight on-demand), warstwa trwałości (ROADMAP + ADR + CHANGELOG + memory)
 - Pełna dokumentacja w `docs/`: README (TOC), guides (getting-started, daily-workflow, makefile-cheatsheet), reference (package-overview), concepts (glossary), 5 ADR retroactive
 - Decyzje fazy 1 podjęte: layout (flatten + algo_bot package), Python 3.11, hatchling, conda env + pip-tools, ruff, mypy strict-on-new

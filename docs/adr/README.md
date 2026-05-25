@@ -19,6 +19,9 @@ Format: lekki, oparty na propozycji [Michael Nygard'a](https://cognitect.com/blo
 | [005](005-backtesting-py-mvp-engine.md) | backtesting.py jako silnik backtestowy MVP | Accepted (retroactive) | pre-2026-05 | 0 |
 | [006](006-logging-strategy.md) | Logging — stdlib logging z JSON file handler | Accepted | 2026-05-21 | 1 |
 | [007](007-risk-adjusted-metrics.md) | Risk-adjusted metrics — hand-rolled `algo_bot/metrics.py` | Accepted | 2026-05-22 | 1 |
+| [008](008-risk-limits-module.md) | Risk limits module — pure gates + backtester hook | Accepted | 2026-05-24 | 1 |
+| [009](009-walk-forward.md) | Walk-forward analyzer — `algo_bot/engine/walkforward.py` | Accepted | 2026-05-25 | 1 |
+| [010](010-automated-quality-gates-ci-pre-commit.md) | Automated quality gates — CI + pre-commit | Accepted | 2026-05-25 | 1 |
 
 ## Polityka
 
@@ -52,7 +55,7 @@ Format: lekki, oparty na propozycji [Michael Nygard'a](https://cognitect.com/blo
 - Alternatives Considered (jakie inne opcje były na stole, dlaczego odrzucone)
 - (opcjonalnie) References, Notes
 
-**Język:** docs po polsku zgodnie z konwencją projektu. Nazwy techniczne (biblioteki, klasy, parametry) po angielsku.
+**Język:** historyczne ADR-y są po polsku. Nowe ADR-y od końca Fazy 1 piszemy po angielsku zgodnie z aktualną konwencją dokumentacji. Nazwy techniczne (biblioteki, klasy, parametry) po angielsku.
 
 ## Jak dodać nowy ADR
 

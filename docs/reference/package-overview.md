@@ -319,7 +319,7 @@ Pliki/katalogi które dorobimy w fazach 1-5 zgodnie z [ROADMAP](../ROADMAP.md):
 - `algo_bot/metrics.py` — Sharpe, Sortino, Calmar, MAR, ... (po decyzji D)
 - `algo_bot/log.py` — logging setup (po decyzji C)
 - `.pre-commit-config.yaml` — pre-commit hooks
-- `.github/workflows/ci.yml` — GitHub Actions
+- `.github/workflows/check.yml` — GitHub Actions (`make check`)
 
 ### Faza 3
 - `algo_bot/alerts/telegram.py` — alerty na Telegram

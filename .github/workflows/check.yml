@@ -1,0 +1,36 @@
+name: check
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+jobs:
+  check:
+    name: make check
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        shell: bash -el {0}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up micromamba
+        uses: mamba-org/setup-micromamba@v2
+        with:
+          environment-file: environment.yml
+          environment-name: algo_bot
+          cache-environment: true
+          cache-environment-key: micromamba-env-${{ runner.os }}-${{ hashFiles('environment.yml') }}
+          cache-downloads: true
+          cache-downloads-key: micromamba-downloads-${{ runner.os }}-${{ hashFiles('environment.yml') }}
+
+      - name: Install package
+        run: python -m pip install -e ".[dev]"
+
+      - name: Run quality gate
+        run: make check

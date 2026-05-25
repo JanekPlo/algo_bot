@@ -85,12 +85,12 @@ Issues     = "https://github.com/JanekPlo/algo_bot/issues"
 # Po `pip install -e .` masz globalne komendy w aktywnym conda env.
 # Mapping: nazwa-komendy = "modul.path:funkcja"
 #
-# TODO (fazy C-F): dodac kolejne wpisy gdy refaktorujemy/tworzymy modul:
-#   algo-fetch     = "algo_bot.fetch_data:main"     (juz ma argparse, brakuje tylko main())
-#   algo-process   = "algo_bot.process_data:main"   (j.w.)
+# TODO (future): dodac kolejne wpisy gdy refaktorujemy/tworzymy modul:
 #   algo-live      = "algo_bot.live:main"           (po przeniesieniu live/ do algo_bot.live)
 [project.scripts]
 algo-backtest    = "algo_bot.engine.backtester:main"
+algo-fetch       = "algo_bot.fetch_data:main"
+algo-process     = "algo_bot.process_data:main"
 algo-sweep       = "algo_bot.engine.sweep:main"
 algo-walkforward = "algo_bot.engine.walkforward:main"  # ADR-009 (Decyzja F)
 

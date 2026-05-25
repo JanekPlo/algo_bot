@@ -48,4 +48,3 @@ exec python -m live.live_binance \
   --price_feed mainnet_mark \
   --poll_ms 1000 \
   --cat_sl_pct 0.15
-

@@ -26,6 +26,7 @@ Public API:
 from __future__ import annotations
 
 import argparse
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -209,19 +210,26 @@ def process_file(
 
 
 def main():
-    # ADR-006: setup_logging na entry point CLI (idempotentne).
-    setup_logging()
     ap = argparse.ArgumentParser()
     ap.add_argument("raw_path", nargs="?", help="np. bot_data/raw/BTC_USDT-5m.csv")
     ap.add_argument(
         "--max-missing-ratio",
         type=float,
         default=DEFAULT_MAX_MISSING_RATIO,
-        help="Dopuszczalny udział braków (domyślnie 0.005 = 0.5%)",
+        help="Dopuszczalny udział braków (domyślnie 0.005 = 0.5%%)",
     )
     # Prosto: na razie bez YAML – featury można dopchnąć później
     ap.add_argument("--features-json", help="Opcjonalny JSON z listą featurów", default=None)
+    ap.add_argument(
+        "--log-level",
+        default="INFO",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        help="Poziom logowania dla process CLI.",
+    )
     args = ap.parse_args()
+
+    # ADR-006: setup_logging na entry point CLI (idempotentne).
+    setup_logging(level=getattr(logging, args.log_level))
 
     feature_cfg = None
     if args.features_json:

@@ -25,6 +25,32 @@ Jeśli `make check` faili po pull — najpewniej zmieniły się deps. Zsynchroni
 make sync          # = pip-sync requirements.txt + pip install -e . --no-deps
 ```
 
+## Pre-commit setup
+
+Enable local hooks once per clone:
+
+```bash
+make precommit-install
+```
+
+The hook runs fast file checks before each commit: standard whitespace/YAML/TOML
+checks plus `ruff-check` and `ruff-format`. It does not run `mypy`; use
+`make check` for the full local/CI gate.
+
+Run hooks manually across the whole repository:
+
+```bash
+make precommit-run
+```
+
+## CI behaviour
+
+GitHub Actions runs `make check` on every pull request and every push to
+`master`. The workflow creates the conda environment from `environment.yml`, so
+CI uses the same Python 3.11 + TA-Lib setup as local development. CI has no
+secrets and live exchange/API tests are skipped unless explicitly enabled
+outside the default workflow.
+
 ## Cykl pracy nad kodem
 
 ### Standardowy flow
@@ -203,6 +229,8 @@ make test-fast               # szybkie testy
 
 # Backtest
 algo-backtest --symbol ... --timeframe ... --strategy ... --params '{...}'
+algo-fetch BTC/USDT 4h --start 2020-01-01
+algo-process
 algo-sweep --strategy ... --symbols ... --timeframes ... --space_file ...
 
 # Maintenance

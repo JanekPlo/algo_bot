@@ -97,6 +97,8 @@ Czas: **~30-60 sekund**.
 ```bash
 # CLI entries (powinny działać po pip install):
 algo-backtest --help
+algo-fetch --help
+algo-process --help
 algo-sweep --help
 
 # Sprawdź import pakietu z dowolnego miejsca:
@@ -123,9 +125,22 @@ Częściowe failures są OK na MVP (legacy kod ma TODO znane bugi). Powinno prze
 make precommit-install
 ```
 
-Instaluje `.git/hooks/pre-commit` który uruchamia ruff + mypy przy każdym `git commit`. Cofa commit jeśli kod ma problemy.
+Installs `.git/hooks/pre-commit`. The hook runs fast local file checks:
+standard whitespace/YAML/TOML checks plus `ruff-check` and `ruff-format`.
+`mypy` stays in the heavier project gate through `make check` and CI.
 
-*Uwaga: pre-commit-config.yaml powstanie w follow-up commicie fazy 1.*
+You can run the same hooks manually:
+
+```bash
+make precommit-run
+```
+
+## Krok 6a — CI behaviour
+
+GitHub Actions runs `make check` on every pull request and every push to
+`master`. CI uses `environment.yml` through micromamba, so it gets the same
+Python 3.11 + TA-Lib setup as local development. CI does not use secrets and
+does not run live exchange/API tests by default.
 
 ## Krok 7 — Pierwszy backtest (smoke test)
 
@@ -133,13 +148,11 @@ Instaluje `.git/hooks/pre-commit` który uruchamia ruff + mypy przy każdym `git
 
 ```bash
 # Pobierz dane (CCXT → bot_data/raw/):
-python -m algo_bot.fetch_data BTC/USDT 4h --start 2020-01-01
+algo-fetch BTC/USDT 4h --start 2020-01-01
 
 # Przetwórz raw → processed z indykatorami:
-python -m algo_bot.process_data
+algo-process
 ```
-
-*Uwaga: te dwa moduły mają argparse ale nie mają jeszcze `main()` zarejestrowanego jako CLI entry. Po follow-up dodamy `algo-fetch` i `algo-process`. Na razie `python -m`.*
 
 Potem pierwszy backtest:
 

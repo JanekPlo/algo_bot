@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import time
 from collections.abc import Iterable
 from pathlib import Path
@@ -179,8 +180,6 @@ def _save_append(path: Path, new_df: pd.DataFrame) -> None:
 
 # === Main CLI ===
 def main():
-    # ADR-006: setup_logging na entry point CLI (idempotentne).
-    setup_logging()
     ap = argparse.ArgumentParser(description="Pobiera OHLCV do RAW (z resume) - Binance Futures")
     ap.add_argument("symbol", help="np. BTC/USDT, BTC_USDT lub BTCUSDT")
     ap.add_argument("timeframe", choices=list(TF_MS.keys()))
@@ -195,7 +194,16 @@ def main():
     ap.add_argument(
         "--market", default="future", choices=["future", "spot"], help="Typ rynku dla CCXT"
     )
+    ap.add_argument(
+        "--log-level",
+        default="INFO",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        help="Poziom logowania dla fetch CLI.",
+    )
     args = ap.parse_args()
+
+    # ADR-006: setup_logging na entry point CLI (idempotentne).
+    setup_logging(level=getattr(logging, args.log_level))
 
     symbol = to_ccxt_symbol(args.symbol)
     tf = args.timeframe

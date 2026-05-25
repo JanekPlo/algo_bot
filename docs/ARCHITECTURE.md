@@ -118,7 +118,7 @@
 | `pyproject.toml` | Editable install, dependencies, ruff/mypy config | wysoki |
 | `Makefile` | `make backtest/sweep/live/test/lint` | średni |
 | `Dockerfile` + `docker-compose.yml` | Containerization | niski (faza 5) |
-| `.github/workflows/ci.yml` | CI: pytest + ruff + mypy | wysoki |
+| `.github/workflows/check.yml` | CI: `make check` (ruff + format-check + mypy + pytest) | wysoki |
 | `deploy/systemd/algo_bot.service` | Systemd unit dla VPS | niski (faza 5) |
 | `deploy/setup_vps.sh` | Bootstrap nowego VPSa | niski (faza 5) |
 

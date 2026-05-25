@@ -3,6 +3,7 @@
 > Quantitative trading framework dla kryptowalutowych perpetual futures, zbudowany wokół metodologii RBI (**R**esearch → **B**acktest → **I**mplement). Część projektu Digital Alchemy.
 
 [![Status](https://img.shields.io/badge/status-alpha-orange)]()
+[![CI](https://github.com/JanekPlo/algo_bot/actions/workflows/check.yml/badge.svg?branch=master)](https://github.com/JanekPlo/algo_bot/actions/workflows/check.yml)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)]()
 [![License](https://img.shields.io/badge/license-MIT-green)]()
 
@@ -33,6 +34,9 @@ make install
 # 4. Sprawdź setup
 algo-backtest --help
 make check     # ruff + mypy + pytest
+
+# 5. Optional: enable local pre-commit hooks
+pre-commit install
 ```
 
 Pełny walkthrough setupu: [docs/guides/getting-started.md](docs/guides/getting-started.md).
@@ -44,6 +48,10 @@ Pełny walkthrough setupu: [docs/guides/getting-started.md](docs/guides/getting-
 algo-backtest --symbol BTC/USDT --timeframe 4h --strategy bghtrend_pullback \
     --params '{"ema_fast":21,"ema_mid":89}'
 
+# Pobranie i przetworzenie danych
+algo-fetch BTC/USDT 4h --start 2020-01-01
+algo-process
+
 # Sweep parametrów (grid lub random search)
 algo-sweep --strategy bghtrend_pullback --symbols BTC/USDT --timeframes 4h \
     --start 2020-01-01 --end 2025-01-01 --space_file config/bghtrend_b1.yaml
@@ -54,6 +62,9 @@ make lint
 make typecheck
 make check       # wszystko razem (CI-style)
 ```
+
+GitHub Actions runs `make check` on pull requests and pushes to `master`.
+Pre-commit runs fast local file checks (`pre-commit install` to enable it).
 
 Więcej: [docs/guides/daily-workflow.md](docs/guides/daily-workflow.md), [docs/guides/makefile-cheatsheet.md](docs/guides/makefile-cheatsheet.md).
 
