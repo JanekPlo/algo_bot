@@ -462,7 +462,7 @@ def run_backtest(
     params: dict[str, Any],
     start: str | None = None,
     end: str | None = None,
-    cash: float = 100_000.0,
+    cash: float = 1_000_000.0,
     commission: float = 0.0004,
     trade_on_close: bool = True,
     slippage_bps: float | None = None,

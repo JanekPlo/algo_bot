@@ -178,7 +178,7 @@ def test_run_backtest_with_csv_data_when_available():
         timeframe="4h",
         strategy="simple_momentum",
         params={"short": 10, "long": 30, "side": "long"},
-        cash=10_000.0,
+        cash=1_000_000.0,
     )
 
     assert isinstance(stats, dict)

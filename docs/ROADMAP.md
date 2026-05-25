@@ -32,7 +32,7 @@ Faza 5: Production na VPS              → 1-2 tyg.
 - [x] Strukturę katalogów wyrównać: `algo_bot/` w roocie (vs `trading/backtesting/algo_bot/`) — **DONE 2026-05-14** (decyzja A, ADR-001)
 - [x] Konfiguracja ruff (lint + format) i mypy (strict-on-new) w pyproject.toml — **DONE 2026-05-14**
 - [x] Risk management module (`algo_bot/risk/limits.py`): max drawdown stop, max concurrent positions, daily loss limit, position sizing oparty o ryzyko (% equity per trade) — **decyzja E** — **DONE 2026-05-24** (ADR-008; pure functions + frozen dataclasses; gates first-hit ordering DD→daily_loss→max_positions; position_size jako caller-driven pure helper bez auto-injection; backtester hook w `Wrapped.next()` z forced-exit + `RiskLimitBreached`; CLI `--max_dd_pct` / `--daily_loss_pct` / `--risk_per_trade_pct`; `MetricsSummary` embed w `save_outputs`)
-- [ ] Walk-forward analyzer (`algo_bot/engine/walkforward.py`) — out-of-sample, train/test split z rolowaniem okna — **decyzja F**
+- [x] Walk-forward analyzer (`algo_bot/engine/walkforward.py`) — out-of-sample, train/test split z rolowaniem okna — **decyzja F** — **DONE 2026-05-25** (ADR-009; pure functions + frozen dataclasses `WalkForwardConfig`/`Fold`/`FoldResult`/`WalkForwardReport`; rolling default + anchored toggle; `int | pd.Timedelta` granulation; reset RiskState per fold (literature convention); rebase+compound equity stitching; `mvp_threshold` row w distribution + `compute_mvp_pass` zwraca 4 boole; output `results/walkforward/<wf_run_id>/`; CLI `algo-walkforward`; sequential MVP, parallel jako future flag)
 - [x] Standardowe metryki risk-adjusted (Sharpe, Sortino, Calmar, MAR, profit factor, recovery time) — `algo_bot/metrics.py` — **decyzja D** — **DONE 2026-05-22** (ADR-007; pure functions + `MetricsSummary` dataclass + `summarize()`; log returns wewnętrznie, Calmar i MAR osobno, edge cases → NaN + warning)
 - [x] Logging framework + setup (`algo_bot/log.py`) zamiast `print` w całym kodzie — **decyzja C** — **DONE 2026-05-21** (ADR-006; retrofit `live/live_binance.py` + `algo_bot/engine/backtester.py` w tej sesji, pozostałe pliki w follow-up)
 - [x] Logging retrofit follow-up (ADR-006): `algo_bot/fetch_data.py`, `algo_bot/process_data.py`, `algo_bot/engine/sweep.py`, `algo_bot/engine/exchanges/binance_adapter.py`, `algo_bot/funding.py`, `algo_bot/data_loader.py` → `get_logger(__name__)` + strukturalne `extra={...}` — **DONE 2026-05-24** (sesja wykończeniowa; `executor.py` deprecated zamiast retrofit; `algo-sweep --log-level` dodany; zero `print()` zostało w `algo_bot/`)
@@ -50,9 +50,9 @@ Faza 5: Production na VPS              → 1-2 tyg.
 - [x] `docs/concepts/glossary.md` — **DONE 2026-05-14**
 - [x] `README.md` (root) update — entry point pod docs/ — **DONE 2026-05-14**
 - [x] Per-file header docstrings w 10 kluczowych plikach pakietu — **DONE 2026-05-14**
-- [ ] ADR-006..010 per każda nowa decyzja w fazie 1 (logging, metrics, risk, walk-forward, CI/pre-commit)
-- [ ] `docs/reference/modules/<modul>.md` dla każdego NOWEGO modułu — deep reference. Stan: `metrics.md` (Decyzja D), `risk-limits.md` (Decyzja E), `log.md` (sesja wykończeniowa 2026-05-24). Brakuje: `walkforward.md` (czeka na Decyzję F).
-- [x] `docs/concepts/risk-management.md` — **DONE 2026-05-24** (Decyzja E; thin Phase 1 deliverable, rozbudowywany w Fazie 4 do `risk-management-production.md`). `walk-forward.md` (po F), `microstructure.md` — TBD.
+- [ ] ADR-006..010 per każda nowa decyzja w fazie 1 (logging, metrics, risk, walk-forward, CI/pre-commit). Stan: ADR-006 (logging) ✓, ADR-007 (metrics) ✓, ADR-008 (risk) ✓, ADR-009 (walk-forward) ✓ — **DONE 2026-05-25**. Brakuje ADR-010 (CI/pre-commit).
+- [x] `docs/reference/modules/<modul>.md` dla każdego NOWEGO modułu — deep reference. Stan: `metrics.md` (Decyzja D), `risk-limits.md` (Decyzja E), `log.md` (sesja wykończeniowa 2026-05-24), `walkforward.md` (Decyzja F). — **DONE 2026-05-25** (4/4 nowe moduły Fazy 1 mają deep reference)
+- [x] `docs/concepts/risk-management.md` — **DONE 2026-05-24** (Decyzja E; thin Phase 1 deliverable, rozbudowywany w Fazie 4 do `risk-management-production.md`). `walk-forward.md` — **DONE 2026-05-25** (Decyzja F; thin Phase 1 → rozbudowywany w Fazie 2 razem z bghtrend WF analysis). `microstructure.md` — TBD.
 
 **Kryteria sukcesu:**
 - `make check` zielony lokalnie i na CI

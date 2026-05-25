@@ -89,10 +89,10 @@ Issues     = "https://github.com/JanekPlo/algo_bot/issues"
 #   algo-fetch     = "algo_bot.fetch_data:main"     (juz ma argparse, brakuje tylko main())
 #   algo-process   = "algo_bot.process_data:main"   (j.w.)
 #   algo-live      = "algo_bot.live:main"           (po przeniesieniu live/ do algo_bot.live)
-#   algo-walkforward = "algo_bot.engine.walkforward:main"  (po decyzji F)
 [project.scripts]
-algo-backtest = "algo_bot.engine.backtester:main"
-algo-sweep    = "algo_bot.engine.sweep:main"
+algo-backtest    = "algo_bot.engine.backtester:main"
+algo-sweep       = "algo_bot.engine.sweep:main"
+algo-walkforward = "algo_bot.engine.walkforward:main"  # ADR-009 (Decyzja F)
 
 # === Hatchling =================================================================
 [tool.hatch.build.targets.wheel]
