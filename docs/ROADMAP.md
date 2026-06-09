@@ -82,12 +82,13 @@ Faza 5: Production na VPS              → 1-2 tyg.
 **Cel:** zrozumieć co dokładnie sweep'ujemy w sesji 4 i czemu te zakresy a nie inne. Bez tego sweep b1..b4 to shotgun, nie eksperyment.
 
 **Sub-deliverables (docs):**
-- [ ] `docs/reference/modules/strategy-bghtrend-pullback.md` — deep walkthrough: teza ekonomiczna, formuły entry/exit, EMA21/89/200 + xtrender + pullback + ATR-trail + cooldown logic, R:R 1:1.5, edge cases
-- [ ] `docs/reference/config-reference.md` — kompletny schema YAML: `config/config.yaml` (global) + `config/bghtrend_b1..b4.yaml` (sweep spaces). Co znaczy każdy parametr, jego dimensjonalność, ekonomiczne uzasadnienie zakresu
-- [ ] Parameter taxonomy table w strategy reference: core (ekonomiczne uzasadnienie — np. trend window, ATR multiplier) vs tuning (kosmetyczne — np. thresholds, deadzones) — tuning parameters są największym wektorem overfittingu
+- [x] `docs/reference/modules/strategy-bghtrend-pullback.md` — deep walkthrough: teza ekonomiczna, formuły entry/exit, EMA21/89/200 + xtrender + pullback + ATR-trail + cooldown logic, R:R 1:1.5, edge cases — **DONE 2026-06-05** (hybrid format — Decyzja 1)
+- [x] `docs/reference/config-reference.md` — kompletny schema YAML: `config/config.yaml` (global) + `config/bghtrend_b1..b4.yaml` (sweep spaces). Co znaczy każdy parametr, jego dimensjonalność, ekonomiczne uzasadnienie zakresu — **DONE 2026-06-05**
+- [x] Parameter taxonomy table w strategy reference: core (ekonomiczne uzasadnienie — np. trend window, ATR multiplier) vs tuning (kosmetyczne — np. thresholds, deadzones) — tuning parameters są największym wektorem overfittingu — **DONE 2026-06-05** (3 kategorie core/tuning/ambiguous — Decyzja 2; overfitting watchlist dla Sesji 6 oznaczony)
+- [x] `docs/reference/modules/indicators-xtrender.md` — osobny deep reference oscylatora xtrender — **DONE 2026-06-05** (Decyzja 4 — standalone doc zamiast sekcji)
 
 **Sub-deliverables (kod):**
-- [ ] (opcjonalnie) Ujednolicenie `b1..b4` jeśli analiza wykryje rozjazdy (np. dwa configi sweepujące te same parametry z różnymi zakresami bez uzasadnienia)
+- [x] (opcjonalnie) Ujednolicenie `b1..b4` — **NIE WYKONANE, świadoma decyzja (Decyzja 3/5, 2026-06-05).** Analiza side-by-side wykazała że b1..b4 to principled 2-D design (oś timescale: b3 fast → b1/b2 medium → b4 slow; oś selectivity: b1 strict vs b2 permissive), nie ad-hoc rozjazdy. Configi zostają nietknięte. Dwa odłożone clean-upy udokumentowane w config-reference.md: phantom `zscore_window` (inert bo `slope_mode=pct`), brak jawnego TF-mappingu w nagłówkach YAML (potwierdzić w Sesji 4).
 
 **Prerequisite:** brak. To research session, używa tylko istniejącego kodu.
 

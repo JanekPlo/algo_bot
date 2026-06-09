@@ -63,6 +63,9 @@ Okres po stop-loss kiedy strategia nie otwiera nowej pozycji. W `bghtrend_pullba
 **DCA (Dollar Cost Averaging)**
 Strategia kupowania stałej kwoty USD co N czasu, niezależnie od ceny. Implementowana w `algo_bot/strategies/dca_btc.py`. Reduces timing risk za cenę nie-optimal entries.
 
+**Deadzone**
+Martwa strefa wokół zera w oscylatorze momentum. W `bghtrend_pullback`: `|xtrender short_t3| <= deadzone` (≈1.5–5) oznacza "brak wyraźnego momentum" → entry odfiltrowane, a w pozycji włącza warunek stale-exit. Zamienia ciągły oscylator w sygnał trójstanowy (bull / flat / bear). Jeden z najbardziej narażonych na overfitting parametrów strategii.
+
 **Deploy key**
 SSH key z dostępem do JEDNEGO repo (vs personal SSH key z dostępem do wszystkich). W algo_bot używany przez sandbox/CI do push. Patrz `.deploy_key` (gitignored).
 
@@ -274,6 +277,9 @@ Czas od max drawdown do nowego peak'a equity. Mierzy "ile czekamy żeby wrócić
 **Risk management**
 Wszystko co ogranicza maksymalną stratę: position sizing, max DD stop, daily loss limit, max concurrent positions. Faza 1 decyzja E.
 
+**R:R (Risk:Reward, reward:risk)**
+Stosunek wielkości targetu (take profit) do wielkości ryzyka (entry → stop loss). W `bghtrend_pullback`: `rr_target` (1.2–2.0), gdzie `risk = entry − SL` (SL zakotwiczony przy EMA89), a `TP = entry ± rr_target × risk`. Definiuje strukturę payoffu — wyższy R:R = niższy wymagany win rate dla profitowości.
+
 **RSI (Relative Strength Index)**
 Oscillator 0-100 mierzący momentum. > 70 = overbought, < 30 = oversold. W algo_bot: `algo_bot/indicators/core.py::rsi()`.
 
@@ -317,6 +323,9 @@ Eksploracja przestrzeni parametrów (grid lub random). W algo_bot: `algo-sweep`.
 ---
 
 ## T
+
+**T3 (Tillson T3)**
+Wygładzona średnia ruchoma — kombinacja sześciu kolejnych EWM z "volume factor" `b` (typowo 0.6–0.8), która pozwala filtrowi "wyprzedzać" zamiast opóźniać. W algo_bot: `algo_bot/indicators/core.py::t3()`, używana w xtrenderze do wygładzenia short-term legu (`short_t3`). Wyższy `b` = bardziej responsywny + overshoot, niższy = gładszy + lag.
 
 **TA-Lib**
 Technical Analysis Library — C lib z Python bindings z ~150 wskaźnikami. W algo_bot instalowany z conda-forge (nie pip). Patrz [getting-started.md](../guides/getting-started.md).
