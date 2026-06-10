@@ -51,7 +51,7 @@ Faza 5: Production na VPS              → 1-2 tyg.
 - [x] `README.md` (root) update — entry point pod docs/ — **DONE 2026-05-14**
 - [x] Per-file header docstrings w 10 kluczowych plikach pakietu — **DONE 2026-05-14**
 - [x] ADR-006..010 per każda nowa decyzja w fazie 1 (logging, metrics, risk, walk-forward, CI/pre-commit). Stan: ADR-006 (logging) ✓, ADR-007 (metrics) ✓, ADR-008 (risk) ✓, ADR-009 (walk-forward) ✓, ADR-010 (CI/pre-commit) ✓ — **DONE 2026-05-25**.
-- [x] `docs/reference/modules/<modul>.md` dla każdego NOWEGO modułu — deep reference. Stan: `metrics.md` (Decyzja D), `risk-limits.md` (Decyzja E), `log.md` (sesja wykończeniowa 2026-05-24), `walkforward.md` (Decyzja F). — **DONE 2026-05-25** (4/4 nowe moduły Fazy 1 mają deep reference)
+- [x] `docs/reference/modules/<modul>.md` dla każdego NOWEGO modułu — deep reference. Stan: `metrics.md` (Decyzja D), `risk-limits.md` (Decyzja E), `log.md` (sesja wykończeniowa 2026-05-24), `walkforward.md` (Decyzja F). — **DONE 2026-05-25** (4/4 nowe moduły Fazy 1 mają deep reference). Plus retroactive z Fazy 2 Sesji 1: `indicators-xtrender.md` (2026-06-05).
 - [x] `docs/concepts/risk-management.md` — **DONE 2026-05-24** (Decyzja E; thin Phase 1 deliverable, rozbudowywany w Fazie 4 do `risk-management-production.md`). `walk-forward.md` — **DONE 2026-05-25** (Decyzja F; thin Phase 1 → rozbudowywany w Fazie 2 razem z bghtrend WF analysis). `microstructure.md` — TBD.
 
 **Kryteria sukcesu:**
@@ -99,17 +99,17 @@ Faza 5: Production na VPS              → 1-2 tyg.
 **Cel:** mieć datasets pod każdą kolejną sesję, jeden raz prawidłowo zrobione.
 
 **Sub-deliverables (kod):**
-- [ ] `bot_data/processed/binance_BTCUSDT_15m.csv` od 2019-01 do bieżąco
-- [ ] `bot_data/processed/binance_BTCUSDT_1h.csv`
-- [ ] `bot_data/processed/binance_BTCUSDT_4h.csv`
-- [ ] `bot_data/processed/binance_ETHUSDT_15m.csv`
-- [ ] `bot_data/processed/binance_ETHUSDT_1h.csv`
-- [ ] `bot_data/processed/binance_ETHUSDT_4h.csv`
-- [ ] Decyzja: fetchujemy native dla każdego TF (więcej API calls) vs resampling z 1m/15m (mniej calls, mniej storage) — drobna decyzja, możliwe że w sesji
-- [ ] Sanity check: brak gap'ów dłuższych niż X, monotonic timestamps, OHLCV invariants (high ≥ open/close/low, low ≤ open/close)
+- [x] `bot_data/processed/binance_BTCUSDT_15m.csv` od 2019-09-08 do bieżąco — **DONE 2026-06-10** (operator run, integrity pass)
+- [x] `bot_data/processed/binance_BTCUSDT_1h.csv` — **DONE 2026-06-10**
+- [x] `bot_data/processed/binance_BTCUSDT_4h.csv` — **DONE 2026-06-10**
+- [x] `bot_data/processed/binance_ETHUSDT_15m.csv` — **DONE 2026-06-10** (ETH perp listed ~2019-11, start naturalnie później)
+- [x] `bot_data/processed/binance_ETHUSDT_1h.csv` — **DONE 2026-06-10**
+- [x] `bot_data/processed/binance_ETHUSDT_4h.csv` — **DONE 2026-06-10**
+- [x] Decyzja: native per TF vs resampling — **DONE 2026-06-10** — wybór: **native per TF** (Decyzja 2; Binance native klines spójne w obrębie giełdy, native volume per TF, zero nowego kodu). Plus Decyzje 1/3: **Binance Futures USDT-M, start 2019-09-08**.
+- [x] Sanity check (monotonic, OHLCV invariants, gap detection > 3×TF) — **DONE 2026-06-10** — walidator `algo_bot/data_integrity.py` + `tests/test_data_integrity.py` (gated per (symbol, tf)). **Pass na wszystkich 6 plikach** (`pytest -m integration` zielony, `make check` 171 passed).
 
 **Sub-deliverables (docs):**
-- [ ] `docs/guides/data-fetching.md` lub sekcja w `running-backtest.md` — jak odpalić `algo-fetch` + `algo-process` dla pełnego setu Fazy 2, jak weryfikować integralność
+- [x] `docs/guides/data-fetching.md` — runbook `algo-fetch` + `algo-process` dla pełnego setu Fazy 2, weryfikacja integralności, resume, troubleshooting — **DONE 2026-06-10**
 
 **Prerequisite:** Sesja 1 (żeby wiedzieć którego TF najpierw potrzebujemy — strategia może mieć "ulubiony" TF z docstringu)
 
@@ -249,6 +249,19 @@ Faza 5: Production na VPS              → 1-2 tyg.
 - **Funding rate cost niedoszacowany** — mitygacja: ADR-011 używa rzeczywistych historycznych funding rates jeśli dostępne.
 - **Boundary closes degenerated WF** — jeśli `algo-walkforward` log pokazuje że dominują force-closes na granicach foldów, test window jest za krótkie vs typowy trade duration bghtrend. Mitygacja: ADR-009 boundary close detection już to flaguje.
 - **Brak historycznych danych 2018-12** — Binance Futures uruchomiony 2019-09, więc 2018-12 stress test może wymagać spot data (z `binance` zamiast `binance.future`) lub alternatywnej giełdy. Decyzja w sesji 7.
+
+### Tail-end follow-ups (code health)
+
+Drobne znaleziska z Sesji 1 (2026-06-05) audytu strategii i configi. Żadne nie blokuje Sesji 2-8 Fazy 2, ale do zamknięcia przed Fazą 3 (testnet) — kod produkcyjny nie powinien iść na żywe pieniądze z silent fail modes ani phantom parameters. Naturalna home: CHANGELOG entries, nie ADR-y (to cleanup, nie architektura).
+
+- [ ] **Phantom `zscore_window` parameter** w `config/bghtrend_b1..b4.yaml` — sampled jako wymiar sweep space, ale inert w runtime bo `slope_mode` jest pinned na `pct`. Sweep wymarznie cykle na nic. Decyzja: wyrzucić z configi (preferred) albo otworzyć drugą gałąź `slope_mode=zscore` w strategii (jeśli ekonomicznie uzasadniona). Możliwe że Sesja 4.
+- [ ] **Implied-TF mapping nie encoded w YAML headers** — b3 → 15m, b1/b2 → 1h, b4 → 4h żyje tylko w głowie autora. Dodać komentarz nagłówka albo `__implied_tf:` meta-key w configach. Sesja 4 confirm + add.
+- [ ] **`config.yaml` cash/commission drift vs `algo-sweep` CLI defaults** — dwie ścieżki definicji tej samej liczby, ryzyko desynchronizacji. Single source of truth: `config.yaml` jako default, CLI override przez explicit flag.
+- [ ] **EMA monotonicity validation runtime** — strategia `bghtrend_pullback` nie waliduje `ema_fast < ema_mid < ema_slow`. Configi b1..b4 gwarantują to construction, ale custom param sets mogą być inverted i strategia silent fails z zero trades. Add validation w `__init__` strategii albo `algo-backtest` argparse pre-validation.
+- [ ] **Xtrender code health** (z `docs/reference/modules/indicators-xtrender.md` Limitations):
+  - Docstring drift: deklaruje 3-tuple, zwraca 5-tuple. Sync docstring + return shape.
+  - Brak standalone tests dla `algo_bot/indicators/xtrender.py`. Dodać `tests/test_xtrender.py` z handcomputed fixtures dla RSI-of-EMA-spread i T3 smoothing.
+  - `long_term` computed-but-unused — dead code. Usunąć albo wykorzystać (sprawdzić git blame czy historycznie był używany przez inną strategię).
 
 ---
 

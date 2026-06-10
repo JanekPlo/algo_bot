@@ -171,6 +171,7 @@ module = [
     "algo_bot.risk.*",                # decyzja E
     "algo_bot.engine.walkforward",    # decyzja F
     "algo_bot.metrics",               # decyzja D
+    "algo_bot.data_integrity",        # Faza 2 Sesja 2 (Decyzja 7)
 ]
 disallow_untyped_defs = true
 disallow_incomplete_defs = true
