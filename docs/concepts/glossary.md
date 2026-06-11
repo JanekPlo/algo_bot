@@ -64,7 +64,7 @@ Okres po stop-loss kiedy strategia nie otwiera nowej pozycji. W `bghtrend_pullba
 Strategia kupowania stałej kwoty USD co N czasu, niezależnie od ceny. Implementowana w `algo_bot/strategies/dca_btc.py`. Reduces timing risk za cenę nie-optimal entries.
 
 **Deadzone**
-Martwa strefa wokół zera w oscylatorze momentum. W `bghtrend_pullback`: `|xtrender short_t3| <= deadzone` (≈1.5–5) oznacza "brak wyraźnego momentum" → entry odfiltrowane, a w pozycji włącza warunek stale-exit. Zamienia ciągły oscylator w sygnał trójstanowy (bull / flat / bear). Jeden z najbardziej narażonych na overfitting parametrów strategii.
+Martwa strefa wokół zera w oscylatorze momentum. W `bghtrend_pullback`: `|xtrender long_term| <= deadzone` (≈1.5–5) oznacza "brak wyraźnego momentum reżimowego" → entry odfiltrowane, a w pozycji włącza warunek stale-exit (korekta 2026-06-11 — gate liczony na legu `long_term`, nie `short_t3`; patrz indicators-xtrender.md). Zamienia ciągły oscylator w sygnał trójstanowy (bull / flat / bear). Jeden z najbardziej narażonych na overfitting parametrów strategii.
 
 **Deploy key**
 SSH key z dostępem do JEDNEGO repo (vs personal SSH key z dostępem do wszystkich). W algo_bot używany przez sandbox/CI do push. Patrz `.deploy_key` (gitignored).

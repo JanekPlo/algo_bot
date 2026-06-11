@@ -51,7 +51,13 @@ except ImportError:
     yaml = None  # type: ignore[assignment]
 
 # używamy istniejącego backtestera jako silnika
-from algo_bot.engine.backtester import run_backtest, run_id as make_run_id, save_outputs
+from algo_bot.engine.backtester import (
+    DEFAULT_CASH,
+    DEFAULT_COMMISSION,
+    run_backtest,
+    run_id as make_run_id,
+    save_outputs,
+)
 from algo_bot.log import get_logger, setup_logging
 
 logger = get_logger(__name__)
@@ -245,9 +251,9 @@ def parse_args():
     ap.add_argument("--n_samples", type=int, default=50, help="dla random")
     ap.add_argument("--seed", type=int, default=42)
 
-    # backtest engine params (wspólne)
-    ap.add_argument("--cash", type=float, default=200_000.0)
-    ap.add_argument("--commission", type=float, default=0.0004)
+    # backtest engine params (wspólne) — defaults z backtester.py (single source of truth)
+    ap.add_argument("--cash", type=float, default=DEFAULT_CASH)
+    ap.add_argument("--commission", type=float, default=DEFAULT_COMMISSION)
     ap.add_argument("--trade_on_close", action="store_true")
     ap.add_argument("--spread_bps", type=float, default=None)
     ap.add_argument("--slippage_bps", type=float, default=None)
@@ -273,13 +279,19 @@ def parse_args():
     return ap.parse_args()
 
 
-def load_space_from_any(args) -> tuple[str, dict[str, Any], int, int]:
+def load_space_from_any(args) -> tuple[str, dict[str, Any], int, int, str | None]:
     """
-    Zwraca (mode, space, n_samples, seed)
+    Zwraca (mode, space, n_samples, seed, implied_tf)
+
+    ``implied_tf`` to opcjonalny meta-key ``__implied_tf`` z pliku space —
+    deklaruje timeframe pod który przestrzeń była projektowana (np. b3 → 15m).
+    ``None`` gdy space podany przez --space_json albo plik nie ma klucza
+    (backward compatible). Walidacja vs --timeframes w ``main()``.
     """
     mode = args.mode
     n_samples = args.n_samples
     seed = args.seed
+    implied_tf: str | None = None
 
     if args.space_json:
         space = json.loads(args.space_json)
@@ -296,11 +308,12 @@ def load_space_from_any(args) -> tuple[str, dict[str, Any], int, int]:
         mode = doc.get("__mode", mode)
         n_samples = int(doc.get("__n", n_samples))
         seed = int(doc.get("__seed", seed))
+        implied_tf = doc.get("__implied_tf")
         space = {k: v for k, v in doc.items() if not k.startswith("__")}
     else:
         raise SystemExit("Podaj --space_json lub --space_file")
 
-    return mode, space, n_samples, seed
+    return mode, space, n_samples, seed, implied_tf
 
 
 def main():
@@ -312,7 +325,23 @@ def main():
     StratClass = resolve_strategy_class(args.strategy)
 
     # wczytaj/rozszerz przestrzeń parametrów
-    mode, space_raw, n_samples, seed = load_space_from_any(args)
+    mode, space_raw, n_samples, seed, implied_tf = load_space_from_any(args)
+
+    # Walidacja implied-TF (cleanup 2026-06-11): configi deklarują pod jaki
+    # timeframe były projektowane (__implied_tf). Mismatch → WARNING, nie błąd
+    # (ADR-006) — operator może świadomie chcieć cross-TF eksperymentu, ale
+    # przypadkowe "b3 na 4h" zostawia wyraźny ślad w logu.
+    if implied_tf is not None:
+        mismatched = [tf for tf in args.timeframes if tf != implied_tf]
+        if mismatched:
+            logger.warning(
+                "Timeframe mismatch vs config __implied_tf",
+                extra={
+                    "implied_tf": implied_tf,
+                    "requested_timeframes": mismatched,
+                    "space_file": args.space_file,
+                },
+            )
     # oczyść klucze wg ParamSchema
     space_clean: dict[str, Any] = {}
     if mode == "grid":

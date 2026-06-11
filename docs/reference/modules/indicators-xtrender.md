@@ -1,6 +1,6 @@
 # Module reference — `algo_bot.indicators.xtrender`
 
-Custom momentum oscillator (Bryan G. Howell "Xtrender" variant) built on the primitives in `algo_bot.indicators.core`. It combines a short-term and a long-term RSI-of-EMA signal, smooths the short-term leg with a T3 moving average, and emits local-extremum markers ("dots"). The only current consumer is `bghtrend_pullback`, where the smoothed short-term leg is the momentum-confirmation filter at entry and the dots drive a profit-taking exit.
+Custom momentum oscillator (port of the "B-Xtrender" Pine Script indicator by @Puppytherapy, Bryan G. Howell variant) built on the primitives in `algo_bot.indicators.core`. It combines a short-term and a long-term RSI-of-EMA signal, smooths the short-term leg with a T3 moving average, and emits local-extremum markers ("dots"). The only current consumer is `bghtrend_pullback`, where the **long-term (regime) leg** is the momentum-confirmation filter at entry and the dots (local extrema of the smoothed short-term leg) drive a profit-taking exit — mirroring the original indicator's design, where `longTermXtrender` is plotted as "B-Xtrender Trend" and the T3 line with turn-circles provides timing.
 
 This is a deep reference for the indicator in isolation. For how the strategy *uses* it, see [strategy-bghtrend-pullback](strategy-bghtrend-pullback.md). For the underlying `ema` / `rsi` / `t3` primitives, see [`algo_bot.indicators.core`](../package-overview.md).
 
@@ -16,12 +16,13 @@ short_term, long_term, short_t3, up_dot, down_dot = xtrender_components(
     t3_len=5, t3_b=0.7,
 )
 
-# Momentum confirmation, as bghtrend_pullback uses it:
-if short_t3.iloc[-1] > deadzone:      # bull momentum present
+# Momentum confirmation, as bghtrend_pullback uses it (regime leg):
+if long_term.iloc[-1] > deadzone:      # bull regime momentum present
     ...
-elif short_t3.iloc[-1] < -deadzone:   # bear momentum present
+elif long_term.iloc[-1] < -deadzone:   # bear regime momentum present
     ...
-# else: |short_t3| <= deadzone -> "no clear momentum", skip the trade
+# else: |long_term| <= deadzone -> "no clear regime momentum", skip the trade
+# (short_t3 feeds the dots — in-profit exit timing, not entry)
 ```
 
 ## Input shape
@@ -44,7 +45,7 @@ Reading it from the inside out:
 
 1. **Short-term leg.** `ema(close, short_l1) - ema(close, short_l2)` is a fast-minus-slow EMA spread — a MACD-style momentum line. Feeding that spread into `rsi(..., short_l3)` normalises it into a bounded `0..100` oscillator, and subtracting `50` recentres it on zero. So `short_term` is "how stretched is the fast/slow EMA spread, on a normalised, mean-zero scale". Positive = fast EMA pulling above slow EMA (up-momentum).
 
-2. **Long-term leg.** `rsi(ema(close, long_l1), long_l2) - 50` is the RSI of a smoothed price, recentred on zero — a slower, regime-level momentum reading. **Note:** `bghtrend_pullback` computes `long_term` but does not gate on it (see Consumers); it is available for diagnostics and future filters.
+2. **Long-term leg.** `rsi(ema(close, long_l1), long_l2) - 50` is the RSI of a smoothed price, recentred on zero — a slower, regime-level momentum reading. In the original Pine indicator this is the component titled **"B-Xtrender Trend"**. `bghtrend_pullback` gates entries on it (deadzone test in `_xtr_ok`) and uses it for the stale-exit momentum check.
 
 3. **T3 smoothing.** `short_t3 = t3(short_term, t3_len, t3_b)` runs the short-term leg through a Tillson T3 — a six-fold EWM with a volume-factor `b` that lets the filter "lead" rather than lag. This is the series the strategy actually thresholds against, because the raw `short_term` is too noisy for a clean deadzone test.
 
@@ -89,8 +90,8 @@ Returns a **5-tuple**: `(short_term, long_term, short_t3, up_dot, down_dot)`.
 | Position | Name | dtype | Meaning |
 |---|---|---|---|
 | 0 | `short_term` | `float` series | Raw short-term oscillator, mean-zero. Noisy; not thresholded directly. |
-| 1 | `long_term` | `float` series | Slow regime-level momentum, mean-zero. Currently diagnostic only. |
-| 2 | `short_t3` | `float` series | T3-smoothed short-term leg. **This is the momentum filter.** |
+| 1 | `long_term` | `float` series | Slow regime-level momentum, mean-zero ("B-Xtrender Trend" in the Pine original). **This is the entry/regime gate in `bghtrend_pullback`.** |
+| 2 | `short_t3` | `float` series | T3-smoothed short-term leg. Feeds the dots (timing); not gated directly by the current consumer. |
 | 3 | `up_dot` | `bool` series | Local trough of `short_t3` (turned up). In-profit short exit. |
 | 4 | `down_dot` | `bool` series | Local peak of `short_t3` (turned down). In-profit long exit. |
 
@@ -110,9 +111,10 @@ All parameters are plumbed straight through from `XtrenderPullbackParams` of the
 
 ## Interpretation
 
-- `short_t3 > 0` and rising → bull momentum.
-- `short_t3 < 0` and falling → bear momentum.
-- `|short_t3| < deadzone` (deadzone ≈ 1.5–5 in the sweep configs) → no clear momentum; the strategy filters the trade out. The deadzone lives on the *strategy* side, not the indicator — `xtrender_components` just returns the raw smoothed value.
+- `short_t3 > 0` and rising → bull momentum (short-term); its local extrema are the dots.
+- `short_t3 < 0` and falling → bear momentum (short-term).
+- `long_term > 0` → bullish regime at the `long_l1`/`long_l2` scale; `< 0` → bearish.
+- `|long_term| < deadzone` (deadzone ≈ 1.5–5 in the sweep configs) → no clear regime momentum; the strategy filters the trade out. The deadzone lives on the *strategy* side, not the indicator — `xtrender_components` just returns the raw values.
 
 The deadzone is what turns a continuous oscillator into a three-state signal (bull / flat / bear) and is one of the most overfitting-prone knobs in the strategy (see the parameter taxonomy in the strategy reference).
 
@@ -121,17 +123,17 @@ The deadzone is what turns a continuous oscillator into a three-state signal (bu
 - **No NaN handling on the float legs.** `short_term`, `long_term`, `short_t3` carry the EWM warm-up `NaN`/transient behaviour straight through (the `core` convention is "caller decides dropna/fillna"). Only the boolean dots are `.fillna(False)`.
 - **Path dependence.** Because every layer is `ewm(adjust=False)`, the result on bar `t` depends on all prior bars. Recompute on a freshly sliced window only after enough warm-up, or the leading values differ from a full-history computation.
 - **`rsi` denominator guard.** `core.rsi` adds `1e-12` to the average-loss denominator, so a flat or strictly monotonic input does not divide by zero; it saturates toward 100 (or 0) instead.
-- **`long_term` is computed but unused by the only consumer.** It is intentionally kept in the return tuple for diagnostics and as a hook for a future regime filter. Do not assume it influences any current trade.
+- **`long_term` usage — RESOLVED 2026-06-11 (tail-end cleanup): code is intent.** This document previously claimed `long_term` is "computed but unused" — a misreading of the consumer's tuple unpacking (`_x_short, x_long, _x_t3, up_dot, down_dot` binds `x_long` = `long_term`, position 1). Verdict from comparing against the original Pine Script (supplied by the operator): the strategy **deliberately** gates on `long_term`. Three lines of evidence: (1) in the Pine original, `longTermXtrender` is the component titled "B-Xtrender Trend" — the regime gate — while the T3 line with turn-circles provides timing, exactly matching the strategy's split (entry gate on `long_term`, dots for in-profit exits); (2) the local variable names `_x_short`/`x_long`/`_x_t3` map 1:1 to the tuple positions — not an off-by-one; (3) economically, a pullback entry requiring `short_t3 > +deadzone` would block precisely the entries the strategy hunts (short-term momentum has just been crushed by the pullback), whereas `long_term > deadzone` asserts "regime still holds despite the dip". The bug was one line in the strategy's module docstring (now fixed) plus its propagation through the Session 1 audit into these docs.
 
 ## Limitations
 
-- **Docstring drift in the source.** The module docstring in `xtrender.py` describes the return as `tuple(st, lt, st_t3)` (a 3-tuple), but the function returns a **5-tuple** including `up_dot` / `down_dot`. The 5-tuple is authoritative; the docstring predates the dots and should be corrected in a future code-touching session (out of scope for this docs-only session).
+- **Docstring drift in the source — RESOLVED 2026-06-11 (tail-end cleanup).** The module docstring in `xtrender.py` now documents the authoritative 5-tuple `(short_term, long_term, short_t3, up_dot, down_dot)` with per-position descriptions, the dot formulas, and the warmup/`fillna` conventions.
 - **Hand-rolled, not TA-Lib.** This is our own implementation on top of `core` primitives, so it will not bit-match TradingView's or any vendor's "Xtrender". Treat absolute values as internal-only; only relative comparisons (vs deadzone, vs prior bars) are meaningful across environments.
-- **No standalone tests.** Coverage today is indirect, through the `bghtrend_pullback` path. A dedicated `tests/test_xtrender.py` (handcomputed `short_t3` on a small fixture, dot detection on a synthetic up/down sequence) is a sensible follow-up if Xtrender is ever reused by a second strategy.
+- **No standalone tests — RESOLVED 2026-06-11 (tail-end cleanup).** `tests/test_xtrender.py` covers the indicator in isolation: short/long legs and the full T3 chain verified against an independent first-principles oracle (plain-loop EMA/RSI/T3 recursions, no pandas, no mocks), a constant-input literal (`-50` across all three legs, with the Tillson-coefficients-sum-to-1 derivation), dot detection on a synthetic V-shaped price, dot wiring (derived from `short_t3`, not the other legs), and the 5-tuple shape/dtype/warmup contract.
 
 ## Consumers
 
-- `algo_bot/strategies/bghtrend_pullback.py` — calls `xtrender_components` once per bar in `on_bar`; uses `short_t3` against `deadzone` for entry confirmation (`_xtr_ok`) and `up_dot`/`down_dot` for in-profit exits. `short_term` and `long_term` are received but ignored.
+- `algo_bot/strategies/bghtrend_pullback.py` — calls `xtrender_components` once per bar in `on_bar`. The entry gate (`_xtr_ok`) and the stale-exit deadzone test deliberately evaluate **`long_term`** (unpacked locally as `x_long`; verdict 2026-06-11 — see Edge cases); `up_dot`/`down_dot` (derived from `short_t3`) drive in-profit exits; `short_term` and `short_t3` itself are received but not gated directly.
 
 ## See also
 

@@ -25,6 +25,8 @@ from typing import Any, Literal
 import pandas as pd
 
 from algo_bot.engine.backtester import (
+    DEFAULT_CASH,
+    DEFAULT_COMMISSION,
     PROJECT_ROOT,
     load_ohlcv_csv,
     run_backtest,
@@ -389,8 +391,8 @@ def run_fold(
     strategy: str,
     params: dict[str, Any],
     risk_limits: RiskLimits | None,
-    cash: float = 100_000.0,
-    commission: float = 0.0004,
+    cash: float = DEFAULT_CASH,
+    commission: float = DEFAULT_COMMISSION,
 ) -> FoldResult:
     """Wykonuje pojedynczy fold przez ``run_backtest`` na test slice.
 
@@ -668,8 +670,8 @@ def walk_forward(
     params: dict[str, Any],
     config: WalkForwardConfig,
     data: pd.DataFrame | None = None,
-    cash: float = 100_000.0,
-    commission: float = 0.0004,
+    cash: float = DEFAULT_CASH,
+    commission: float = DEFAULT_COMMISSION,
     wf_run_id: str | None = None,
     save: bool = True,
 ) -> WalkForwardReport:
@@ -949,8 +951,9 @@ def parse_args() -> Any:
         default=5,
         help="próg ostrzeżenia gdy expected_folds < this",
     )
-    ap.add_argument("--cash", type=float, default=100_000.0)
-    ap.add_argument("--commission", type=float, default=0.0004)
+    # Defaults z backtester.py (single source of truth)
+    ap.add_argument("--cash", type=float, default=DEFAULT_CASH)
+    ap.add_argument("--commission", type=float, default=DEFAULT_COMMISSION)
     # Risk flags (ADR-008)
     ap.add_argument(
         "--max_dd_pct",

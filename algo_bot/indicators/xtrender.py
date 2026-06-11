@@ -6,18 +6,29 @@ Xtrender oscillator — custom momentum indicator (Bryan G. Howell variant).
 
 Public API:
 - xtrender_components(close, short_l1, short_l2, short_l3, long_l1, long_l2, t3_len, t3_b)
-    -> tuple(st, lt, st_t3)
-    Zwraca: short-term, long-term, smoothed short-term komponenty.
+    -> tuple(short_term, long_term, short_t3, up_dot, down_dot)
+    5-tka pd.Series (indeks jak wejście):
+    [0] short_term — surowy short-term oscylator (RSI spreadu EMA, recentered na 0)
+    [1] long_term  — wolny, reżimowy momentum (RSI wygładzonej ceny, recentered na 0)
+    [2] short_t3   — short_term wygładzony T3 (Tillson)
+    [3] up_dot     — bool, lokalny dołek short_t3 (oscylator zawrócił w górę)
+    [4] down_dot   — bool, lokalny szczyt short_t3 (oscylator zawrócił w dół)
+    Kropki mają .fillna(False) na pierwszych barach; legi float niosą warmup
+    EWM bez maskowania (konwencja core — caller decyduje o dropna/fillna).
 
 Formuła:
 - short_term = rsi(ema(close, short_l1) - ema(close, short_l2), short_l3) - 50
 - long_term  = rsi(ema(close, long_l1), long_l2) - 50
 - short_t3   = t3(short_term, t3_len, t3_b)
+- up_dot     = (st > st[-1]) & (st[-1] < st[-2]), gdzie st = short_t3
+- down_dot   = (st < st[-1]) & (st[-1] > st[-2])
 
-Interpretacja:
-- short_t3 > 0 i rosnący → bull momentum
-- short_t3 < 0 i opadający → bear momentum
-- |short_t3| < deadzone (~3) → no clear momentum (filtruj trades)
+Interpretacja (poziom wskaźnika):
+- short_t3 > 0 i rosnący → bull momentum (short-term)
+- short_t3 < 0 i opadający → bear momentum (short-term)
+- long_term > 0 → reżim byczy w skali long_l1/long_l2, < 0 → niedźwiedzi
+- |wartość| < deadzone (~1.5-5, parametr konsumenta) → brak czytelnego momentum
+  (deadzone żyje po stronie strategii, nie wskaźnika)
 
 Używany w:
 - algo_bot/strategies/bghtrend_pullback.py — jako filter momentum przy entry

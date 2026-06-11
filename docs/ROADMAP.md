@@ -254,14 +254,15 @@ Faza 5: Production na VPS              → 1-2 tyg.
 
 Drobne znaleziska z Sesji 1 (2026-06-05) audytu strategii i configi. Żadne nie blokuje Sesji 2-8 Fazy 2, ale do zamknięcia przed Fazą 3 (testnet) — kod produkcyjny nie powinien iść na żywe pieniądze z silent fail modes ani phantom parameters. Naturalna home: CHANGELOG entries, nie ADR-y (to cleanup, nie architektura).
 
-- [ ] **Phantom `zscore_window` parameter** w `config/bghtrend_b1..b4.yaml` — sampled jako wymiar sweep space, ale inert w runtime bo `slope_mode` jest pinned na `pct`. Sweep wymarznie cykle na nic. Decyzja: wyrzucić z configi (preferred) albo otworzyć drugą gałąź `slope_mode=zscore` w strategii (jeśli ekonomicznie uzasadniona). Możliwe że Sesja 4.
-- [ ] **Implied-TF mapping nie encoded w YAML headers** — b3 → 15m, b1/b2 → 1h, b4 → 4h żyje tylko w głowie autora. Dodać komentarz nagłówka albo `__implied_tf:` meta-key w configach. Sesja 4 confirm + add.
-- [ ] **`config.yaml` cash/commission drift vs `algo-sweep` CLI defaults** — dwie ścieżki definicji tej samej liczby, ryzyko desynchronizacji. Single source of truth: `config.yaml` jako default, CLI override przez explicit flag.
-- [ ] **EMA monotonicity validation runtime** — strategia `bghtrend_pullback` nie waliduje `ema_fast < ema_mid < ema_slow`. Configi b1..b4 gwarantują to construction, ale custom param sets mogą być inverted i strategia silent fails z zero trades. Add validation w `__init__` strategii albo `algo-backtest` argparse pre-validation.
-- [ ] **Xtrender code health** (z `docs/reference/modules/indicators-xtrender.md` Limitations):
-  - Docstring drift: deklaruje 3-tuple, zwraca 5-tuple. Sync docstring + return shape.
-  - Brak standalone tests dla `algo_bot/indicators/xtrender.py`. Dodać `tests/test_xtrender.py` z handcomputed fixtures dla RSI-of-EMA-spread i T3 smoothing.
-  - `long_term` computed-but-unused — dead code. Usunąć albo wykorzystać (sprawdzić git blame czy historycznie był używany przez inną strategię).
+- [x] **Phantom `zscore_window` parameter** w `config/bghtrend_b1..b4.yaml` — **DONE 2026-06-11** (sesja cleanup; usunięty z 4 configów, default dataclass (100) i uśpiona gałąź `_slope_zscore` zostają; ponowne otwarcie `slope_mode=zscore` wymaga ADR).
+- [x] **Implied-TF mapping nie encoded w YAML headers** — **DONE 2026-06-11** (`__implied_tf` meta-key + komentarz nagłówka w b1..b4: b1/b2→1h, b3→15m, b4→4h; `algo-sweep` WARNING na mismatch vs `--timeframes`, run leci dalej — świadome cross-TF możliwe).
+- [x] **`config.yaml` cash/commission drift vs `algo-sweep` CLI defaults** — **DONE 2026-06-11** (rozstrzygnięcie INNE niż sugestia: audit wykazał że ŻADEN kod nie czyta `config.yaml`, więc SoT to stałe `DEFAULT_CASH`/`DEFAULT_COMMISSION` w `backtester.py` importowane przez wszystkie 3 CLI; `config.yaml backtest:` jest informacyjnym lustrem; commission 0.002→0.0004 fix).
+- [x] **EMA monotonicity validation runtime** — **DONE 2026-06-11** (wariant `__post_init__` na `XtrenderPullbackParams` — szerszy niż `__init__` strategii, łapie też sweep/walkforward przez `coerce_params`; `ValueError` z czytelnym message; `tests/test_bghtrend_params.py`).
+- [x] **Xtrender code health** — **DONE 2026-06-11** (3 z 3; trzeci sub-item przerodził się w decyzję rozstrzygniętą tego samego dnia — patrz niżej):
+  - [x] Docstring drift: zsynchronizowany do 5-tuple z opisem per pozycja.
+  - [x] Standalone tests: `tests/test_xtrender.py`, 8 testów (first-principles oracle, literal −50 dla stałej ceny, dots na V-shape, wiring, kontrakt API).
+  - [x] `long_term` — **NIE jest dead code.** Znalezisko sesji: audyt Sesji 1 błędnie odczytał unpack — `x_long` w strategii wiąże `long_term` (pozycja 1), nie `short_t3`, i to `long_term` jest faktycznym filtrem entry + stale-exit. Docs poprawione z flagą DISCREPANCY. Nic nie usunięto.
+- [x] **PARKED DECISION: `x_long` = `long_term` vs docstring "short_t3"** — **RESOLVED 2026-06-11 (ta sama sesja): kod = intencja.** Janek dostarczył oryginalny Pine Script (B-Xtrender @Puppytherapy) — `longTermXtrender` to komponent "B-Xtrender Trend" (reżimowy gate), linia T3 z kropkami daje timing; dokładnie tak strategia tego używa (entry gate na `long_term`, dots na in-profit exit). Plus nazwy zmiennych mapują 1:1 na pozycje tupli (nie off-by-one) i sens ekonomiczny (filtr short-term na pullbacku blokowałby właściwe wejścia). Bug był w docstringu strategii (poprawiony) + propagacja przez audyt Sesji 1 do docs (poprawione: strategy-bghtrend-pullback.md, indicators-xtrender.md, glossary Deadzone). Zero zmian zachowania — dotychczasowe backtesty ważne, git archeology niepotrzebna.
 
 ---
 

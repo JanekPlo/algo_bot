@@ -66,6 +66,13 @@ PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir
 RAW_DIR = os.path.join(PROJECT_ROOT, "bot_data", "processed")
 OUT_DIR = os.path.join(PROJECT_ROOT, "results", "backtests")
 
+# Defaults silnika backtestowego — single source of truth (cleanup 2026-06-11).
+# CLI algo-backtest / algo-sweep / algo-walkforward importują te wartości zamiast
+# trzymać własne kopie; config.yaml ich NIE definiuje (sekcja backtest: jest
+# informacyjna — patrz docs/reference/config-reference.md).
+DEFAULT_CASH = 1_000_000.0  # >> max(High) BTC — bez warningu fractional trading
+DEFAULT_COMMISSION = 0.0004  # 4 bps = Binance USDT-M taker fee
+
 
 # ------------------------------
 # Utils
@@ -462,8 +469,8 @@ def run_backtest(
     params: dict[str, Any],
     start: str | None = None,
     end: str | None = None,
-    cash: float = 1_000_000.0,
-    commission: float = 0.0004,
+    cash: float = DEFAULT_CASH,
+    commission: float = DEFAULT_COMMISSION,
     trade_on_close: bool = True,
     slippage_bps: float | None = None,
     spread_bps: float | None = None,
@@ -715,8 +722,8 @@ def parse_args():
     )
     ap.add_argument("--start", default=None)
     ap.add_argument("--end", default=None)
-    ap.add_argument("--cash", type=float, default=100_000.0)
-    ap.add_argument("--commission", type=float, default=0.0004)
+    ap.add_argument("--cash", type=float, default=DEFAULT_CASH)
+    ap.add_argument("--commission", type=float, default=DEFAULT_COMMISSION)
     ap.add_argument("--trade_on_close", action="store_true")
     ap.add_argument("--slippage_bps", type=float, default=None)
     ap.add_argument("--spread_bps", type=float, default=None)

@@ -12,7 +12,13 @@ target R:R (1:1.5).
 Filtry entry:
 1. Trend definowany przez 3 EMA (21/89/200) — kierunek = nachylenie EMA89/200
 2. Pullback — cena w okolicy EMA89 (ATR-based threshold)
-3. Xtrender — short_t3 > deadzone (long entry) lub < -deadzone (short entry)
+3. Xtrender — long_term > deadzone (long entry) lub < -deadzone (short entry).
+   CELOWO komponent reżimowy (w oryginale Pine "B-Xtrender Trend"), nie short_t3:
+   na pullbacku short-term momentum właśnie dostało po głowie i jego filtr
+   blokowałby wejścia; long_term mówi "reżim nadal trzyma mimo cofki".
+   Kropki (lokalne ekstrema short_t3) służą do in-profit exit, nie do entry.
+   Werdykt 2026-06-11 po porównaniu z oryginałem Pine — patrz
+   docs/reference/modules/indicators-xtrender.md.
 4. Rebound — opcjonalne: ostatnia świeca pokazała powrót w kierunku trendu
 
 Risk management:
@@ -98,6 +104,24 @@ class XtrenderPullbackParams:
     trade_on_close: bool = True
     tp_pct: float | None = None
     sl_pct: float | None = None
+
+    def __post_init__(self) -> None:
+        """Walidacja inwariantu EMA: fast < mid < slow.
+
+        Odwrócona hierarchia nie jest błędem składni, tylko ekonomicznym
+        nonsensem — ``_trend_ok`` nigdy nie przepuści entry i strategia
+        "po cichu" robi zero trades. Fail-fast z czytelnym komunikatem
+        zamiast cichej porażki (ADR-006: invariant violation → raise).
+        Hook łapie każdą ścieżkę konstrukcji paramów (algo-backtest,
+        algo-sweep, algo-walkforward — wszystkie przechodzą przez
+        ``coerce_params`` → ``schema(**clean)``).
+        """
+        if not (self.ema_fast < self.ema_mid < self.ema_slow):
+            raise ValueError(
+                f"Inwariant EMA naruszony: wymagane ema_fast < ema_mid < ema_slow, "
+                f"dostałem ema_fast={self.ema_fast}, ema_mid={self.ema_mid}, "
+                f"ema_slow={self.ema_slow}. Popraw parametry (np. 21 < 89 < 200)."
+            )
 
 
 # =========================

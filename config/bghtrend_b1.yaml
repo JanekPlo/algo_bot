@@ -1,3 +1,5 @@
+# Implied timeframe: 1h (b1 = medium/strict baseline; patrz docs/reference/config-reference.md)
+__implied_tf: "1h"
 __mode: random
 __n: 5
 __seed: 101
@@ -11,7 +13,6 @@ slope_lookback: {type: choice, values: [21, 34]}
 slope_thr_mid:  {type: float, min: 0.00005, max: 0.00010, step: 0.00001}
 slope_thr_slow: {type: float, min: 0.00003, max: 0.00006, step: 0.000005}
 
-zscore_window: {type: choice, values: [80, 100, 140]}
 deadzone:      {type: choice, values: [3.0, 4.0, 5.0]}
 
 pullback_lookback:  {type: choice, values: [10, 15, 20]}

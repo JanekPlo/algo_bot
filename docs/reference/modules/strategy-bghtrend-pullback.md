@@ -20,7 +20,7 @@ stats, equity, trades = run_backtest(
 - **What it trades:** one symbol, one position at a time, either side (`side="both"` default).
 - **Timeframe:** TF-agnostic in code, but the sweep configs are implicitly tuned to TF bands — `bghtrend_b3` for fast (≈15m), `b1`/`b2` for medium (≈1h), `b4` for slow (≈4h). See [config-reference](../config-reference.md).
 - **Signal cadence:** evaluated once per closed bar via `on_bar(df) -> Signal`. Exits are checked before entries.
-- **Indicators:** EMA21/89/200 (trend), ATR (volatility, stops, pullback band), Xtrender `short_t3` (momentum confirmation) + dots (in-profit exit).
+- **Indicators:** EMA21/89/200 (trend), ATR (volatility, stops, pullback band), Xtrender `long_term` (regime momentum confirmation at entry) + dots from `short_t3` (in-profit exit).
 
 ## Economic thesis
 
@@ -100,7 +100,7 @@ When `require_rebound=True`: a long needs the last close back above EMA21 **and*
 
 ### Gate 4 — `_xtr_ok` (momentum)
 
-`x_long` here is the `short_t3` leg of Xtrender (the third element of the components tuple, named locally `x_long`). Long requires `short_t3[-1] > deadzone`; short requires `< -deadzone`. The deadzone makes momentum a three-state signal — see [indicators-xtrender](indicators-xtrender.md).
+**CORRECTION 2026-06-11 (tail-end cleanup), resolved same day:** this section previously claimed `x_long` is the `short_t3` leg — a misreading of the unpacking order. The strategy unpacks `_x_short, x_long, _x_t3, up_dot, down_dot`, so `x_long` binds **`long_term`** (position 1 of the 5-tuple) — and this is **deliberate**, confirmed against the original Pine Script where `longTermXtrender` is the "B-Xtrender Trend" (regime) component. Long entry requires `long_term[-1] > deadzone`; short requires `< -deadzone`; the stale-exit deadzone test also evaluates `long_term`. Economically coherent: at a pullback the short-term leg has just been crushed, so gating on it would block the very entries the strategy hunts; `long_term` asserts the regime still holds. `short_t3` feeds the dots (in-profit exits) only. Full evidence chain: [indicators-xtrender](indicators-xtrender.md) → Edge cases. The deadzone makes regime momentum a three-state signal.
 
 ### Post-gate — `_entry_distance_ok` (don't chase)
 
@@ -124,7 +124,7 @@ if self._pos_side is not None:
         if side == "short" and up_dot[-1]:   return Signal("exit", reason="xtrender_trough")
 
     self._bars_in_trade += 1                            # 4. stale timeout
-    if self._bars_in_trade >= stale_max_bars and abs(short_t3[-1]) <= deadzone:
+    if self._bars_in_trade >= stale_max_bars and abs(long_term[-1]) <= deadzone:
         return Signal("exit", reason="time_limit")
 
     return Signal("hold", side, meta={"sl", "tp", "trail"})
@@ -154,7 +154,7 @@ A `down_dot` (Xtrender just peaked) exits a profitable long; an `up_dot` exits a
 
 ### 4. Stale timeout
 
-After `stale_max_bars` bars in trade, **and** only if momentum has gone flat (`|short_t3| <= deadzone`), the position is closed (`time_limit`). This frees capital from positions that are neither winning to target nor stopping out — the "going nowhere in chop" case. Note the timeout is *conditional* on flat momentum; a position still showing momentum is held past the bar count.
+After `stale_max_bars` bars in trade, **and** only if regime momentum has gone flat (`|long_term| <= deadzone`), the position is closed (`time_limit`). This frees capital from positions that are neither winning to target nor stopping out — the "going nowhere in chop" case. Note the timeout is *conditional* on flat momentum; a position still showing momentum is held past the bar count.
 
 ### Cooldown
 
@@ -172,7 +172,8 @@ A stop-out sets `_cooldown_left = cooldown_bars`. While the counter is positive 
 |---|---|---|
 | EMA21 / EMA89 / EMA200 | `core.ema` | Trend stack (ordering) + slope filter (EMA89/200). EMA89 also anchors the pullback band and the stop. |
 | ATR | `core.atr` (EWM, span = `pullback_atr_len`) | Pullback band width, entry-distance cap, SL padding, trailing-stop step. |
-| Xtrender `short_t3` | `xtrender_components` | Momentum confirmation at entry (vs deadzone). |
+| Xtrender `long_term` | `xtrender_components` | Regime momentum confirmation at entry + stale-exit flatness test (vs deadzone). |
+| Xtrender `short_t3` (via dots) | `xtrender_components` | In-profit exit timing — local extrema (`up_dot`/`down_dot`). |
 | Xtrender `up_dot` / `down_dot` | `xtrender_components` | In-profit momentum-exhaustion exits. |
 
 Full Xtrender formula and parameter meanings: [indicators-xtrender](indicators-xtrender.md).
@@ -222,8 +223,8 @@ Ranges are the union across `bghtrend_b1..b4` (see [config-reference](../config-
 - **No position sizing inside the strategy.** `on_bar` emits `enter`/`exit` with SL/TP in `meta` but does not set `Signal.size`. Risk-based sizing (`algo_bot.risk.position_size`) is caller-driven and not wired here — the backtester uses its default sizing. See [risk-limits](risk-limits.md).
 - **Execution assumption is taker-on-close, optimistic fills.** Entries/exits resolve at bar Close (or High/Low for SL/TP tests) with no spread, no slippage, no funding. Same-bar TP+SL resolves in TP's favour, and gaps fill at the bar's range rather than the stop price. All of this makes backtest fills rosier than live — the explicit motivation for ADR-011 microstructure adjustments (Session 3). The strategy is **not** maker-aware; it does not post limit orders or model queue position.
 - **Indicators recomputed per bar.** No incremental indicator state — correct but O(n) per bar; fine for backtests, a consideration for high-frequency live loops.
-- **`zscore` slope mode is dead code in practice.** Supported but never selected by any config; the `zscore_window` parameter is consequently inert across the entire sweep space.
-- **No runtime validation of EMA monotonicity.** The strategy never asserts `ema_fast < ema_mid < ema_slow`; an inverted parameter set would simply never satisfy `_trend_ok` and trade zero times, silently. The configs guarantee monotonicity by construction (see [config-reference](../config-reference.md) → Validation rules), but the contract is implicit.
+- **`zscore` slope mode is dead code in practice.** Supported but never selected by any config. The phantom `zscore_window` sweep dimension was removed from `bghtrend_b1..b4.yaml` on 2026-06-11 (tail-end cleanup); the dataclass default (100) and the dormant `_slope_zscore` branch remain. Re-opening the branch requires an ADR.
+- **EMA monotonicity — validated at runtime since 2026-06-11 (tail-end cleanup).** `XtrenderPullbackParams.__post_init__` enforces `ema_fast < ema_mid < ema_slow` (strict) and raises `ValueError` with a readable message on violation. Previously an inverted set would silently trade zero times; now every construction path (`algo-backtest`, `algo-sweep`, `algo-walkforward` — all via `coerce_params`) fails fast. Tests: `tests/test_bghtrend_params.py`.
 
 ## Consumers
 

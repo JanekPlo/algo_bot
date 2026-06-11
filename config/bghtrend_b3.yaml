@@ -1,3 +1,5 @@
+# Implied timeframe: 15m (b3 = fast/agile; patrz docs/reference/config-reference.md)
+__implied_tf: "15m"
 __mode: random
 __n: 5
 __seed: 303
@@ -11,7 +13,6 @@ slope_lookback: {type: choice, values: [21]}
 slope_thr_mid:  {type: float, min: 0.00003, max: 0.00008, step: 0.00001}
 slope_thr_slow: {type: float, min: 0.00002, max: 0.00005, step: 0.000005}
 
-zscore_window: {type: choice, values: [60, 80, 100]}
 deadzone:      {type: choice, values: [1.5, 2.0, 3.0]}
 
 pullback_lookback:  {type: choice, values: [8, 12, 15]}

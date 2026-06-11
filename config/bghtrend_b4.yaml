@@ -1,3 +1,5 @@
+# Implied timeframe: 4h (b4 = slow/macro; patrz docs/reference/config-reference.md)
+__implied_tf: "4h"
 __mode: random
 __n: 5
 __seed: 404
@@ -11,7 +13,6 @@ slope_lookback: {type: choice, values: [34, 55]}
 slope_thr_mid:  {type: float, min: 0.00003, max: 0.00007, step: 0.00001}
 slope_thr_slow: {type: float, min: 0.000025, max: 0.00005, step: 0.000005}
 
-zscore_window: {type: choice, values: [100, 140, 160]}
 deadzone:      {type: choice, values: [3.0, 4.0, 5.0]}
 
 pullback_lookback:  {type: choice, values: [15, 20, 24]}

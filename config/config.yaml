@@ -7,10 +7,13 @@ data:
   raw_dir: "bot_data/raw"       # katalog z surowymi CSV
   processed_dir: "bot_data/processed"  # katalog z przetworzonymi CSV
 
-# Parametry backtestu
+# Parametry backtestu — INFORMACYJNE (żaden kod nie czyta tej sekcji).
+# Single source of truth: DEFAULT_CASH / DEFAULT_COMMISSION w
+# algo_bot/engine/backtester.py. Wartości poniżej są lustrem tych stałych
+# (cleanup 2026-06-11); zmiana ich tutaj NIE wpływa na backtesty.
 backtest:
-  cash: 1000000         # początkowy kapitał w USD
-  commission: 0.002    # prowizja 0.2% na transakcję
+  cash: 1000000        # początkowy kapitał w USD (= DEFAULT_CASH)
+  commission: 0.0004   # 4 bps = Binance USDT-M taker fee (= DEFAULT_COMMISSION)
   trade_on_close: true # czy realizować zlecenia na zamknięciu świecy
 
 # Pipeline przetwarzania danych (features do compute_features)
