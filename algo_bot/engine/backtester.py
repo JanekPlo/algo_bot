@@ -6,9 +6,12 @@ Główny silnik backtestowy algo_bot. Wrapper na backtesting.py adaptujący
 StrategyBase API (on_bar -> Signal) do BTStrategy z backtesting.py.
 
 Public API:
-- run_backtest(symbol, timeframe, strategy, params, ..., data=None) -> (stats, equity_df, trades_df)
-    Pojedynczy backtest. Zwraca metryki + equity curve + log transakcji
-    (z opcjonalnymi mikrostructure adjustments dla slippage/spread).
+- run_backtest(symbol, timeframe, strategy, params, ..., data=None, microstructure=None)
+    -> (stats, equity_df, trades_df)
+    Pojedynczy backtest. Zwraca metryki + equity curve + log transakcji.
+    Z ``microstructure`` (ADR-011) dokłada overlay slippage+funding: kolumna
+    ``Equity_adjusted`` w equity, kolumny breakdown w trades, oraz
+    ``_metrics_summary_raw`` / ``_metrics_summary_post_microstructure`` w stats.
     Opcjonalny ``data`` pozwala wstrzyknąć pre-loaded OHLCV DataFrame (testy
     deterministyczne, walk-forward per fold) zamiast ładowania z CSV.
 - save_outputs(rid, symbol, timeframe, strategy, params_in, stats, equity, trades) -> str
@@ -20,8 +23,8 @@ Internal:
 - make_bt_wrapper(StratClass, params_obj) -> BTStrategy subclass
     Adapter parsujący Signal na backtesting.py API (buy/sell/position.close).
     Obsługuje TP/SL/trail, cooldown, same-bar TP-vs-SL priority.
-- adjust_trades_df(trades, spread_bps, slippage_bps, ...) -> DataFrame
-    Post-run adjustment dla mikrostructure (spread, slippage).
+- Microstructure (slippage + funding) żyje w algo_bot/microstructure.py
+    (ADR-011); run_backtest woła apply_microstructure() jako post-run overlay.
 
 CLI:
 - python -m algo_bot.engine.backtester --help
@@ -45,12 +48,17 @@ from dataclasses import asdict, is_dataclass
 from datetime import UTC, datetime
 from typing import Any
 
-import numpy as np
 import pandas as pd
 from backtesting import Backtest, Strategy as BTStrategy
 
+from algo_bot.data_loader import load_funding
 from algo_bot.log import get_logger, setup_logging
 from algo_bot.metrics import MetricsSummary, summarize
+from algo_bot.microstructure import (
+    MicrostructureConfig,
+    apply_microstructure,
+    resolve_funding,
+)
 from algo_bot.risk import (
     RiskLimitBreached,
     RiskLimits,
@@ -146,77 +154,11 @@ def coerce_params(StratClass, params_dict: dict[str, Any]) -> Any:
 
 
 # ------------------------------
-# Microstructure helpers (post-run adjustment, zostawiamy hook)
+# Microstructure: ADR-011 — overlay przeniesiony do algo_bot/microstructure.py.
+# Stary cosmetic adjust_trades_df / apply_micro_price USUNIĘTE (nie wpływały na
+# equity ani metryki — liczyły tylko nieczytane kolumny AdjEntry/PnL_adj).
+# run_backtest woła teraz apply_microstructure() w sekcji 7.
 # ------------------------------
-def apply_micro_price(
-    base_price: float, side: str, spread_bps: float, slippage_bps: float
-) -> float:
-    half = (spread_bps or 0.0) / 2.0 / 1e4
-    slip = (slippage_bps or 0.0) / 1e4
-    if side == "buy":
-        px = base_price * (1 + half)
-        px = px * (1 + slip)
-    else:  # sell
-        px = base_price * (1 - half)
-        px = px * (1 - slip)
-    return float(px)
-
-
-def adjust_trades_df(
-    trades: pd.DataFrame,
-    spread_bps: float | None,
-    slippage_bps: float | None,
-    symbol: str,
-    timeframe: str,
-) -> pd.DataFrame:
-    if trades is None or trades.empty:
-        return trades
-
-    t = trades.copy()
-    required = {"EntryPrice", "ExitPrice", "EntryTime", "ExitTime"}
-    missing = required - set(t.columns)
-    if missing:
-        # różne wersje backtesting.py – gdy brak kolumn, oddaj surowe
-        return t
-
-    # side z Size (standard w backtesting.py: Size > 0 long, < 0 short)
-    if "Size" in t.columns:
-        side = np.where(t["Size"].astype(float) >= 0, "long", "short")
-    else:
-        side = np.array(["long"] * len(t))
-    t["side"] = side
-
-    if not spread_bps and not slippage_bps:
-        return t
-
-    sbps = float(spread_bps or 0.0)
-    slbps = float(slippage_bps or 0.0)
-
-    def _adj(px, s_buy_sell):
-        return apply_micro_price(float(px), s_buy_sell, sbps, slbps)
-
-    # Entry: long -> buy; short -> sell
-    t["AdjEntryPrice"] = np.where(
-        t["side"] == "long",
-        [_adj(p, "buy") for p in t["EntryPrice"]],
-        [_adj(p, "sell") for p in t["EntryPrice"]],
-    )
-    # Exit: long -> sell; short -> buy
-    t["AdjExitPrice"] = np.where(
-        t["side"] == "long",
-        [_adj(p, "sell") for p in t["ExitPrice"]],
-        [_adj(p, "buy") for p in t["ExitPrice"]],
-    )
-
-    qty = t["Size"].astype(float).abs() if "Size" in t.columns else 1.0
-
-    t["PnL_adj"] = np.where(
-        t["side"] == "long",
-        (t["AdjExitPrice"] - t["AdjEntryPrice"]) * qty,
-        (t["AdjEntryPrice"] - t["AdjExitPrice"]) * qty,
-    )
-
-    return t
 
 
 # ------------------------------
@@ -472,11 +414,11 @@ def run_backtest(
     cash: float = DEFAULT_CASH,
     commission: float = DEFAULT_COMMISSION,
     trade_on_close: bool = True,
-    slippage_bps: float | None = None,
-    spread_bps: float | None = None,
     unit_scale: float | None = None,
     data: pd.DataFrame | None = None,
     risk_limits: RiskLimits | None = None,
+    microstructure: MicrostructureConfig | None = None,
+    funding_historical: pd.Series | None = None,
 ) -> tuple[dict[str, Any], pd.DataFrame, pd.DataFrame]:
     """
     Zwraca: (stats_raw, equity_df, trades_df_exec_adjusted)
@@ -494,6 +436,15 @@ def run_backtest(
             każdym barze; breach kończy run i wpisuje detale do
             ``stats["_risk_breach"]``. ``None`` (default) → brak gate'ów,
             backward-compatible z poprzednim API.
+        microstructure: Konfiguracja korekt mikrostruktury (ADR-011). ``None``
+            (default) → brak slippage/funding, equity i trades jak z silnika
+            (backward-compatible). Gdy podana i ``enabled`` — dodaje kolumnę
+            ``Equity_adjusted`` do equity, kolumny breakdown do trades, oraz
+            ``_metrics_summary_raw`` / ``_metrics_summary_post_microstructure``
+            do stats.
+        funding_historical: Opcjonalna pre-loaded historia funding (Series).
+            ``None`` + ``funding_source="historical"`` → auto-load przez
+            ``data_loader.load_funding(symbol)`` (FileNotFoundError → synthetic).
     """
     # 1) Dane — albo wstrzyknięte z zewnątrz, albo ładowane z bot_data/processed/
     if data is not None:
@@ -598,16 +549,47 @@ def run_backtest(
     )
     trades_raw = stats._trades.copy() if hasattr(stats, "_trades") else pd.DataFrame()
 
-    # 7) Post-run microstructure adjustment (opcjonalnie)
-    trades_adj = adjust_trades_df(trades_raw, spread_bps, slippage_bps, symbol, timeframe)
-
-    # 8) Dorzuć meta do stats
+    # 7) Meta do stats + microstructure overlay
     stats = dict(stats)
-    stats["_microstructure"] = {
-        "spread_bps": spread_bps,
-        "slippage_bps": slippage_bps,
-        "note": "trades.csv zawiera ewentualne korekty AdjEntry/AdjExit; equity pozostaje z silnika.",
-    }
+
+    # Microstructure overlay (ADR-011) — slippage + funding na equity/trades.
+    # Domyślnie wyłączone (microstructure=None) → backward-compatible.
+    trades = trades_raw
+    if microstructure is not None and microstructure.enabled:
+        fh = funding_historical
+        if fh is None and microstructure.funding_source == "historical":
+            try:
+                fh = load_funding(symbol)
+            except FileNotFoundError:
+                logger.warning(
+                    "Funding CSV not found — synthetic fallback",
+                    extra={"symbol": symbol},
+                )
+                fh = None
+        funding = resolve_funding(fh, df.index[0], df.index[-1], microstructure)
+        ms_result = apply_microstructure(
+            equity_raw=equity["Equity"],
+            trades=trades_raw,
+            ohlcv=df,
+            funding=funding,
+            config=microstructure,
+        )
+        equity["Equity_adjusted"] = ms_result.equity_adjusted.to_numpy()
+        trades = trades_raw.copy()
+        if ms_result.per_trade:
+            trades["pnl_raw"] = [tc.pnl_raw for tc in ms_result.per_trade]
+            trades["pnl_post"] = [tc.pnl_post for tc in ms_result.per_trade]
+            trades["slip_cost_quote"] = [tc.slip_cost_quote for tc in ms_result.per_trade]
+            trades["funding_cost_quote"] = [tc.funding_cost_quote for tc in ms_result.per_trade]
+        stats["_microstructure"] = {
+            "enabled": True,
+            "slip_bps": microstructure.slip_bps,
+            "funding_source": microstructure.funding_source,
+            "funding_rate_synthetic": microstructure.funding_rate_synthetic,
+            "total_slip_quote": ms_result.total_slip_quote,
+            "total_funding_quote": ms_result.total_funding_quote,
+            "n_trades": len(ms_result.per_trade),
+        }
     if unit_scale is not None and float(unit_scale) != 1.0:
         stats["_scaling"] = {"unit_scale": float(unit_scale)}
 
@@ -619,7 +601,7 @@ def run_backtest(
     if risk_limits is not None:
         stats["_risk_limits"] = asdict(risk_limits)
 
-    return stats, equity, trades_adj
+    return stats, equity, trades
 
 
 def _metrics_summary_to_json_safe(summary: MetricsSummary) -> dict[str, Any]:
@@ -662,8 +644,22 @@ def save_outputs(
         if not trades.empty and "PnL" in trades.columns:
             trades_pnl = trades["PnL"]
         if equity_series is not None and len(equity_series) > 1:
-            metrics_summary = summarize(equity=equity_series, trades_pnl=trades_pnl)
-            stats["_metrics_summary"] = _metrics_summary_to_json_safe(metrics_summary)
+            raw_summary = summarize(equity=equity_series, trades_pnl=trades_pnl)
+            safe_raw = _metrics_summary_to_json_safe(raw_summary)
+            stats["_metrics_summary_raw"] = safe_raw
+            # backward-compat alias (= raw; fee silnika należy do raw, ADR-011 §9)
+            stats["_metrics_summary"] = safe_raw
+            # Post-microstructure z Equity_adjusted + pnl_post (ADR-011 §9)
+            if "Equity_adjusted" in equity.columns:
+                post_pnl = (
+                    trades["pnl_post"]
+                    if (not trades.empty and "pnl_post" in trades.columns)
+                    else trades_pnl
+                )
+                post_summary = summarize(equity=equity["Equity_adjusted"], trades_pnl=post_pnl)
+                stats["_metrics_summary_post_microstructure"] = _metrics_summary_to_json_safe(
+                    post_summary
+                )
     except Exception as e:
         logger.warning(
             "Failed to compute MetricsSummary for summary.json",
@@ -725,8 +721,6 @@ def parse_args():
     ap.add_argument("--cash", type=float, default=DEFAULT_CASH)
     ap.add_argument("--commission", type=float, default=DEFAULT_COMMISSION)
     ap.add_argument("--trade_on_close", action="store_true")
-    ap.add_argument("--slippage_bps", type=float, default=None)
-    ap.add_argument("--spread_bps", type=float, default=None)
     ap.add_argument(
         "--unit_scale",
         type=float,
@@ -761,6 +755,31 @@ def parse_args():
         default="UTC",
         help="IANA timezone dla daily_loss reset (default UTC).",
     )
+    # Microstructure flags (ADR-011)
+    ap.add_argument(
+        "--microstructure",
+        choices=["none", "full"],
+        default="full",
+        help="Master switch korekt mikrostruktury. full = slippage + funding.",
+    )
+    ap.add_argument(
+        "--slip_bps",
+        type=float,
+        default=1.0,
+        help="Slippage per side w bps, na TOP of fee (--commission). Default 1.0.",
+    )
+    ap.add_argument(
+        "--funding_source",
+        choices=["historical", "synthetic", "none"],
+        default="historical",
+        help="Źródło funding rate. historical = CSV + synthetic fallback.",
+    )
+    ap.add_argument(
+        "--funding_rate_synthetic",
+        type=float,
+        default=0.0001,
+        help="Stały funding rate per 8h dla synthetic/fallback (default 0.0001 = 0.01%%).",
+    )
     return ap.parse_args()
 
 
@@ -789,6 +808,13 @@ def main():
             daily_reset_tz=args.daily_reset_tz,
         )
 
+    microstructure = MicrostructureConfig(
+        enabled=(args.microstructure == "full"),
+        slip_bps=args.slip_bps,
+        funding_source=args.funding_source,
+        funding_rate_synthetic=args.funding_rate_synthetic,
+    )
+
     stats, equity, trades = run_backtest(
         symbol=args.symbol,
         timeframe=args.timeframe,
@@ -799,10 +825,9 @@ def main():
         cash=args.cash,
         commission=args.commission,
         trade_on_close=args.trade_on_close,
-        slippage_bps=args.slippage_bps,
-        spread_bps=args.spread_bps,
         unit_scale=args.unit_scale,
         risk_limits=risk_limits,
+        microstructure=microstructure,
     )
 
     save_outputs(

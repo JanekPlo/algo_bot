@@ -205,6 +205,52 @@ def count_missing_bars(df: pd.DataFrame, timeframe: str) -> int:
     return max(0, missing)
 
 
+# === FUNDING (perp futures, ADR-011) ===
+def get_funding_path(symbol: str, exchange: str = "binance") -> Path:
+    """Ścieżka do pliku funding: bot_data/processed/binance_<SYMBOL>_funding.csv."""
+    PROC_DIR.mkdir(parents=True, exist_ok=True)
+    return PROC_DIR / f"{exchange.lower()}_{symbol_noslash(symbol)}_funding.csv"
+
+
+def load_funding(
+    symbol: str,
+    *,
+    exchange: str = "binance",
+    start: str | None = None,
+    end: str | None = None,
+) -> pd.Series:
+    """Wczytuje historię funding rate dla symbolu (ADR-011).
+
+    Plik PROCESSED: bot_data/processed/binance_<SYMBOL>_funding.csv z kolumnami
+    'datetime' (UTC) i 'funding_rate'. Zwraca Series[funding_rate] indeksowaną
+    UTC datetime, posortowaną, bez duplikatów.
+
+    Args:
+        symbol: np. 'BTC/USDT' lub 'BTCUSDT'.
+        exchange: prefiks pliku (domyślnie 'binance').
+        start/end: opcjonalny zakres czasu (UTC).
+
+    Raises:
+        FileNotFoundError: gdy plik nie istnieje. Caller (run_backtest) decyduje
+            o fallbacku na synthetic (Decyzja 6c).
+        ValueError: gdy brak kolumny 'funding_rate'.
+    """
+    path = get_funding_path(symbol, exchange)
+    if not path.exists():
+        raise FileNotFoundError(f"Funding file not found: {path}")
+    df = pd.read_csv(path)
+    df = _ensure_datetime_index(df)
+    if "funding_rate" not in df.columns:
+        raise ValueError(f"Missing column 'funding_rate' in {path}")
+    s = pd.to_numeric(df["funding_rate"], errors="coerce")
+    if start:
+        s = s[s.index >= pd.to_datetime(start, utc=True)]
+    if end:
+        s = s[s.index <= pd.to_datetime(end, utc=True)]
+    s.name = "funding_rate"
+    return s
+
+
 # === LEGACY: init/fetch/raw ===
 def init_exchange(
     exchange_name: str, api_key: str | None = None, secret: str | None = None, **kwargs: Any

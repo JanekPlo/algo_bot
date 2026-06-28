@@ -17,6 +17,20 @@ Sekcje na każdą wersję:
 
 ## [Unreleased]
 
+### Added (Phase 2 Session 3 — ADR-011 microstructure adjustments, 2026-06-19)
+- **`algo_bot/microstructure.py`** — pure, I/O-free overlay charging slippage + perpetual funding on top of the raw backtest. Frozen dataclasses (`MicrostructureConfig`, `TradeCost`, `MicrostructureResult`) + pure functions (`slippage_cost`, `settlements_in_window`, `synthetic_funding_series`, `resolve_funding`, `funding_flows_for_trade`, `funding_cost_for_trade`, `apply_microstructure`). Slippage = constant `slip_bps`/side cash debit at entry+exit; funding = per-settlement (8 h) `Notional × Rate`, longs pay shorts when positive, charged only for positions open at the settlement instant (half-open `(entry, exit]`). Both subtracted from the raw equity curve → `equity_adjusted` and from trade PnL → `pnl_post`. mypy strict-on-new.
+- **`tests/test_microstructure.py`** — independent arithmetic oracle (handcomputed literals, no pandas re-application, no mocks): funding from `Notional × Rate` worked examples, slippage from `notional × bps/1e4`, bar-by-bar equity overlay timeline, tz-aware normalisation. Funding math reproduced from Binance docs before writing tests (xtrender lesson 2026-06-11).
+- **`algo_bot/funding.py` rewritten** — legacy hardcoded scraper → parametrised `fetch_funding(symbol, start, end)` + `algo-fetch-funding` CLI; output `bot_data/processed/binance_<SYMBOL>_funding.csv` (`datetime`,`funding_rate`, UTC).
+- **`data_loader.load_funding(symbol)` + `get_funding_path`** — loads per-symbol funding history (Decision 7a).
+- **`run_backtest(..., microstructure=, funding_historical=)`** — opt-in overlay (default `None` = off, backward-compatible). Adds `Equity_adjusted` to the equity DataFrame, 4 breakdown columns to trades (`pnl_raw`/`pnl_post`/`slip_cost_quote`/`funding_cost_quote`), and `_metrics_summary_raw` + `_metrics_summary_post_microstructure` + `_microstructure` to `summary.json` (`_metrics_summary` kept as backward-compat alias of raw).
+- **`WalkForwardConfig.microstructure`** — threaded per fold; per-fold `MetricsSummary` and the stitched OOS curve become post-microstructure when enabled; funding sliced to the fold range.
+- **Shared CLI flags** `--microstructure {none,full}` / `--slip_bps` (default 1.0) / `--funding_source {historical,synthetic,none}` / `--funding_rate_synthetic` (default 0.0001) across `algo-backtest`, `algo-sweep`, `algo-walkforward`; `algo-fetch-funding` entry-point in `pyproject.toml`. Sweep `index.csv` gains `sharpe_raw` / `sharpe_post`.
+- **Docs (English):** ADR-011, `docs/reference/modules/microstructure.md` (deep reference), `docs/concepts/microstructure.md` (perp cost mechanics, why ~10 bps round-trip is realistic, reading raw vs post). Cross-references added to `strategy-bghtrend-pullback.md` and `walkforward.md`.
+
+### Removed (Phase 2 Session 3 — ADR-011)
+- **Cosmetic microstructure scaffold** in `backtester.py` (`apply_micro_price`, `adjust_trades_df`, `--slippage_bps`, `--spread_bps`) — computed unread `AdjEntry/AdjExit/PnL_adj` columns, never touched equity or metrics. Superseded by the `microstructure` overlay (which adjusts the equity curve, hence Sharpe/maxDD).
+- **Dead funding scaffold** in `sweep.py` (`--funding_csv`, `--funding_mode`, the `_funding` extract) — passed kwargs `run_backtest` never accepted (would have raised on use). Replaced by the shared microstructure flags.
+
 ### Added
 - **Phase 2 tail-end cleanup (2026-06-11) — code health, 5 parking-lot items z ROADMAP:**
   - **EMA monotonicity validation runtime** — `XtrenderPullbackParams.__post_init__` egzekwuje `ema_fast < ema_mid < ema_slow` (ostra nierówność) i podnosi `ValueError` z czytelnym komunikatem. Łapie każdą ścieżkę konstrukcji paramów (`algo-backtest`/`algo-sweep`/`algo-walkforward` — wszystkie przez `coerce_params` → `schema(**clean)`). Wcześniej odwrócony zestaw "po cichu" robił zero trades. Testy: `tests/test_bghtrend_params.py` (5 testów, w tym dowód że brzegowe kombinacje z b1..b4 przechodzą).

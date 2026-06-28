@@ -88,11 +88,12 @@ Issues     = "https://github.com/JanekPlo/algo_bot/issues"
 # TODO (future): dodac kolejne wpisy gdy refaktorujemy/tworzymy modul:
 #   algo-live      = "algo_bot.live:main"           (po przeniesieniu live/ do algo_bot.live)
 [project.scripts]
-algo-backtest    = "algo_bot.engine.backtester:main"
-algo-fetch       = "algo_bot.fetch_data:main"
-algo-process     = "algo_bot.process_data:main"
-algo-sweep       = "algo_bot.engine.sweep:main"
-algo-walkforward = "algo_bot.engine.walkforward:main"  # ADR-009 (Decyzja F)
+algo-backtest      = "algo_bot.engine.backtester:main"
+algo-fetch         = "algo_bot.fetch_data:main"
+algo-fetch-funding = "algo_bot.funding:main"  # ADR-011 (Decyzja 6)
+algo-process       = "algo_bot.process_data:main"
+algo-sweep         = "algo_bot.engine.sweep:main"
+algo-walkforward   = "algo_bot.engine.walkforward:main"  # ADR-009 (Decyzja F)
 
 # === Hatchling =================================================================
 [tool.hatch.build.targets.wheel]
@@ -172,6 +173,7 @@ module = [
     "algo_bot.engine.walkforward",    # decyzja F
     "algo_bot.metrics",               # decyzja D
     "algo_bot.data_integrity",        # Faza 2 Sesja 2 (Decyzja 7)
+    "algo_bot.microstructure",        # Faza 2 Sesja 3 (ADR-011)
 ]
 disallow_untyped_defs = true
 disallow_incomplete_defs = true

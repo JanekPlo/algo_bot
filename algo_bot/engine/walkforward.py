@@ -33,6 +33,7 @@ from algo_bot.engine.backtester import (
 )
 from algo_bot.log import get_logger, setup_logging
 from algo_bot.metrics import MetricsSummary, summarize
+from algo_bot.microstructure import MicrostructureConfig
 from algo_bot.risk.limits import RiskLimits
 
 logger = get_logger(__name__)
@@ -70,6 +71,9 @@ class WalkForwardConfig:
             fold count < this. Phase 2 MVP wymaga >=5 (ROADMAP linia 79).
         risk_limits: Opcjonalne limity ryzyka (ADR-008). Stosowane per fold
             z świeżym RiskState (decyzja §5 ADR-009).
+        microstructure: Opcjonalna konfiguracja mikrostruktury (ADR-011).
+            Przekazywana do run_backtest per fold; funding jest slice'owany do
+            zakresu foldu wewnątrz run_backtest (Decyzja 11).
     """
 
     train: int | pd.Timedelta
@@ -78,6 +82,7 @@ class WalkForwardConfig:
     mode: Literal["rolling", "anchored"] = "rolling"
     min_folds_warn: int = 5
     risk_limits: RiskLimits | None = None
+    microstructure: MicrostructureConfig | None = None
 
 
 @dataclass(frozen=True)
@@ -393,6 +398,7 @@ def run_fold(
     risk_limits: RiskLimits | None,
     cash: float = DEFAULT_CASH,
     commission: float = DEFAULT_COMMISSION,
+    microstructure: MicrostructureConfig | None = None,
 ) -> FoldResult:
     """Wykonuje pojedynczy fold przez ``run_backtest`` na test slice.
 
@@ -440,12 +446,21 @@ def run_fold(
         risk_limits=risk_limits,
         cash=cash,
         commission=commission,
+        microstructure=microstructure,
     )
 
-    # MetricsSummary z OOS equity (Series) + trade-level PnL
-    equity_series = equity["Equity"] if "Equity" in equity.columns else equity.iloc[:, 0]
-    trades_pnl: pd.Series | None
-    trades_pnl = trades["PnL"] if "PnL" in trades.columns else None
+    # MetricsSummary z OOS equity — preferuj post-microstructure gdy dostępne
+    # (ADR-011): Equity_adjusted / pnl_post. Inaczej raw (backward-compatible).
+    if "Equity_adjusted" in equity.columns:
+        equity_series = equity["Equity_adjusted"]
+    elif "Equity" in equity.columns:
+        equity_series = equity["Equity"]
+    else:
+        equity_series = equity.iloc[:, 0]
+    pnl_col = "pnl_post" if "pnl_post" in trades.columns else "PnL"
+    trades_pnl: pd.Series | None = (
+        trades[pnl_col] if (not trades.empty and pnl_col in trades.columns) else None
+    )
     metrics = summarize(equity_series, trades_pnl)
 
     # Boundary closes — trade'y zamknięte dokładnie na test_end (§6 ADR-009)
@@ -631,7 +646,13 @@ def stitch_equity(folds: Sequence[FoldResult], initial_cash: float = 100_000.0) 
     rows: list[dict[str, Any]] = []
     cum_capital = float(initial_cash)
     for fr in folds:
-        eq = fr.equity["Equity"] if "Equity" in fr.equity.columns else fr.equity.iloc[:, 0]
+        # Preferuj post-microstructure (ADR-011) — spójnie z metrykami foldu.
+        if "Equity_adjusted" in fr.equity.columns:
+            eq = fr.equity["Equity_adjusted"]
+        elif "Equity" in fr.equity.columns:
+            eq = fr.equity["Equity"]
+        else:
+            eq = fr.equity.iloc[:, 0]
         if eq.empty:
             continue
         eq0 = float(eq.iloc[0])
@@ -741,6 +762,7 @@ def walk_forward(
             risk_limits=config.risk_limits,
             cash=cash,
             commission=commission,
+            microstructure=config.microstructure,
         )
         fold_results.append(fr)
 
@@ -984,6 +1006,30 @@ def parse_args() -> Any:
         default="INFO",
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
     )
+    # Microstructure flags (ADR-011) — stosowane per fold
+    ap.add_argument(
+        "--microstructure",
+        choices=["none", "full"],
+        default="full",
+        help="Master switch korekt mikrostruktury per fold. full = slippage + funding.",
+    )
+    ap.add_argument(
+        "--slip_bps",
+        type=float,
+        default=1.0,
+        help="Slippage per side w bps, na TOP of fee. Default 1.0.",
+    )
+    ap.add_argument(
+        "--funding_source",
+        choices=["historical", "synthetic", "none"],
+        default="historical",
+    )
+    ap.add_argument(
+        "--funding_rate_synthetic",
+        type=float,
+        default=0.0001,
+        help="Stały funding rate per 8h dla synthetic/fallback (default 0.0001).",
+    )
     return ap.parse_args()
 
 
@@ -1010,6 +1056,13 @@ def main() -> None:
             daily_reset_tz=args.daily_reset_tz,
         )
 
+    microstructure = MicrostructureConfig(
+        enabled=(args.microstructure == "full"),
+        slip_bps=args.slip_bps,
+        funding_source=args.funding_source,
+        funding_rate_synthetic=args.funding_rate_synthetic,
+    )
+
     config = WalkForwardConfig(
         train=train,
         test=test,
@@ -1017,6 +1070,7 @@ def main() -> None:
         mode=args.mode,
         min_folds_warn=args.min_folds_warn,
         risk_limits=risk_limits,
+        microstructure=microstructure,
     )
 
     report = walk_forward(

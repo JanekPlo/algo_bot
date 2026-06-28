@@ -59,6 +59,7 @@ from algo_bot.engine.backtester import (
     save_outputs,
 )
 from algo_bot.log import get_logger, setup_logging
+from algo_bot.microstructure import MicrostructureConfig
 
 logger = get_logger(__name__)
 
@@ -200,11 +201,16 @@ def extract_metrics(stats: dict[str, Any]) -> dict[str, Any]:
     for k in KEEP_KEYS:
         if k in stats:
             d[k] = stats[k]
-    # mikrostruktura/funding info jeśli jest
+    # Microstructure breakdown (ADR-011) — totals + config jako ms:*.
     if "_microstructure" in stats:
         d.update({f"ms:{k}": v for k, v in stats["_microstructure"].items()})
-    if "_funding" in stats:
-        d.update({f"fund:{k}": v for k, v in stats["_funding"].items()})
+    # Raw vs post-microstructure Sharpe do rankingu sweepa (post = realny edge).
+    raw = stats.get("_metrics_summary_raw")
+    if isinstance(raw, dict) and "sharpe" in raw:
+        d["sharpe_raw"] = raw["sharpe"]
+    post = stats.get("_metrics_summary_post_microstructure")
+    if isinstance(post, dict) and "sharpe" in post:
+        d["sharpe_post"] = post["sharpe"]
     return d
 
 
@@ -255,10 +261,30 @@ def parse_args():
     ap.add_argument("--cash", type=float, default=DEFAULT_CASH)
     ap.add_argument("--commission", type=float, default=DEFAULT_COMMISSION)
     ap.add_argument("--trade_on_close", action="store_true")
-    ap.add_argument("--spread_bps", type=float, default=None)
-    ap.add_argument("--slippage_bps", type=float, default=None)
-    ap.add_argument("--funding_csv", default=None)
-    ap.add_argument("--funding_mode", choices=["events", "accrual"], default=None)
+    # Microstructure flags (ADR-011) — wspólne z algo-backtest / algo-walkforward
+    ap.add_argument(
+        "--microstructure",
+        choices=["none", "full"],
+        default="full",
+        help="Master switch korekt mikrostruktury. full = slippage + funding.",
+    )
+    ap.add_argument(
+        "--slip_bps",
+        type=float,
+        default=1.0,
+        help="Slippage per side w bps, na TOP of fee. Default 1.0.",
+    )
+    ap.add_argument(
+        "--funding_source",
+        choices=["historical", "synthetic", "none"],
+        default="historical",
+    )
+    ap.add_argument(
+        "--funding_rate_synthetic",
+        type=float,
+        default=0.0001,
+        help="Stały funding rate per 8h dla synthetic/fallback (default 0.0001).",
+    )
 
     # walk-forward (opcjonalnie)
     ap.add_argument(
@@ -323,6 +349,14 @@ def main():
     setup_logging(level=logging.getLevelName(args.log_level))
 
     StratClass = resolve_strategy_class(args.strategy)
+
+    # Microstructure config (ADR-011) — wspólny dla wszystkich runów sweepa.
+    microstructure = MicrostructureConfig(
+        enabled=(args.microstructure == "full"),
+        slip_bps=args.slip_bps,
+        funding_source=args.funding_source,
+        funding_rate_synthetic=args.funding_rate_synthetic,
+    )
 
     # wczytaj/rozszerz przestrzeń parametrów
     mode, space_raw, n_samples, seed, implied_tf = load_space_from_any(args)
@@ -413,14 +447,7 @@ def main():
                         cash=args.cash,
                         commission=args.commission,
                         trade_on_close=args.trade_on_close,
-                        slippage_bps=args.slippage_bps,
-                        spread_bps=args.spread_bps,
-                        # funding opcjonalnie – backtester sam rozpozna None:
-                        **(
-                            {"funding_csv": args.funding_csv, "funding_mode": args.funding_mode}
-                            if args.funding_csv
-                            else {}
-                        ),
+                        microstructure=microstructure,
                     )
                     outdir = save_outputs(
                         rid, sym, tf, args.strategy, p_clean, stats, equity, trades
@@ -451,13 +478,7 @@ def main():
                             cash=args.cash,
                             commission=args.commission,
                             trade_on_close=args.trade_on_close,
-                            slippage_bps=args.slippage_bps,
-                            spread_bps=args.spread_bps,
-                            **(
-                                {"funding_csv": args.funding_csv, "funding_mode": args.funding_mode}
-                                if args.funding_csv
-                                else {}
-                            ),
+                            microstructure=microstructure,
                         )
                         outdir = save_outputs(
                             rid, sym, tf, args.strategy, p_clean, stats, equity, trades

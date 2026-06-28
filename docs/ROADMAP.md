@@ -120,18 +120,18 @@ Faza 5: Production na VPS              → 1-2 tyg.
 **Cel:** określić jak slippage (5-10 bps) i funding cost (8h cycle dla perp futures) są aplikowane w backteście, żeby wyniki sweep'a i WF były realistic, nie naive.
 
 **Sub-deliverables (kod):**
-- [ ] `algo_bot/microstructure.py` lub extension na `algo_bot/engine/backtester.py` — funkcje adjustujące trade PnL o slippage + funding
-- [ ] Decyzja architektoniczna: post-hoc na trades (prostsze, nie wpływa na entry timing) vs in-loop w backtester (skomplikowane, ale ekspresja "trade nie wszedł bo slip był wyższy niż edge")
-- [ ] Decyzja: stały slip czy size-aware (linear / square-root market impact)
-- [ ] Funding rate source: rzeczywiste historyczne dane z Binance (preferowane) vs syntetyczne 0.01%/8h jako baseline
-- [ ] CLI flags w `algo-backtest`: `--slip_bps`, `--funding_source` (lub `--no_funding` dla raw mode)
-- [ ] `MetricsSummary` extension: dodatkowe `_metrics_summary_raw` + `_metrics_summary_post_microstructure` w `summary.json`?
-- [ ] `tests/test_microstructure.py` bez mocków
+- [x] `algo_bot/microstructure.py` — pure functions + frozen dataclasses adjustujące equity/trades o slippage + funding — **DONE 2026-06-19** (ADR-011 Decyzja 1b: nowy moduł top-level, pattern jak `algo_bot.risk`; mypy strict-on-new)
+- [x] Decyzja architektoniczna post-hoc vs in-loop — **DONE 2026-06-19** (post-hoc overlay na **equity curve** z jednego runu silnika, nie tylko na trades_pnl — daje realne post-microstructure Sharpe/maxDD; stary cosmetic `adjust_trades_df` wyrwany; ADR-011 §2/§15)
+- [x] Decyzja stały slip vs size-aware — **DONE 2026-06-19** (stały `slip_bps`/side, symmetric; default 1.0 bp; size-aware jako future flag; ADR-011 §3/§4)
+- [x] Funding rate source — **DONE 2026-06-19** (hybrid: historical CSV + synthetic fallback z WARNING; per-settlement 8h sterowane realnym `fundingTime`; ADR-011 §5/§6/§7; `algo-fetch-funding` + `data_loader.load_funding`)
+- [x] CLI flags — **DONE 2026-06-19** (`--microstructure {none,full}` / `--slip_bps` / `--funding_source` / `--funding_rate_synthetic` w `algo-backtest`/`algo-sweep`/`algo-walkforward`)
+- [x] `MetricsSummary` extension — **DONE 2026-06-19** (`_metrics_summary_raw` + `_metrics_summary_post_microstructure` w `summary.json`; `Equity_adjusted` w equity + 4 kolumny breakdown w trades; Decyzja 9a/10a)
+- [x] `tests/test_microstructure.py` bez mocków — **DONE 2026-06-19** (niezależna wyrocznia arytmetyczna; funding math zreprodukowane z Binance docs; handcomputed literals)
 
 **Sub-deliverables (docs):**
-- [ ] ADR-011 `docs/adr/011-microstructure-adjustments.md` po angielsku
-- [ ] `docs/concepts/microstructure.md` — spread / slippage / funding mechanics dla perp futures Binance, jak je adjustujemy, dlaczego 5-10 bps jest realistic dla typowego size'a bghtrend
-- [ ] `docs/reference/modules/microstructure.md` jeśli osobny moduł powstaje
+- [x] ADR-011 `docs/adr/011-microstructure-adjustments.md` po angielsku — **DONE 2026-06-19** (format ADR-009; decyzje 1-14 + alternatives + consequences + defaults z published source)
+- [x] `docs/concepts/microstructure.md` — **DONE 2026-06-19** (mechanika perp futures Binance, fee vs slippage vs funding, dlaczego ~10 bps round-trip realistic, jak czytać raw vs post)
+- [x] `docs/reference/modules/microstructure.md` — **DONE 2026-06-19** (deep reference, wzorzec metrics.md/risk-limits.md; + wzmianki w strategy-bghtrend-pullback.md i walkforward.md)
 
 **Prerequisite:** Sesja 1 (audit strategii pokaże czy bghtrend jest maker-friendly czy taker-only — wpływa na slip model). Opcjonalnie Sesja 2 dla testów na realnych danych.
 

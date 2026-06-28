@@ -331,6 +331,7 @@ Output paths and summary line are printed to stdout. Structured logs (per-fold m
 - **Equity stitching uses simple returns per fold.** Compounded geometrically across folds. NOT log returns — log compounding inside a fold would conflict with the natural multiplicative rebase.
 - **Sequential execution.** Per-fold runtime is ~1–3s; 5–20 folds = ~10s–1min. Parallel as a future flag.
 - **`MVP_THRESHOLDS` are module-level constants.** When Phase 2 calibrates them, edit `MVP_THRESHOLDS` in `walkforward.py` and the `mvp_threshold` row + `mvp_pass` automatically follow.
+- **Microstructure per fold (ADR-011).** `WalkForwardConfig.microstructure` is threaded into each fold's `run_backtest`; funding is sliced to the fold range. When enabled, per-fold `MetricsSummary` and the stitched OOS curve are computed from `Equity_adjusted` / `pnl_post`, so the MVP pass/fail reflects post-microstructure (realistic) costs. Default `None` → raw, backward-compatible.
 
 ## Limitations
 
@@ -352,6 +353,7 @@ Output paths and summary line are printed to stdout. Structured logs (per-fold m
 - [Concepts — Walk-forward](../../concepts/walk-forward.md) — methodology, why mandatory before live
 - [Reference — algo_bot.metrics](metrics.md) — `summarize()` consumed per fold
 - [Reference — algo_bot.risk.limits](risk-limits.md) — `RiskLimits` consumed per fold; reset semantics
+- [Reference — algo_bot.microstructure](microstructure.md) — per-fold slippage + funding overlay (ADR-011)
 - [ADR-005](../../adr/005-backtesting-py-mvp-engine.md) — `run_backtest` signature consumed
 - [ADR-006](../../adr/006-logging-strategy.md) — `get_logger(__name__)` convention
 - Source: `algo_bot/engine/walkforward.py`

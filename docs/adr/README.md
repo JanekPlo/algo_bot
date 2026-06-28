@@ -22,6 +22,7 @@ Format: lekki, oparty na propozycji [Michael Nygard'a](https://cognitect.com/blo
 | [008](008-risk-limits-module.md) | Risk limits module — pure gates + backtester hook | Accepted | 2026-05-24 | 1 |
 | [009](009-walk-forward.md) | Walk-forward analyzer — `algo_bot/engine/walkforward.py` | Accepted | 2026-05-25 | 1 |
 | [010](010-automated-quality-gates-ci-pre-commit.md) | Automated quality gates — CI + pre-commit | Accepted | 2026-05-25 | 1 |
+| [011](011-microstructure-adjustments.md) | Microstructure adjustments — slippage + funding overlay (`algo_bot/microstructure.py`) | Accepted | 2026-06-19 | 2 |
 
 ## Polityka
 
