@@ -108,7 +108,11 @@ def _ensure_datetime_index(df: pd.DataFrame) -> pd.DataFrame:
         else:
             df.index = idx.tz_convert("UTC")
     elif "datetime" in df.columns:
-        df["datetime"] = pd.to_datetime(df["datetime"], utc=True)
+        # format="ISO8601": Binance fundingTime miewa jitter ms (np.
+        # "08:00:00.001000+00:00" obok "08:00:00+00:00") — pandas 2.x
+        # wnioskuje format z pierwszego wiersza i pada na mieszanej
+        # precyzji. ISO8601 parsuje oba warianty (fix Sesja 4, 2026-07-04).
+        df["datetime"] = pd.to_datetime(df["datetime"], utc=True, format="ISO8601")
         df = df.set_index("datetime")
     elif "ts" in df.columns:
         df["datetime"] = pd.to_datetime(df["ts"].astype("int64"), unit="ms", utc=True)

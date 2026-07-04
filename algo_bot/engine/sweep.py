@@ -196,6 +196,13 @@ KEEP_KEYS = [
 ]
 
 
+# Metryki eksportowane z MetricsSummary (ADR-007) do index.csv — raw + post.
+# Emitowane ZAWSZE (None gdy brak summary) — stały schemat kolumn per wiersz,
+# inaczej DictWriter rozjeżdża wiersze względem raz zapisanego nagłówka.
+# Sesja 4: filtry selekcyjne do walk-forward liczą się wprost z index.csv.
+_SUMMARY_EXPORT_KEYS = ("sharpe", "calmar", "profit_factor", "max_drawdown_pct", "n_trades")
+
+
 def extract_metrics(stats: dict[str, Any]) -> dict[str, Any]:
     d = {}
     for k in KEEP_KEYS:
@@ -204,13 +211,12 @@ def extract_metrics(stats: dict[str, Any]) -> dict[str, Any]:
     # Microstructure breakdown (ADR-011) — totals + config jako ms:*.
     if "_microstructure" in stats:
         d.update({f"ms:{k}": v for k, v in stats["_microstructure"].items()})
-    # Raw vs post-microstructure Sharpe do rankingu sweepa (post = realny edge).
+    # Raw vs post-microstructure do rankingu sweepa (post = realny edge).
     raw = stats.get("_metrics_summary_raw")
-    if isinstance(raw, dict) and "sharpe" in raw:
-        d["sharpe_raw"] = raw["sharpe"]
     post = stats.get("_metrics_summary_post_microstructure")
-    if isinstance(post, dict) and "sharpe" in post:
-        d["sharpe_post"] = post["sharpe"]
+    for key in _SUMMARY_EXPORT_KEYS:
+        d[f"{key}_raw"] = raw.get(key) if isinstance(raw, dict) else None
+        d[f"{key}_post"] = post.get(key) if isinstance(post, dict) else None
     return d
 
 
@@ -459,6 +465,7 @@ def main():
                         "symbol": sym,
                         "timeframe": tf,
                         "mode": mode,
+                        "space_file": os.path.basename(args.space_file) if args.space_file else "",
                         "params": json.dumps(p_clean, sort_keys=True),
                         "path": outdir,
                         **extract_metrics(dict(stats)),
@@ -491,6 +498,9 @@ def main():
                             "timeframe": tf,
                             "mode": f"{mode}+walkforward",
                             "wf_window": k,
+                            "space_file": (
+                                os.path.basename(args.space_file) if args.space_file else ""
+                            ),
                             "params": json.dumps(p_clean, sort_keys=True),
                             "path": outdir,
                             **extract_metrics(dict(stats)),

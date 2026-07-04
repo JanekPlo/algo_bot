@@ -17,6 +17,22 @@ Sekcje na każdą wersję:
 
 ## [Unreleased]
 
+### Added (Phase 2 Session 4 — in-sample sweep, 2026-07-04)
+- **`StrategyBase.precompute(df)` hook** — optional one-shot vectorised indicator precomputation called by the backtest wrapper with the full dataset before the bar loop. Causality contract in the docstring: only indicators where value at `t` depends on data `<= t` may be cached. Implemented in `bghtrend_pullback` (3×EMA + ATR + xtrender cached, `on_bar` reads `.iloc[:m]` prefixes); live path unchanged (fallback recomputes per prefix).
+- **`tests/test_bghtrend_precompute_equivalence.py`** — no-mock equivalence proof: (a) prefix-invariance of EMA/ATR/x_long (`rtol=1e-12`), (b) bar-by-bar identical `Signal` sequence live-path vs precompute-path on 700 synthetic bars, with a non-vacuous guard (fixture must produce real entries+exits).
+- **Sweep `index.csv` selection columns** — `extract_metrics` now exports the full ADR-007 selection set from both summaries (`sharpe/calmar/profit_factor/max_drawdown_pct/n_trades` × `_raw`/`_post`, keys always emitted → stable header for `DictWriter`) plus a `space_file` column (b1 vs b2 were indistinguishable on the same symbol/TF). WF-candidate filters compute directly from `index.csv`.
+- **Docs (English):** `docs/guides/running-sweep.md` (CLI, index schema, interpretation heuristics A-E, worth-WF thresholds), `docs/guides/running-backtest.md` (CLI, outputs, troubleshooting), `docs/reference/metrics-reference.md` (DRAFT — ADR-007 metrics with crypto context; WF section lands in Session 5).
+- **`notebooks/03_bghtrend_sweep_and_walkforward.ipynb`** — section 1 "Sweep review": PRIOR (recorded before results), heuristics A-E, WF-candidate filters, dumps `results/experiments/sweep_review.json`. Sections 2-6 reserved for Sessions 5-8.
+- **ROADMAP: Session 4b (ad-hoc) — VPS research runner** — sweeps/backtests on a VPS in tmux (env via deploy key + conda/TA-Lib, rsync data/results, `--index_csv`-per-run or file lock before parallelism).
+
+### Changed (Phase 2 Session 4)
+- **`config/bghtrend_b1..b4.yaml`: `__n: 5 → 30`** — 5 random samples per config was statistically vacuous for top-N interpretation; 30 gives the clustering heuristics signal. Note: `__n` in the space file overrides `--n_samples` (documented in running-sweep.md).
+- **Backtest wrapper `_current_df()` no longer copies** — per-bar full-prefix `.copy()` was one of two O(n²) sources (86+ min for a single 15m backtest; ~4.5 min after the fix, ~20× faster). Contract: strategies treat the df as read-only.
+
+### Fixed (Phase 2 Session 4)
+- **O(n²) backtest loop** — `bghtrend_pullback.on_bar` recomputed all indicators on the whole prefix every bar; combined with the per-bar prefix copy this made 15m full-history sweeps infeasible (ETA ~43 h for 30 samples). Fixed via `precompute` + no-copy (see Added/Changed).
+- **`data_loader._ensure_datetime_index`** — Binance `fundingTime` has millisecond jitter (`08:00:00.001000` next to `08:00:00`); pandas 2.x infers the format from the first row and hard-fails on mixed precision. `format="ISO8601"` parses both variants (shared with the OHLCV path, which is ISO-compatible).
+
 ### Added (Phase 2 Session 3 — ADR-011 microstructure adjustments, 2026-06-19)
 - **`algo_bot/microstructure.py`** — pure, I/O-free overlay charging slippage + perpetual funding on top of the raw backtest. Frozen dataclasses (`MicrostructureConfig`, `TradeCost`, `MicrostructureResult`) + pure functions (`slippage_cost`, `settlements_in_window`, `synthetic_funding_series`, `resolve_funding`, `funding_flows_for_trade`, `funding_cost_for_trade`, `apply_microstructure`). Slippage = constant `slip_bps`/side cash debit at entry+exit; funding = per-settlement (8 h) `Notional × Rate`, longs pay shorts when positive, charged only for positions open at the settlement instant (half-open `(entry, exit]`). Both subtracted from the raw equity curve → `equity_adjusted` and from trade PnL → `pnl_post`. mypy strict-on-new.
 - **`tests/test_microstructure.py`** — independent arithmetic oracle (handcomputed literals, no pandas re-application, no mocks): funding from `Notional × Rate` worked examples, slippage from `notional × bps/1e4`, bar-by-bar equity overlay timeline, tz-aware normalisation. Funding math reproduced from Binance docs before writing tests (xtrender lesson 2026-06-11).

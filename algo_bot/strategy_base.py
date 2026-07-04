@@ -101,6 +101,30 @@ class StrategyBase(ABC):
         """
         return None
 
+    def precompute(self, df: pd.DataFrame) -> None:
+        """Opcjonalny hook wydajnościowy: jednorazowe policzenie wskaźników.
+
+        Backtester woła tę metodę RAZ przed pętlą, z PEŁNYM df (cała historia
+        którą będzie odtwarzał bar-po-barze). Strategia może policzyć wskaźniki
+        wektorowo na całej serii i cache'ować pełne serie, a w ``on_bar``
+        czytać prefiks ``.iloc[:len(df)]`` zamiast liczyć od zera per bar
+        (usuwa O(n²) — patrz Sesja 4 Fazy 2, 2026-07-04).
+
+        KONTRAKT KAUZALNOŚCI: wolno cache'ować wyłącznie wskaźniki kauzalne —
+        wartość w barze ``t`` zależy tylko od danych ``<= t`` (EMA, ATR, RSI,
+        T3, shift wstecz). Wskaźnik centrowany albo używający ``shift(-k)``
+        złamałby ekwiwalencję prefix-vs-full i wprowadził look-ahead bias.
+        Ekwiwalencję pilnuje test (prefix recompute == precomputed cache).
+
+        W trybie live hook nie jest wołany (df rośnie na żywo) — ``on_bar``
+        musi zachować ścieżkę fallback liczącą wskaźniki z otrzymanego df.
+
+        Args:
+            df: pełny DataFrame OHLCV, ten sam który silnik będzie podawał
+                do ``on_bar`` jako rosnący prefiks.
+        """
+        return None
+
     @abstractmethod
     def on_bar(self, df: pd.DataFrame) -> Signal:
         """

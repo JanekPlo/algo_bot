@@ -186,6 +186,13 @@ def make_bt_wrapper(StratClass, params_obj, risk_limits: RiskLimits | None = Non
             self._algo = StratClass(params_obj)
             self._has_df = hasattr(self.data, "df")
 
+            # Perf hook (Sesja 4 Fazy 2): w init() backtesting.py udostępnia
+            # PEŁNY df (dopiero pętla run() przycina go per bar przez
+            # _set_length). Strategia może więc policzyć wskaźniki wektorowo
+            # raz — kontrakt kauzalności w StrategyBase.precompute.
+            if self._has_df:
+                self._algo.precompute(self.data.df)
+
             # stan egzekucyjny wrappera
             self._pos_side = None  # 'long'/'short'/None — lustrzane do strategii
             self._sl = None  # float
@@ -205,7 +212,10 @@ def make_bt_wrapper(StratClass, params_obj, risk_limits: RiskLimits | None = Non
         def _current_df(self) -> pd.DataFrame:
             n = len(self.data.Close)
             if self._has_df:
-                return self.data.df.iloc[:n].copy()
+                # Bez .copy() — pełna kopia prefiksu per bar dawała O(n²)
+                # (Sesja 4 Fazy 2). Kontrakt: strategia traktuje df jako
+                # read-only; on_bar dostaje slice-view współdzielący bufory.
+                return self.data.df.iloc[:n]
             # fallback: zbuduj df ręcznie
             idx = pd.RangeIndex(n)
             vol = self.data.Volume[:n] if hasattr(self.data, "Volume") else [0] * n

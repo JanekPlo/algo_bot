@@ -1,7 +1,7 @@
 # Implied timeframe: 1h (b2 = medium/permissive; patrz docs/reference/config-reference.md)
 __implied_tf: "1h"
 __mode: random
-__n: 5
+__n: 30
 __seed: 202
 
 ema_fast:   {type: int,   min: 13, max: 21}

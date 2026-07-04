@@ -1,7 +1,7 @@
 # Implied timeframe: 4h (b4 = slow/macro; patrz docs/reference/config-reference.md)
 __implied_tf: "4h"
 __mode: random
-__n: 5
+__n: 30
 __seed: 404
 
 ema_fast:   {type: int,   min: 21, max: 25}

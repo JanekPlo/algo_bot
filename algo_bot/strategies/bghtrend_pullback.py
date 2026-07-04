@@ -140,6 +140,10 @@ class Strategy(StrategyBase):
     _bars_in_trade: int = 0
     _cooldown_left: int = 0
 
+    # cache wskaźników z precompute (backtest); None → ścieżka live/fallback
+    _pre: dict[str, pd.Series] | None = None
+    _pre_len: int = 0
+
     @staticmethod
     def required_features() -> set[str]:
         return {"Open", "High", "Low", "Close"}
@@ -305,6 +309,38 @@ class Strategy(StrategyBase):
         self._trail = None
         self._bars_in_trade = 0
 
+    # ---------- precompute (perf hook, patrz StrategyBase.precompute) ----------
+    def precompute(self, df: pd.DataFrame) -> None:
+        """Jednorazowe, wektorowe policzenie wskaźników na pełnej historii.
+
+        Wszystkie cache'owane wskaźniki są kauzalne (EMA/ATR/RSI/T3/shift
+        wstecz), więc prefiks ``.iloc[:m]`` pełnej serii jest wartościowo
+        identyczny z policzeniem wskaźnika na prefiksie df — dowód:
+        tests/test_bghtrend_precompute_equivalence.py. Usuwa O(n²) z pętli
+        backtestu (Sesja 4 Fazy 2, 2026-07-04).
+        """
+        c = df["Close"]
+        _x_short, x_long, _x_t3, up_dot, down_dot = xtrender_components(
+            c,
+            self.p.short_l1,
+            self.p.short_l2,
+            self.p.short_l3,
+            self.p.long_l1,
+            self.p.long_l2,
+            self.p.t3_len,
+            self.p.t3_b,
+        )
+        self._pre = {
+            "ema21": ema(c, self.p.ema_fast),
+            "ema89": ema(c, self.p.ema_mid),
+            "ema200": ema(c, self.p.ema_slow),
+            "atr": atr(df, self.p.pullback_atr_len),
+            "x_long": x_long,
+            "up_dot": up_dot,
+            "down_dot": down_dot,
+        }
+        self._pre_len = len(df)
+
     # ---------- main ----------
     def on_bar(self, df: pd.DataFrame) -> Signal:
         need = max(
@@ -318,21 +354,33 @@ class Strategy(StrategyBase):
 
         h, lo, c = df["High"], df["Low"], df["Close"]
 
-        ema21 = ema(c, self.p.ema_fast)
-        ema89 = ema(c, self.p.ema_mid)
-        ema200 = ema(c, self.p.ema_slow)
-        atr_s = atr(df, self.p.pullback_atr_len)
+        m = len(df)
+        if self._pre is not None and m <= self._pre_len:
+            # Backtest: prefiksy kauzalnych serii z precompute — O(1) per bar.
+            ema21 = self._pre["ema21"].iloc[:m]
+            ema89 = self._pre["ema89"].iloc[:m]
+            ema200 = self._pre["ema200"].iloc[:m]
+            atr_s = self._pre["atr"].iloc[:m]
+            x_long = self._pre["x_long"].iloc[:m]
+            up_dot = self._pre["up_dot"].iloc[:m]
+            down_dot = self._pre["down_dot"].iloc[:m]
+        else:
+            # Live/fallback: licz z otrzymanego df (dotychczasowa ścieżka).
+            ema21 = ema(c, self.p.ema_fast)
+            ema89 = ema(c, self.p.ema_mid)
+            ema200 = ema(c, self.p.ema_slow)
+            atr_s = atr(df, self.p.pullback_atr_len)
 
-        _x_short, x_long, _x_t3, up_dot, down_dot = xtrender_components(
-            c,
-            self.p.short_l1,
-            self.p.short_l2,
-            self.p.short_l3,
-            self.p.long_l1,
-            self.p.long_l2,
-            self.p.t3_len,
-            self.p.t3_b,
-        )
+            _x_short, x_long, _x_t3, up_dot, down_dot = xtrender_components(
+                c,
+                self.p.short_l1,
+                self.p.short_l2,
+                self.p.short_l3,
+                self.p.long_l1,
+                self.p.long_l2,
+                self.p.t3_len,
+                self.p.t3_b,
+            )
 
         # cooldown po SL
         if self._cooldown_left > 0:

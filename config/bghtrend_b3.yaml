@@ -1,7 +1,7 @@
 # Implied timeframe: 15m (b3 = fast/agile; patrz docs/reference/config-reference.md)
 __implied_tf: "15m"
 __mode: random
-__n: 5
+__n: 30
 __seed: 303
 
 ema_fast:   {type: int,   min: 9,  max: 15}

@@ -142,18 +142,33 @@ Faza 5: Production na VPS              → 1-2 tyg.
 **Cel:** pierwsza orientacja: które parametry bghtrend dają sensowny Sharpe na pełnej historii, czy są clustery w parameter space (dobry znak) czy random (zły).
 
 **Sub-deliverables (kod):**
-- [ ] 6 sweep runs (BTC/ETH × 15m/1h/4h × każdy konfig b1..b4) — łącznie 24 sweep runs, każdy z 5 random samples = 120 backtestów (orientacyjnie, zależy od `__n` w configach po ujednoliceniu)
-- [ ] `results/sweeps/<run_id>/index.csv` × 24, plus top-10 wynik per (symbol, TF)
-- [ ] Manual review: czy top-10 wyników klastruje w parameter space (sąsiednie param sets dają podobny Sharpe) czy losowo rozrzucone
+- [x] Sweep runs — **DONE (partial, świadoma decyzja) 2026-07-04.** Scope zmieniony na matched-TF (Decyzja 1a sesji): 8 runów (b1/b2→1h, b3→15m, b4→4h × BTC+ETH), `__n: 30` (nie 5 — za mało statystycznie). Wykonane 5/8 (b3-BTC-15m, b1×2, b4×2); b2×2 i b3-ETH **wstrzymane celowo** po jednoznacznie negatywnym sygnale z 5 grup (patrz Manual review). Bonus sesji: perf fix O(n²) w pętli backtestu (precompute hook, ~20× szybciej — bez tego sweep 15m był infeasible, ETA 43h) + fix parsowania funding CSV (ISO8601).
+- [x] `index.csv` — **DONE 2026-07-04** — w `results/experiments/index.csv` (nie `results/sweeps/` — tak działa istniejący kod), rozszerzony o `space_file` + pełen zestaw selekcyjny `{sharpe,calmar,profit_factor,max_drawdown_pct,n_trades}×{raw,post}`. Top-10 per grupa w `results/experiments/sweep_review.json` (generowany przez notebook 03).
+- [x] Manual review — **DONE 2026-07-04, wynik NEGATYWNY.** Heurystyki A-E na 5 grupach × 30 sampli: **0 kandydatów po filtrach WF** (sharpe_post>1.5 ∧ PF>1.5 ∧ n_trades>100 ∧ DD>-0.20). Najlepsze top-1 sharpe_post: 0.775 (b4-BTC, ale n_trades=1!), 0.658 (b1-BTC, n_trades=14), b3-15m całe ≤0, b1-ETH prawie całe <0 (cross-symbol fail). Kluczowy pattern: wysokie Sharpe TYLKO przy n_trades rzędu 1-30 (statystycznie puste), sample z setkami trades głęboko ujemne. Per Decyzja 5 kickoffu: brak IS edge → **WF wstrzymany, eskalacja do sesji decyzyjnej pivot/refactor strategii z mózgiem-Claude** (przed Sesją 5).
 
 **Sub-deliverables (docs):**
-- [ ] `docs/guides/running-sweep.md` — YAML space format (random vs grid mode), interpretacja `index.csv`, jak czytać top-N, jak ocenić clustering vs random
-- [ ] `docs/guides/running-backtest.md` — example argumenty, jak czytać `summary.json`, troubleshooting (CSV missing, params nie pasują do strategii, itd.)
-- [ ] `docs/reference/metrics-reference.md` — interpretacja każdej metryki w `_metrics_summary` (post-ADR-007). Co znaczy Sharpe 1.2 w crypto? Calmar trailing 36m vs całość? Recovery time `inf`?
+- [x] `docs/guides/running-sweep.md` — **DONE 2026-07-04** (CLI, schemat index.csv, heurystyki A-E, progi worth-WF)
+- [x] `docs/guides/running-backtest.md` — **DONE 2026-07-04**
+- [x] `docs/reference/metrics-reference.md` — **DONE 2026-07-04 (DRAFT** — WF-specific interpretation w Sesji 5)
+- [x] `notebooks/03_bghtrend_sweep_and_walkforward.ipynb` sekcja "Sweep review" — **DONE 2026-07-04** (PRIOR + heurystyki + zrzut sweep_review.json; sekcje 2-6 czekają na Sesje 5-8)
 
 **Prerequisite:** Sesja 1 (parameter taxonomy), Sesja 2 (dane), Sesja 3 (microstructure — sweep powinien być post-slip).
 
 **Wartość:** orientacja, pierwsze decyzje "co wartość brać do WF". Bez tego WF byłby na losowo wybranym param set.
+
+### Sesja 4b (ad-hoc) — VPS research runner
+
+**Cel:** sweepy/backtesty/WF odpalane na VPS w tmux zamiast na desktopie — komp nie musi być włączony przez wielogodzinne kolejki; docelowo research compute 24/7. Zidentyfikowane w Sesji 4 (2026-07-04), gdy kolejka 8 sweepów zajęła ~6h desktopa.
+
+**Sub-deliverables (kod/ops):**
+- [ ] Env na VPS: klon repo (deploy key) + `conda env create -f environment.yml` (TA-Lib z conda-forge) + smoke test `make check`
+- [ ] Data sync: `rsync bot_data/processed/` PC→VPS, `rsync results/` VPS→PC (results/ nie żyje w gicie); prosty skrypt lub Makefile targets `sync-up`/`sync-down`
+- [ ] Równoległość per config: globalny append do `results/experiments/index.csv` nie jest multi-process safe — flaga `--index_csv <path>` per run albo file lock. Bez tego na VPS lecimy sekwencyjnie w tmux (akceptowalne na start)
+- [ ] `docs/guides/vps-research-runner.md` — thin runbook: setup, tmux, sync, czego nie robić (równoległe pisanie do tego samego index.csv)
+
+**Prerequisite:** Sesja 4 (żeby wiedzieć ile compute realnie potrzeba). Nie blokuje Sesji 5 — WF na top-kandydatach może iść jeszcze na desktopie.
+
+**Wartość:** research odklejony od włączonego PC; przygotowuje grunt pod VPS Fazy 5 (ten sam host może służyć za live runner później).
 
 ### Sesja 5 — Walk-forward bghtrend na top params + Notebook 03
 
