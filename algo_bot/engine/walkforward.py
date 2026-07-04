@@ -20,7 +20,7 @@ from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 import pandas as pd
 
@@ -611,7 +611,9 @@ def compute_mvp_pass(distribution: pd.DataFrame) -> dict[str, bool]:
             out[k] = False
             continue
         try:
-            val = float(means[k])
+            # means[k] to skalar, ale pandas-stubs typuje Series.__getitem__ jako
+            # Any | Series — cast informuje mypy, że to float (no-op w runtime).
+            val = float(cast(float, means[k]))
         except (TypeError, ValueError):
             out[k] = False
             continue
