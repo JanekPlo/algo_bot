@@ -17,6 +17,14 @@ Sekcje na każdą wersję:
 
 ## [Unreleased]
 
+### Added (Phase 2 Session 4b — VPS research runner, 2026-07-04)
+- **`scripts/vps-sync.sh`** — rsync wrapper with `up` (`bot_data/processed/` PC→VPS) and `down` (`results/` VPS→PC) subcommands. Config via `VPS_HOST` / `VPS_REPO` / `RSYNC_OPTS`; `--dry-run` supported. No `--delete` (a wrong `VPS_HOST` can never wipe local `results/`); no secrets touched (Decision 5 — only market data and results move).
+- **Makefile targets `sync-up` / `sync-down`** — thin wrappers over `scripts/vps-sync.sh`, require `VPS_HOST=...`.
+- **`docs/guides/vps-research-runner.md`** (English) — thin runbook: miniforge install, read-only deploy-key clone, `conda env create` + `make check` smoke, dataset sync, running sweeps in tmux, results pull-back, end-to-end smoke test, and anti-patterns (no parallel writes to `index.csv`, no `algo-fetch` on the VPS, no secrets, no `rsync --delete`).
+- **Decisions (5):** (1) env = miniforge + `environment.yml` — TA-Lib atomically from conda-forge, matches WSL; (2) data source = rsync `processed/` from PC — reproducibility over freshness (a VPS-side `algo-fetch` would drift the dataset and break PC↔VPS comparability); (3) parallelism = sequential in tmux — `results/experiments/index.csv` append is not multi-process safe, `--index_csv`-per-run deferred; (4) results transport = rsync `results/` back to PC where notebook 03 / brain-Claude live; (5) security = fresh read-only deploy key generated on the VPS, no `.env`/API keys on the box.
+- **No `algo_bot/` code touched** — sequential-in-tmux (Decision 3) needs zero code change; the parallelism flag is an explicit follow-up, not part of 4b.
+- **Operator-run items** (sandbox cannot reach the VPS or the network): VPS provisioning, `make check` on the VPS, `sync-up`, and the smoke sweep are executed from the WSL/VPS terminals per the runbook and confirmed back. Reference host: OVH VPS-2, 6 vCores / 12 GB RAM / 100 GB, Ubuntu 22.04 LTS, `os-waw2`.
+
 ### Added (Phase 2 Session 4 — in-sample sweep, 2026-07-04)
 - **`StrategyBase.precompute(df)` hook** — optional one-shot vectorised indicator precomputation called by the backtest wrapper with the full dataset before the bar loop. Causality contract in the docstring: only indicators where value at `t` depends on data `<= t` may be cached. Implemented in `bghtrend_pullback` (3×EMA + ATR + xtrender cached, `on_bar` reads `.iloc[:m]` prefixes); live path unchanged (fallback recomputes per prefix).
 - **`tests/test_bghtrend_precompute_equivalence.py`** — no-mock equivalence proof: (a) prefix-invariance of EMA/ATR/x_long (`rtol=1e-12`), (b) bar-by-bar identical `Signal` sequence live-path vs precompute-path on 700 synthetic bars, with a non-vacuous guard (fixture must produce real entries+exits).

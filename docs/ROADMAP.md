@@ -160,11 +160,14 @@ Faza 5: Production na VPS              → 1-2 tyg.
 
 **Cel:** sweepy/backtesty/WF odpalane na VPS w tmux zamiast na desktopie — komp nie musi być włączony przez wielogodzinne kolejki; docelowo research compute 24/7. Zidentyfikowane w Sesji 4 (2026-07-04), gdy kolejka 8 sweepów zajęła ~6h desktopa.
 
+**Decyzje (5) uzgodnione 2026-07-04** (opcje + trade-offs w CHANGELOG [Unreleased] / `docs/guides/vps-research-runner.md`): (1) env = miniforge + `environment.yml`; (2) źródło danych = rsync `processed/` z PC (powtarzalność > świeżość); (3) równoległość = sekwencyjnie w tmux, flaga `--index_csv` odłożona; (4) transport wyników = rsync `results/` VPS→PC; (5) bezpieczeństwo = świeży read-only deploy key na VPS, zero sekretów. Host: OVH VPS-2, 6 vCore / 12 GB / 100 GB, Ubuntu 22.04 LTS, `os-waw2`.
+
 **Sub-deliverables (kod/ops):**
-- [ ] Env na VPS: klon repo (deploy key) + `conda env create -f environment.yml` (TA-Lib z conda-forge) + smoke test `make check`
-- [ ] Data sync: `rsync bot_data/processed/` PC→VPS, `rsync results/` VPS→PC (results/ nie żyje w gicie); prosty skrypt lub Makefile targets `sync-up`/`sync-down`
-- [ ] Równoległość per config: globalny append do `results/experiments/index.csv` nie jest multi-process safe — flaga `--index_csv <path>` per run albo file lock. Bez tego na VPS lecimy sekwencyjnie w tmux (akceptowalne na start)
-- [ ] `docs/guides/vps-research-runner.md` — thin runbook: setup, tmux, sync, czego nie robić (równoległe pisanie do tego samego index.csv)
+- [x] Data sync tooling — **DONE 2026-07-04** — `scripts/vps-sync.sh` (`up`/`down`, `--dry-run`, bez `--delete`, bez sekretów) + Makefile targets `sync-up` / `sync-down` (wymagają `VPS_HOST=`).
+- [x] Równoległość — **DONE 2026-07-04 (decyzja)** — sekwencyjnie w tmux (Decyzja 3, zero zmian kodu); `results/experiments/index.csv` append nie jest multi-process safe; flaga `--index_csv <path>` per run to świadomie odłożony follow-up (osobny mini-deliverable z testem, gdy sekwencyjnie zacznie boleć na 6 vCore).
+- [x] `docs/guides/vps-research-runner.md` — **DONE 2026-07-04** — thin runbook (EN): miniforge, read-only deploy key + clone, `make env`/`make install`/`make check` smoke, sync-up/down, tmux, end-to-end smoke sweep, anti-patterns.
+- [ ] Env na VPS: klon repo (deploy key) + `conda env create -f environment.yml` + smoke `make check` — **runbook gotowy (Part A), pending operator run** (sandbox nie sięga VPS/network).
+- [ ] Smoke test: krótki `algo-sweep` w tmux + `sync-down`, wiersz wraca na PC — **procedura gotowa (runbook), pending operator run.**
 
 **Prerequisite:** Sesja 4 (żeby wiedzieć ile compute realnie potrzeba). Nie blokuje Sesji 5 — WF na top-kandydatach może iść jeszcze na desktopie.
 

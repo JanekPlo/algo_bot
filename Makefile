@@ -101,6 +101,17 @@ backtest:  ## algo-backtest [ARGS=...]  (skrot)
 sweep:  ## algo-sweep [ARGS=...]  (skrot)
 	algo-sweep $(ARGS)
 
+# === VPS research runner (Sesja 4b) =========================================
+# Sync danych/wynikow z VPS. Wymaga VPS_HOST (SSH alias lub user@host).
+# Szczegoly: docs/guides/vps-research-runner.md
+.PHONY: sync-up
+sync-up:  ## rsync bot_data/processed/ PC->VPS (wymaga VPS_HOST=...)
+	VPS_HOST=$(VPS_HOST) scripts/vps-sync.sh up
+
+.PHONY: sync-down
+sync-down:  ## rsync results/ VPS->PC (wymaga VPS_HOST=...)
+	VPS_HOST=$(VPS_HOST) scripts/vps-sync.sh down
+
 # === Pre-commit ==============================================================
 .PHONY: precommit-install
 precommit-install:  ## Zainstaluj pre-commit hooks (jednorazowo)
