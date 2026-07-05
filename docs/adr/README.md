@@ -23,6 +23,8 @@ Format: lekki, oparty na propozycji [Michael Nygard'a](https://cognitect.com/blo
 | [009](009-walk-forward.md) | Walk-forward analyzer — `algo_bot/engine/walkforward.py` | Accepted | 2026-05-25 | 1 |
 | [010](010-automated-quality-gates-ci-pre-commit.md) | Automated quality gates — CI + pre-commit | Accepted | 2026-05-25 | 1 |
 | [011](011-microstructure-adjustments.md) | Microstructure adjustments — slippage + funding overlay (`algo_bot/microstructure.py`) | Accepted | 2026-06-19 | 2 |
+| [012](012-mvp-no-go-bghtrend.md) | MVP no-go for `bghtrend_pullback` — kept as historical baseline | Accepted | 2026-07-05 | 2 |
+| [013](013-wf-eligibility-thresholds.md) | WF-eligibility thresholds — pre-WF filter (`WF_ELIGIBILITY_THRESHOLDS`) | Accepted | 2026-07-05 | 2 |
 
 ## Polityka
 

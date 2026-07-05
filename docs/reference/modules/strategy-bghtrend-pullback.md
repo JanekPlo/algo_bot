@@ -1,6 +1,16 @@
 # Module reference — `algo_bot.strategies.bghtrend_pullback`
 
-The Phase 2 MVP candidate. A trend-following pullback strategy: it identifies a strong directional regime with a three-EMA stack, waits for price to retrace toward the mid EMA (EMA89), confirms re-acceleration with the Xtrender momentum oscillator, and enters in the trend direction with an ATR-based stop, a fixed reward:risk target, and an ATR trailing stop. Single-symbol, single-position, long/short.
+> **⚠️ DEPRECATED as MVP candidate per [ADR-012](../../adr/012-mvp-no-go-bghtrend.md) (2026-07-05).**
+> The Session 4 in-sample sweep (2026-07-04) found **no exploitable edge**: 0 of 150
+> post-microstructure configurations cleared the WF-eligibility filter, high Sharpe
+> appeared only on 1-3-trade samples, and the edge did not transfer BTC→ETH.
+> The strategy is **kept in the repo as a historical baseline / zero-edge comparator**,
+> not as an active line of work. Phase 2 pivoted to a mean-reversion candidate
+> (`MR-Session` map in the ROADMAP). This reference is retained for that comparator
+> role and as documentation of what a failed sweep looks like — the code and sweep
+> configs (`bghtrend_b1..b4.yaml`) are unchanged. Evidence: `results/experiments/sweep_review.json`.
+
+The (former) Phase 2 MVP candidate. A trend-following pullback strategy: it identifies a strong directional regime with a three-EMA stack, waits for price to retrace toward the mid EMA (EMA89), confirms re-acceleration with the Xtrender momentum oscillator, and enters in the trend direction with an ATR-based stop, a fixed reward:risk target, and an ATR trailing stop. Single-symbol, single-position, long/short.
 
 This is a hybrid reference: critical paths (entry gate, exit precedence, SL/TP/trail math) are shown as the actual code; mechanical helpers (indicator computation, slope normalisation) are summarised. For the momentum oscillator in isolation see [indicators-xtrender](indicators-xtrender.md). The strategy/Signal API contract is [ADR-003](../../adr/003-strategybase-signal-api.md). Sweep configurations are documented in [config-reference](../config-reference.md).
 

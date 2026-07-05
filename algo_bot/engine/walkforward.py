@@ -44,11 +44,40 @@ WF_OUT_DIR = os.path.join(PROJECT_ROOT, "results", "walkforward")
 # Phase 2 MVP success criteria (ROADMAP linie 100-104). Wszystkie używają
 # kierunku "wartość średnia >= próg". DD jest reprezentowany jako liczba
 # ujemna (loss), więc >= -0.25 oznacza "strata <= 25%".
+#
+# UWAGA — dwa różne progi, dwa różne pytania (ADR-013):
+#   * MVP_THRESHOLDS         = POST-WF go-live gate. "Czy strategia jest gotowa
+#     na testnet/live po walk-forwardzie?" (ADR-009). NIE ruszamy tego bez
+#     ekonomicznej podstawy — to brama na żywy kapitał.
+#   * WF_ELIGIBILITY_THRESHOLDS = PRE-WF filter (niżej). "Czy in-sample sweep
+#     result jest wart drogiego walk-forwardu?" — inne pytanie, inny (luźniejszy
+#     n_trades / DD) próg, świadomie skalibrowany post-Sesja 4.
 MVP_THRESHOLDS: dict[str, float] = {
     "sharpe": 1.0,
     "max_drawdown_pct": -0.25,
     "profit_factor": 1.3,
     "n_trades": 50.0,
+}
+
+# Pre-WF eligibility filter (ADR-013). Stosowany na in-sample sweep review
+# (notebook 03, docs/guides/running-sweep.md) do decyzji "które konfiguracje
+# są warte walk-forwardu". NIE jest wpięty w compute_mvp_pass — to filtr
+# operatorski nad index.csv, nie post-WF gate.
+#
+# Kalibracja (ADR-013): pierwotny arbitralny pre-WF Sharpe 1.5 zawyżał bar.
+# Przy realistycznym IS→OOS decay 0.5-0.7x, in-sample Sharpe 1.0 mapuje na
+# ~0.5-0.7 OOS — wystarczy by wejść w WF i ZOBACZYĆ decay (aktywacja WF jest
+# tania decyzyjnie względem straconej szansy na realny edge). Brak konfliktu
+# z MVP_THRESHOLDS: tam Sharpe 1.0 to POST-WF go-live, tu 1.0 to PRE-WF wstęp.
+# n_trades 100 (ostrzej niż MVP 50) i DD -0.20 (ostrzej niż MVP -0.25) —
+# in-sample łatwiej nazbierać trade'ów, więc wymagamy więcej statystyki i
+# ciaśniejszego DD zanim uznamy sweep sample za warty WF (Sesja 4 pokazała,
+# że wysokie Sharpe siedzą na n_trades≈1 — dlatego twardy próg liczby trade'ów).
+WF_ELIGIBILITY_THRESHOLDS: dict[str, float] = {
+    "sharpe": 1.0,
+    "profit_factor": 1.3,
+    "n_trades": 100.0,
+    "max_drawdown_pct": -0.20,
 }
 
 

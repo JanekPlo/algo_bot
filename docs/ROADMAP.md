@@ -71,11 +71,42 @@ Faza 5: Production na VPS              → 1-2 tyg.
 
 **Cel:** wybrana strategia ma statystycznie istotną przewagę w out-of-sample, nie tylko w in-sample sweep.
 
-**Wybór strategii kandydatki:** **bghtrend_pullback** — jest najbardziej dopracowana, ma sensowną tezę ekonomiczną (trend + pullback z xtrenderem jako filtrem momentum), ma cooldown i ATR-trail (już zaimplementowane).
+**Wybór strategii kandydatki:** ~~**bghtrend_pullback**~~ → **NO-GO (ADR-012, 2026-07-05)**. bghtrend była pierwszą kandydatką (najbardziej dopracowana, teza trend+pullback+xtrender), ale Sesja 4 sweep nie znalazła edge'u. Pivot na **mean-reversion (Bollinger Bands + RSI)** — patrz status i MR-Session map niżej.
 
 **Kontekst:** Faza 1 zamknięta 2026-05-25 (Decyzje A-G + C/D/E/F + ADR-010 CI). Foundation kompletna — `algo_bot.metrics`, `algo_bot.risk`, `algo_bot.engine.walkforward`, logging, CI, pre-commit, wszystkie CLI entries. Wchodzimy w research / walidację strategii. Sesje stają się dłuższe (notebooki, analiza, interpretacja statystyczna) niż w Fazie 1, ale mniej decyzji architektonicznych skali D/E/F — większość pracy to operacje na istniejącym frameworze.
 
-**Mapa sesji Fazy 2** (8 sesji, ~16-22h pracy łącznie, planowo 2-4 tygodnie):
+> **Status update (2026-07-05) — PIVOT.** The bghtrend candidate was declared a
+> **no-go** in [ADR-012](adr/012-mvp-no-go-bghtrend.md): the Session 4 in-sample sweep
+> (2026-07-04) found no exploitable edge — 0/150 post-microstructure configs cleared the
+> WF-eligibility filter, high Sharpe appeared only on 1-3-trade samples, and the edge did
+> not transfer BTC→ETH (evidence: `results/experiments/sweep_review.json`). Sessions 1-4/4b
+> below are **kept as the historical bghtrend record** (done, valid work — the framework
+> professionally disqualified its first candidate). The walk-forward / Monte Carlo / stress /
+> go-no-go sessions originally numbered **5-8 are retired** as a bghtrend line, superseded by
+> the **MR-Session map** below; they stay readable as a conceptual template for any candidate.
+
+#### Phase 2 pivot — MR-Session map (mean-reversion candidate, from 2026-07-05)
+
+- **MR-Session Alpha (Pivot A+B) — DONE 2026-07-05** — ADR-012 (bghtrend no-go),
+  ADR-013 + new `WF_ELIGIBILITY_THRESHOLDS` constant (pre-WF filter calibration 1.5→1.0),
+  regime-robustness sanity-check step in `running-sweep.md`. (This session.)
+- **MR-Session Beta (Selection + Implementation start)** — new strategy
+  `algo_bot/strategies/mean_reversion_bb_rsi.py` (long-only: `close < BB_lower ∧ RSI < oversold`,
+  target = BB middle, SL = 2×ATR, stale timeout), `bbands()` added to `indicators/core.py`
+  (currently absent — only `ema/rsi/atr/t3` exist), `config/mr_b1..b3.yaml` sweep spaces
+  informed by the Mastermind theses (mastermindzx.pl) as a parameter prior, tests
+  (params / entry gates / exit precedence / precompute equivalence), legacy
+  `bollinger_band_breakout_short.py` removed, deep-reference skeleton.
+- **MR-Session 1 (Audit)** — full deep reference + parameter taxonomy + Mastermind
+  cross-check (analog to the bghtrend Session 1).
+- **MR-Session 2 (Sweep)** — sweep on `mr_b1..b3` under `WF_ELIGIBILITY_THRESHOLDS` +
+  rolling per-year regime-robustness (analog to Session 4).
+- **MR-Session 3+ (WF → MC → Stress → ADR go/no-go)** — only if the sweep clears the
+  eligibility filter; otherwise an MR no-go ADR and the next pivot (breakout / funding arb / …).
+
+---
+
+**Mapa sesji Fazy 2 — bghtrend line (Sesje 1-4 historical / done; Sesje 5-8 retired per ADR-012)** (oryginalnie 8 sesji, ~16-22h; retained for reference):
 
 ### Sesja 1 — Audit strategii + configi + parameter taxonomy
 
@@ -173,7 +204,7 @@ Faza 5: Production na VPS              → 1-2 tyg.
 
 **Wartość:** research odklejony od włączonego PC; przygotowuje grunt pod VPS Fazy 5 (ten sam host może służyć za live runner później).
 
-### Sesja 5 — Walk-forward bghtrend na top params + Notebook 03
+### Sesja 5 — Walk-forward bghtrend na top params + Notebook 03 — RETIRED (ADR-012 pivot; template for MR-Session 3)
 
 **Cel:** serce Fazy 2. Walk-forward (minimum 5 fold, np. train 12m / test 3m / step 3m) na 2-3 najlepszych konfiguracjach z sesji 4. Pierwsza próba pass/fail kryteriów MVP.
 
@@ -191,7 +222,7 @@ Faza 5: Production na VPS              → 1-2 tyg.
 
 **Wartość:** podstawowa walidacja MVP. Po tej sesji wiemy czy bghtrend ma szansę, czy iterujemy.
 
-### Sesja 6 — Monte Carlo bootstrap + parameter stability heatmap
+### Sesja 6 — Monte Carlo bootstrap + parameter stability heatmap — RETIRED (ADR-012 pivot; template for later MR-Session)
 
 **Cel:** robustness checks. Czy WF Sharpe to edge czy lucky path? Czy strategia jest wrażliwa na małe zmiany parametrów?
 
@@ -208,7 +239,7 @@ Faza 5: Production na VPS              → 1-2 tyg.
 
 **Wartość:** weryfikacja czy MVP pass z sesji 5 to nie szczęście. Jeśli realny max DD jest w 5% lewym ogonie bootstrap distribution → trzeba przemyśleć. Heatmap stability mówi czy strategia jest "robust plateau" czy "knife edge".
 
-### Sesja 7 — Stress test na 4 reżimach
+### Sesja 7 — Stress test na 4 reżimach — RETIRED (ADR-012 pivot; template for later MR-Session)
 
 **Cel:** czy strategia przeżyła historyczne katastrofy. Trend-following typowo radzi sobie z grindującymi bear markets ale dostaje po głowie od V-shape recovery i mass liquidation events.
 
@@ -224,7 +255,7 @@ Faza 5: Production na VPS              → 1-2 tyg.
 
 **Wartość:** sanity check. Strategia która przeżyła wszystkie 4 reżimy jest gotowa na testnet. Strategia która umarła w 2020-03 nie idzie na żywy kapitał bez review.
 
-### Sesja 8 — Decyzja MVP go/no-go + ADR-012
+### Sesja 8 — Decyzja MVP go/no-go + ADR-012 — RETIRED (ADR-012 delivered early 2026-07-05 as the bghtrend NO-GO, not a go; template for MR-Session go/no-go)
 
 **Cel:** formalna decyzja: bghtrend w obecnej formie idzie do Fazy 3 (testnet/paper) lub iteracja parametrów / strategii.
 
@@ -245,8 +276,8 @@ Faza 5: Production na VPS              → 1-2 tyg.
 | ADR | Sesja | Decyzja |
 |---|---|---|
 | ADR-011 | 3 | Microstructure adjustments — gdzie i jak |
-| ADR-012 | 8 | MVP go/no-go |
-| (opc.) ADR-013 | 5 lub 6 | Diagnostics package layout (Monte Carlo + parameter stability) jeśli wydzielamy z notebooka do `algo_bot.diagnostics` |
+| ADR-012 | Pivot A (2026-07-05) | MVP **no-go** dla bghtrend (nie "go" — sweep bez edge'u); kept-as-baseline |
+| ADR-013 | Pivot A (2026-07-05) | WF-eligibility thresholds — pre-WF filter `WF_ELIGIBILITY_THRESHOLDS` (przeniesienie z pierwotnego "diagnostics package"; diagnostics wróci jako osobny ADR w MR-cyklu jeśli wydzielimy `algo_bot.diagnostics`) |
 
 ### Kryteria sukcesu MVP (z ADR-009 `MVP_THRESHOLDS`, hardcoded w `algo_bot.engine.walkforward`)
 

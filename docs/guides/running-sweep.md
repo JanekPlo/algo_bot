@@ -91,21 +91,56 @@ apply all five checks. A high top-1 Sharpe **by itself means nothing** with
   space on BTC vs ETH. Overlapping values → cross-asset edge. Disjoint →
   asset-specific overfit.
 
-## "Worth walk-forward" threshold
+## "Worth walk-forward" threshold — hard filter (`WF_ELIGIBILITY_THRESHOLDS`)
 
-ADR-009 MVP thresholds are **out-of-sample** targets (Sharpe ≥ 1.0,
-maxDD ≥ -0.25, PF ≥ 1.3, n_trades ≥ 50). In-sample results decay roughly
-0.4–0.7× IS→OOS, so a candidate must clear all of:
+The pre-WF filter lives in code as `WF_ELIGIBILITY_THRESHOLDS`
+(`algo_bot.engine.walkforward`, ADR-013) — **import it, do not re-hardcode**:
 
-- `sharpe_post > 1.5`
-- `profit_factor_post > 1.5`
+- `sharpe_post > 1.0`
+- `profit_factor_post > 1.3`
 - `n_trades_post > 100`
 - `max_drawdown_pct_post > -0.20`
+
+This is a **pre-WF** filter ("is this sample worth the expensive walk-forward?"),
+not the ADR-009 `MVP_THRESHOLDS` **post-WF** go-live gate (Sharpe ≥ 1.0,
+maxDD ≥ -0.25, PF ≥ 1.3, n_trades ≥ 50). ADR-013 recalibrated the Sharpe bar
+from an earlier arbitrary `1.5` to `1.0`: with a realistic 0.5–0.7× IS→OOS
+decay an in-sample Sharpe of 1.0 maps to ~0.5–0.7 OOS, which is enough to be
+worth *seeing* the decay in a WF run. `n_trades` (100) and DD (-0.20) are
+**stricter** than the go-live gate on purpose — in-sample it is cheap to
+accumulate trades, and Session 4 showed high Sharpe sitting on `n_trades ≈ 1`
+(statistically empty), so we demand more statistics and a tighter DD before
+spending WF compute.
 
 Rank survivors by `sharpe_post × n_trades / 1000` (rewards edge **and**
 sample size), pick 2–3 per (symbol, timeframe). If nothing survives, that is
 itself a result: the strategy has no in-sample edge and walk-forward would be
-a waste of compute.
+a waste of compute (exactly the bghtrend outcome — ADR-012).
+
+## Regime robustness sanity check (soft gate — run after the hard filter)
+
+Clearing the hard filter is necessary but not sufficient: a single bull regime
+(e.g. 2020–2021) can carry a full-history Sharpe while the strategy bleeds in
+every other year. After the hard filter, for each surviving candidate compute a
+**rolling per-year Sharpe** — split the full backtest window (2019-H2 … 2025)
+into calendar-year bins (6–7 bins) and read `sharpe_post` per bin
+(`algo_bot.metrics.rolling_sharpe`, or a `groupby` on the equity curve's year).
+
+Soft condition: **`n_positive_years ≥ 3` of the 6–7 bins.**
+
+- **Hard pass + broad regime** (positive across ≥ 3 years, not clustered) →
+  proceed to walk-forward with normal confidence.
+- **Hard pass + concentrated regime** (positive only in 2020–2021, negative or
+  flat elsewhere) → **soft NO-GO**, or at minimum treat any subsequent WF result
+  with heavy suspicion: the WF folds landing in the good regime will look great
+  and the rest will drag, and the aggregate can mask a strategy that only works
+  when the whole market trends up.
+
+This stays a **judgment call in the notebook / guide, not a hardcoded constant**:
+seven per-year numbers are something an operator reads and weighs (is the good
+run a regime the strategy is *designed* to exploit, or luck?), not a clean
+threshold — hardwiring it into the code would add complexity without value.
+Record the per-year table and the call in the captains-log next to the WF decision.
 
 ## Statistical awareness
 

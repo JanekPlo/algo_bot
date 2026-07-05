@@ -25,6 +25,7 @@ import pytest
 
 from algo_bot.engine.walkforward import (  # type: ignore[attr-defined]
     MVP_THRESHOLDS,
+    WF_ELIGIBILITY_THRESHOLDS,
     Fold,
     FoldResult,
     WalkForwardConfig,
@@ -530,6 +531,43 @@ class TestComputeMvpPass:
         empty = pd.DataFrame()
         pass_dict = compute_mvp_pass(empty)
         assert pass_dict == dict.fromkeys(MVP_THRESHOLDS, False)
+
+
+class TestWfEligibilityThresholds:
+    """WF_ELIGIBILITY_THRESHOLDS to PRE-WF filter (ADR-013), rozłączny semantycznie
+    z MVP_THRESHOLDS (POST-WF go-live gate). Testy pilnują wartości i relacji
+    między progami — regresję łapiemy, gdyby ktoś je pomylił/zbił."""
+
+    def test_exact_values(self):
+        """Wartości z ADR-013 / kickoffu Pivot A."""
+        assert WF_ELIGIBILITY_THRESHOLDS == {
+            "sharpe": 1.0,
+            "profit_factor": 1.3,
+            "n_trades": 100.0,
+            "max_drawdown_pct": -0.20,
+        }
+
+    def test_distinct_object_from_mvp(self):
+        """To osobna stała, nie alias MVP_THRESHOLDS."""
+        assert WF_ELIGIBILITY_THRESHOLDS is not MVP_THRESHOLDS
+        assert WF_ELIGIBILITY_THRESHOLDS != MVP_THRESHOLDS
+
+    def test_sharpe_pf_aligned_with_mvp(self):
+        """Sharpe i PF są celowo równe MVP go-live (pre-WF 1.0 IS ≈ post-WF 1.0 OOS
+        po decay — patrz ADR-013), więc filtr eligibility nie jest luźniejszy na
+        tych dwóch osiach niż finalna brama."""
+        assert WF_ELIGIBILITY_THRESHOLDS["sharpe"] == MVP_THRESHOLDS["sharpe"]
+        assert WF_ELIGIBILITY_THRESHOLDS["profit_factor"] == MVP_THRESHOLDS["profit_factor"]
+
+    def test_n_trades_stricter_than_mvp(self):
+        """Pre-WF wymaga WIĘCEJ trade'ów niż MVP: in-sample łatwo nazbierać
+        statystyki, a Sesja 4 pokazała wysokie Sharpe na n_trades≈1 (puste)."""
+        assert WF_ELIGIBILITY_THRESHOLDS["n_trades"] > MVP_THRESHOLDS["n_trades"]
+
+    def test_drawdown_stricter_than_mvp(self):
+        """Pre-WF wymaga CIAŚNIEJSZEGO DD (-0.20) niż MVP go-live (-0.25):
+        DD to liczba ujemna, więc 'ciaśniejszy' = bliżej zera = większy."""
+        assert WF_ELIGIBILITY_THRESHOLDS["max_drawdown_pct"] > MVP_THRESHOLDS["max_drawdown_pct"]
 
 
 # ============================================================================
