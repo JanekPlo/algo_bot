@@ -1,0 +1,30 @@
+# Implied timeframe: 1h (mr_b1 = MR baseline STRICT; patrz docs/reference/modules/strategy-mean-reversion-bb-stoch.md)
+# Oś selektywności: b1 strict (wymaga Stocha, głębsze wstęgi) vs b2 relaxed.
+# Zakresy z priora Mastermind MMS: BB 20±..., num_std 2.0±..., Stoch 14/3/3, SL ~2%.
+__implied_tf: "1h"
+__mode: random
+__n: 30
+__seed: 201
+
+# Bollinger Bands — środek SMA, wstęgi ± num_std·std (populacyjne)
+bb_window:  {type: choice, values: [18, 20, 22]}
+bb_num_std: {type: float, min: 2.0, max: 2.5, step: 0.1}
+
+# Stochastic slow 14/3/3, progi kontrariańskie 20/80 (prior Mastermind, zamrożone)
+stoch_k:          {type: choice, values: [14]}
+stoch_d:          {type: choice, values: [3]}
+stoch_smooth:     {type: choice, values: [3]}
+stoch_oversold:   {type: choice, values: [20.0]}
+stoch_overbought: {type: choice, values: [80.0]}
+
+# Wejście — strict: gate Stocha wymagany (bb_stoch), krótkie okno reakcji
+entry_mode:      {type: choice, values: ["bb_stoch"]}
+arm_expiry_bars: {type: choice, values: [1, 2]}
+require_reclaim: {type: choice, values: [false, true]}
+
+# Wyjście — SL stały ~2%, TP=przeciwna żywa wstęga (strukturalne), SL-first
+sl_pct:          {type: float, min: 0.015, max: 0.025, step: 0.005}
+tp_has_priority: {type: choice, values: [false]}
+
+side:           {type: choice, values: ["both"]}
+trade_on_close: {type: choice, values: [true]}

@@ -71,7 +71,7 @@ Faza 5: Production na VPS              → 1-2 tyg.
 
 **Cel:** wybrana strategia ma statystycznie istotną przewagę w out-of-sample, nie tylko w in-sample sweep.
 
-**Wybór strategii kandydatki:** ~~**bghtrend_pullback**~~ → **NO-GO (ADR-012, 2026-07-05)**. bghtrend była pierwszą kandydatką (najbardziej dopracowana, teza trend+pullback+xtrender), ale Sesja 4 sweep nie znalazła edge'u. Pivot na **mean-reversion (Bollinger Bands + RSI)** — patrz status i MR-Session map niżej.
+**Wybór strategii kandydatki:** ~~**bghtrend_pullback**~~ → **NO-GO (ADR-012, 2026-07-05)**. bghtrend była pierwszą kandydatką (najbardziej dopracowana, teza trend+pullback+xtrender), ale Sesja 4 sweep nie znalazła edge'u. Pivot na **mean-reversion (Bollinger Bands + Stochastic)** — patrz status i MR-Session map niżej. (Pierwotnie planowane jako BB+RSI; MR-Session Beta zmieniła oscylator na Stochastic zgodnie z priorem Mastermind MMS.)
 
 **Kontekst:** Faza 1 zamknięta 2026-05-25 (Decyzje A-G + C/D/E/F + ADR-010 CI). Foundation kompletna — `algo_bot.metrics`, `algo_bot.risk`, `algo_bot.engine.walkforward`, logging, CI, pre-commit, wszystkie CLI entries. Wchodzimy w research / walidację strategii. Sesje stają się dłuższe (notebooki, analiza, interpretacja statystyczna) niż w Fazie 1, ale mniej decyzji architektonicznych skali D/E/F — większość pracy to operacje na istniejącym frameworze.
 
@@ -90,13 +90,19 @@ Faza 5: Production na VPS              → 1-2 tyg.
 - **MR-Session Alpha (Pivot A+B) — DONE 2026-07-05** — ADR-012 (bghtrend no-go),
   ADR-013 + new `WF_ELIGIBILITY_THRESHOLDS` constant (pre-WF filter calibration 1.5→1.0),
   regime-robustness sanity-check step in `running-sweep.md`. (This session.)
-- **MR-Session Beta (Selection + Implementation start)** — new strategy
-  `algo_bot/strategies/mean_reversion_bb_rsi.py` (long-only: `close < BB_lower ∧ RSI < oversold`,
-  target = BB middle, SL = 2×ATR, stale timeout), `bbands()` added to `indicators/core.py`
-  (currently absent — only `ema/rsi/atr/t3` exist), `config/mr_b1..b3.yaml` sweep spaces
-  informed by the Mastermind theses (mastermindzx.pl) as a parameter prior, tests
-  (params / entry gates / exit precedence / precompute equivalence), legacy
-  `bollinger_band_breakout_short.py` removed, deep-reference skeleton.
+- **MR-Session Beta (Selection + Implementation start) — DONE 2026-07-10** — new strategy
+  `algo_bot/strategies/mean_reversion_bb_stoch.py` (contrarian **both-directions**: touch of a
+  Bollinger band → armed → first *reaction* candle enters; TP = opposite **live** band;
+  **fixed 2% SL**; **Stochastic** 14/3/3 as an `entry_mode ∈ {bb_only, bb_stoch}` sweep
+  dimension gated at arming; **no** trail/BE/timeout — bare core). `bbands()` + `stochastic()`
+  added to `indicators/core.py` (were absent — only `ema/rsi/atr/t3` existed),
+  `config/mr_b1..b3.yaml` sweep spaces informed by the Mastermind prior (mastermindzx.pl),
+  tests (indicator oracles, params, both-dir entry gates, exit precedence, precompute
+  equivalence), legacy `bollinger_band_breakout_short.py` removed, deep-reference DRAFT
+  skeleton. Decisions + deferred edge (pyramiding + sequential leverage, sizing, timeout →
+  separate ADR) recorded in CHANGELOG [Unreleased]. **Spec reconciled vs the original
+  Pivot-A bullet:** `bb_stoch` not `bb_rsi`, both-dir not long-only, Stochastic not RSI,
+  fixed 2% SL not 2×ATR, TP = opposite band, no timeout.
 - **MR-Session 1 (Audit)** — full deep reference + parameter taxonomy + Mastermind
   cross-check (analog to the bghtrend Session 1).
 - **MR-Session 2 (Sweep)** — sweep on `mr_b1..b3` under `WF_ELIGIBILITY_THRESHOLDS` +
