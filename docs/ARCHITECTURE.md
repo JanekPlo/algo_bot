@@ -33,14 +33,14 @@
 │           ▼             │      │           ▼                            │
 │  ┌─────────────────┐    │      │  ┌──────────────────────────────────┐  │
 │  │ process_data.py │    │      │  │ strategies/*.py                  │  │
-│  │ (indykatory,    │    │      │  │  - bghtrend_pullback (MVP)       │  │
-│  │  feature eng.)  │    │      │  │  - bollinger_band_breakout_short │  │
+│  │ (indykatory,    │    │      │  │  - mean_reversion_bb_stoch (MVP) │  │
+│  │  feature eng.)  │    │      │  │  - bghtrend_pullback (baseline)  │  │
 │  └────────┬────────┘    │      │  │  - simple_momentum, ...          │  │
 │           ▼             │      │  └────────┬─────────────────────────┘  │
 │  bot_data/processed/    │      │           ▼                            │
 │  (CSV: OHLCV + feats)   │      │  ┌──────────────────────────────────┐  │
-│                         │      │  │ indicators/ (xtrender, core,     │  │
-│                         │      │  │  t3, ema, atr, rsi)              │  │
+│                         │      │  │ indicators/ (xtrender, core:     │  │
+│                         │      │  │  t3, ema, atr, rsi, bb, stoch)   │  │
 │                         │      │  └──────────────────────────────────┘  │
 └─────────────────────────┘      └────────────────────────────────────────┘
               │                                  │
@@ -261,8 +261,8 @@ algo_bot/                          # docelowo: root repo (obecnie zagnieżdżone
 │   └── telemetry/
 │       └── journal.py
 ├── strategies/
-│   ├── bghtrend_pullback.py       # MVP
-│   ├── bollinger_band_breakout_short.py
+│   ├── mean_reversion_bb_stoch.py # MVP candidate (pivot 2026-07-05, ADR-012)
+│   ├── bghtrend_pullback.py       # baseline (NO-GO ADR-012)
 │   ├── simple_momentum.py
 │   ├── short_trend_following.py
 │   ├── ema_cross_sig.py

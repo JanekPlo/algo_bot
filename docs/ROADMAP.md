@@ -103,8 +103,24 @@ Faza 5: Production na VPS              → 1-2 tyg.
   separate ADR) recorded in CHANGELOG [Unreleased]. **Spec reconciled vs the original
   Pivot-A bullet:** `bb_stoch` not `bb_rsi`, both-dir not long-only, Stochastic not RSI,
   fixed 2% SL not 2×ATR, TP = opposite band, no timeout.
-- **MR-Session 1 (Audit)** — full deep reference + parameter taxonomy + Mastermind
-  cross-check (analog to the bghtrend Session 1).
+- **MR-Session 1 (Audit) — DONE 2026-07-11** — full deep reference + parameter
+  taxonomy + Mastermind cross-check (analog to the bghtrend Session 1). Delivered:
+  **`docs/references/mms/`** (MMS prior extracted + versioned: README w/ copyright
+  note, 4 HIGH + 2 MEDIUM tab files, 33 full-tab screenshots in `raw/`; `09-backtests`
+  pending source screenshots); `strategy-mean-reversion-bb-stoch.md` **DRAFT → FULL**
+  (hybrid, parameter taxonomy w/ overfitting watchlist ⚠ `bb_num_std` steps / Stoch
+  thresholds / `arm_expiry_bars` / `require_reclaim`, 16-row Mastermind alignment
+  table citing mms/ per row, MR-Session 2 interpretation caveat, known limitations);
+  `indicators-bbands.md` + `indicators-stochastic.md` deep references; independent
+  oracle pass (unpack order / gate-at-arming / SL-first precedence verified clean)
+  mechanised into `TestAuditSeams` (3 state-machine seams) + a hand-derivable bbands
+  identity test; `require_reclaim` docstring drift fixed (zero behaviour change — no
+  real bug found); package-overview/ARCHITECTURE/config-reference drift fix (Beta
+  follow-up closed). Key finding for MR-Session 2: MMS uses Stochastic as the
+  **add-on (pyramiding) filter** (%K&%D cross), not a base-entry gate — Beta's
+  `entry_mode` is a deliberate adaptation; and MMS itself expects the bare core to
+  bleed in strong trends, so a weak sweep ≠ methodology falsified (the deferred
+  sizing layer is the claimed edge).
 - **MR-Session 2 (Sweep)** — sweep on `mr_b1..b3` under `WF_ELIGIBILITY_THRESHOLDS` +
   rolling per-year regime-robustness (analog to Session 4).
 - **MR-Session 3+ (WF → MC → Stress → ADR go/no-go)** — only if the sweep clears the

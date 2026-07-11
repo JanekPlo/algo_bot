@@ -352,6 +352,129 @@ class TestExitPrecedenceIntegration:
 
 
 # =====================================================================
+# 4b. Szwy maszyny stanów armed→reaction (audyt MR-Session 1, 2026-07-11)
+# =====================================================================
+class TestAuditSeams:
+    """Semantyki NIEPOKRYTE w sekcjach 3-4, wytypowane w independent-oracle
+    pass audytu (wyrocznia: ręczne prześledzenie ścieżek on_bar; opis w
+    docs/reference/modules/strategy-mean-reversion-bb-stoch.md):
+    (a) re-touch w oknie armed nie odświeża licznika wygaśnięcia,
+    (b) bar wyjścia nie może tego samego bara uzbroić kierunku,
+    (c) touch obu wstęg jednym barem → brak uzbrojenia.
+    """
+
+    _P: ClassVar[dict] = {
+        "bb_window": 10,
+        "bb_num_std": 1.5,
+        "stoch_k": 5,
+        "stoch_d": 3,
+        "stoch_smooth": 3,
+        "entry_mode": "bb_only",
+        "arm_expiry_bars": 1,
+        "side": "both",
+        "sl_pct": 0.02,
+    }
+
+    def test_arm_expiry_not_refreshed_by_retouch(self):
+        """arm_expiry_bars=1: świeca S arm'uje; następna świeca BEZ reakcji
+        (niedźwiedzia), ale z PONOWNYM dotknięciem wstęgi → rozbrojenie.
+        Gdyby re-touch odświeżał licznik, bycza świeca bar później weszłaby
+        w pozycję — asertujemy, że wejścia nie ma."""
+        i = 30  # pierwszy long setup w _mr_ohlcv
+        df = _mr_ohlcv()
+        c = df["Close"].to_numpy().copy()
+        c[i + 1] = c[i] - 0.5  # niedźwiedzi korpus + nadal głęboko pod wstęgą
+        c[i + 2] = c[i + 1] + 1.5  # bycza reakcja JUŻ PO rozbrojeniu
+        o = np.empty_like(c)
+        o[0] = c[0]
+        o[1:] = c[:-1]
+        h = np.maximum(o, c) + 0.3
+        low = np.minimum(o, c) - 0.3
+        df2 = pd.DataFrame(
+            {"Open": o, "High": h, "Low": low, "Close": c, "Volume": 1.0}, index=df.index
+        )
+
+        strat = Strategy(dict(self._P))
+        enters = []
+        for m in range(1, i + 4):  # ostatni prefiks kończy się na barze i+2
+            sig = strat.on_bar(df2.iloc[:m])
+            if sig.action == "enter":
+                enters.append(m)
+            if m == i + 1:  # po świecy dotknięcia S
+                assert strat._armed_side == "long" and strat._armed_bars == 1
+            if m == i + 2:  # po świecy bez reakcji: rozbrojony, NIE odświeżony
+                assert strat._armed_side is None, "re-touch odświeżył uzbrojenie"
+        # Wcześniejsze wejścia organiczne fixture (sinusoida + bb_only +
+        # arm_expiry_bars=1) są poza zakresem tego testu — liczy się tylko
+        # okno setupu: m=i+2 (świeca bez reakcji) i m=i+3 (bycza świeca,
+        # która weszłaby TYLKO gdyby re-touch odświeżył licznik).
+        critical = [m for m in enters if m in (i + 2, i + 3)]
+        assert critical == [], f"wejście mimo rozbrojenia: bary {critical}"
+
+    def test_exit_bar_does_not_arm(self):
+        """Crash bar łamie SL i jednocześnie dotyka dolnej wstęgi. Exit ma
+        pierwszeństwo i kończy przetwarzanie bara — dotknięcie z bara wyjścia
+        NIE uzbraja. Bycza świeca zaraz po nim nie może więc być wejściem."""
+        base = {**self._P, "side": "long", "arm_expiry_bars": 2}
+        df = _mr_ohlcv()
+        probe = Strategy(dict(base))
+        events = _run_sequence(probe, df)
+        entry_m = next(e["m"] for e in events if e["action"] == "enter")
+        entry_idx = entry_m - 1
+        crash_idx = entry_idx + 1
+        nxt = crash_idx + 1
+        entry_close = float(df["Close"].iloc[entry_idx])
+
+        df2 = df.copy()
+        cols = {k: df2.columns.get_loc(k) for k in ("Open", "High", "Low", "Close")}
+        # crash: SL (2%) przebity z zapasem, Low głęboko pod dolną wstęgą
+        df2.iloc[crash_idx, cols["Open"]] = entry_close
+        df2.iloc[crash_idx, cols["Close"]] = entry_close * 0.97
+        df2.iloc[crash_idx, cols["High"]] = entry_close
+        df2.iloc[crash_idx, cols["Low"]] = entry_close * 0.90
+        # następny bar: jawna bycza reakcja (byłaby wejściem, gdyby crash uzbroił)
+        df2.iloc[nxt, cols["Open"]] = entry_close * 0.97
+        df2.iloc[nxt, cols["Close"]] = entry_close * 0.99
+        df2.iloc[nxt, cols["High"]] = entry_close * 0.995
+        df2.iloc[nxt, cols["Low"]] = entry_close * 0.965
+
+        strat = Strategy(dict(base))
+        sig_exit = sig_next = None
+        for m in range(1, nxt + 2):
+            sig = strat.on_bar(df2.iloc[:m])
+            if m == crash_idx + 1:
+                sig_exit = sig
+                assert strat._armed_side is None, "bar wyjścia uzbroił kierunek"
+            if m == nxt + 1:
+                sig_next = sig
+        assert sig_exit is not None and sig_exit.action == "exit"
+        assert sig_exit.meta["reason"] == "sl_fixed"
+        assert sig_next is not None and sig_next.action != "enter"
+
+    def test_both_bands_touch_no_arm(self):
+        """Gigantyczny bar przebijający OBIE wstęgi naraz → brak jednoznacznego
+        kierunku → brak uzbrojenia (jawna gałąź w on_bar)."""
+        q = 60  # spokojna strefa fixture (między setupem short@50 a long@70)
+        df = _mr_ohlcv()
+        df2 = df.copy()
+        c_q = float(df2["Close"].iloc[q])
+        df2.iloc[q, df2.columns.get_loc("High")] = c_q + 15.0
+        df2.iloc[q, df2.columns.get_loc("Low")] = c_q - 15.0
+
+        strat = Strategy(dict(self._P))
+        sig = None
+        for m in range(1, q + 1):
+            sig = strat.on_bar(df2.iloc[:m])
+        # precondition fixture: przed barem q jesteśmy flat i rozbrojeni
+        assert strat._pos_side is None and strat._armed_side is None, (
+            "precondition fixture nie trzyma — dobierz inny bar q"
+        )
+        sig = strat.on_bar(df2.iloc[: q + 1])
+        assert strat._armed_side is None, "touch obu wstęg uzbroił kierunek"
+        assert sig.action not in ("enter", "exit")
+
+
+# =====================================================================
 # 5. Precompute equivalence — live vs precompute, bar po barze
 # =====================================================================
 class TestPrecomputeEquivalence:

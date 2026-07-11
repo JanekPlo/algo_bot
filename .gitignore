@@ -48,6 +48,7 @@ env/
 .DS_Store
 Thumbs.db
 desktop.ini
+*Zone.Identifier
 
 # === Jupyter ===
 .ipynb_checkpoints/

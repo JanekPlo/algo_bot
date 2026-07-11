@@ -49,15 +49,15 @@ algo_bot/
 │
 ├── indicators/                        # custom wskaźniki techniczne
 │   ├── __init__.py                    # re-exporty z core + xtrender
-│   ├── core.py                        # ema, rsi, atr, t3 (formuły)
+│   ├── core.py                        # ema, rsi, atr, t3, bbands, stochastic (formuły)
 │   └── xtrender.py                    # xtrender oscillator + komponenty
 │
 ├── strategies/                        # implementacje strategii tradingowych
 │   ├── __init__.py
-│   ├── bghtrend_pullback.py           # MVP candidate — trend + pullback + xtrender + ATR-trail
-│   ├── bollinger_band_breakout_short.py
+│   ├── bghtrend_pullback.py           # baseline (NO-GO ADR-012; kept as reference)
 │   ├── dca_btc.py
 │   ├── ema_cross_sig.py
+│   ├── mean_reversion_bb_stoch.py     # MVP candidate — contrarian BB + Stochastic (pivot 2026-07-05)
 │   ├── short_trend_following.py
 │   ├── simple_momentum.py
 │   ├── template.py                    # skeleton dla nowej strategii
@@ -91,7 +91,7 @@ algo_bot/
 
 | Plik | Rola |
 |---|---|
-| `core.py` | Podstawowe wskaźniki: `ema()`, `rsi()`, `atr()`, `t3()`. Wszystkie operują na `pd.Series`. |
+| `core.py` | Podstawowe wskaźniki: `ema()`, `rsi()`, `atr()`, `t3()`, `bbands()`, `stochastic()`. Wszystkie kauzalne (precompute-safe). Deep references: [indicators-bbands.md](modules/indicators-bbands.md), [indicators-stochastic.md](modules/indicators-stochastic.md). |
 | `xtrender.py` | `xtrender_components()` — custom oscillator (Bryan G. Howell variant). Używany w `bghtrend_pullback.py`. |
 
 ### `algo_bot/strategies/`
@@ -100,8 +100,8 @@ Każda strategia = osobny plik. Konwencja: klasa `Strategy` dziedziczy po `Strat
 
 | Strategia | Linie | Co robi |
 |---|---:|---|
-| `bghtrend_pullback.py` | 333 | **MVP candidate.** Trend (EMA21/89/200) + pullback (cena spada w pobliże EMA89) + xtrender momentum confirm + ATR-trail SL + cooldown po SL. Najmocniej rozbudowana strategia. |
-| `bollinger_band_breakout_short.py` | 46 | Klasyczna: przerwanie poniżej dolnego pasma Bollingera → short z TP/SL. Używa natywnego `backtesting.Strategy` (nie StrategyBase). |
+| `mean_reversion_bb_stoch.py` | ~360 | **MVP candidate (pivot 2026-07-05, ADR-012).** Kontrariańska mean-reversion: touch wstęgi BB → armed → świeca reakcyjna → entry; TP = przeciwna żywa wstęga; stały 2% SL; opcjonalny gate Stochastic. Deep reference: [strategy-mean-reversion-bb-stoch.md](modules/strategy-mean-reversion-bb-stoch.md). |
+| `bghtrend_pullback.py` | 333 | **Baseline (NO-GO, ADR-012).** Trend (EMA21/89/200) + pullback + xtrender momentum confirm + ATR-trail SL + cooldown po SL. Zachowana jako historyczny punkt odniesienia frameworka. |
 | `simple_momentum.py` | 56 | EMA crossover (short vs long). Klasyczna MA cross. Używa StrategyBase. |
 | `short_trend_following.py` | 69 | Death Cross + MACD + ATR trailing stop. Tylko short. Używa `backtesting.Strategy` (natywnie). |
 | `dca_btc.py` | 148 | Dollar Cost Averaging dla BTC. Co N świec dokłada zakupu. Optionally skalowane przez Fear & Greed index. Używa StrategyBase z `allow_pyramiding=True`. |

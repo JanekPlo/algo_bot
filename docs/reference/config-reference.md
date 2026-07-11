@@ -1,10 +1,10 @@
 # Reference — configuration files
 
-Everything under `config/`: the global project config (`config.yaml`) and the strategy sweep spaces (`bghtrend_b1..b4.yaml`). This document is the schema-and-semantics reference; for what the parameters *mean economically* see [strategy-bghtrend-pullback](modules/strategy-bghtrend-pullback.md), and for the sweep engine that consumes these files see `algo_bot/engine/sweep.py`.
+Everything under `config/`: the global project config (`config.yaml`) and the strategy sweep spaces (`bghtrend_b1..b4.yaml`, `mr_b1..b3.yaml`). This document is the schema-and-semantics reference; for what the parameters *mean economically* see [strategy-bghtrend-pullback](modules/strategy-bghtrend-pullback.md) and [strategy-mean-reversion-bb-stoch](modules/strategy-mean-reversion-bb-stoch.md) (the latter contains the full mr_b1..b3 parameter taxonomy), and for the sweep engine that consumes these files see `algo_bot/engine/sweep.py`.
 
 ## Global config — `config/config.yaml`
 
-The project-wide config. Loaded for data paths, backtest defaults, and the feature-engineering pipeline. **Note:** the per-strategy `optimize` blocks in this file are the *legacy grid-search* format used by older strategies (`bollinger_band_breakout_short`, `short_trend_following`, `simple_momentum`). `bghtrend_pullback` does **not** use them — its parameter space lives in the dedicated `bghtrend_b*.yaml` files consumed by `algo-sweep --space_file`.
+The project-wide config. Loaded for data paths, backtest defaults, and the feature-engineering pipeline. **Note:** the per-strategy `optimize` blocks in this file are the *legacy grid-search* format used by older strategies (`short_trend_following`, `simple_momentum`; `bollinger_band_breakout_short` was removed in MR-Session Beta 2026-07-10). `bghtrend_pullback` does **not** use them — its parameter space lives in the dedicated `bghtrend_b*.yaml` files consumed by `algo-sweep --space_file`.
 
 | Key | Type | Meaning |
 |---|---|---|

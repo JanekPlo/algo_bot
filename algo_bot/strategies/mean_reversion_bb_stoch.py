@@ -24,7 +24,8 @@ Mechanika wejścia (both-directions, symetryczna) — "armed → reaction":
    na `arm_expiry_bars` kolejnych barów.
 2. ENTRY: pierwsza uzbrojona świeca reakcyjna R (korpus w stronę przeciwną:
    long → Close>Open; short → Close<Open). Opcjonalnie `require_reclaim` żąda
-   dodatkowo powrotu Close do środka wstęgi. Wejście po Close bara R
+   dodatkowo powrotu Close do wnętrza wstęgi (nad dolną / pod górną — NIE do
+   linii środkowej). Wejście po Close bara R
    (trade_on_close). Brak reakcji w oknie → rozbrojenie.
 
    Uwaga projektowa: gate Stocha jest przy UZBROJENIU, nie na barze reakcji.
@@ -102,7 +103,7 @@ class MeanReversionBBStochParams:
     # Mechanika wejścia (armed → reaction)
     entry_mode: str = "bb_stoch"  # 'bb_only' | 'bb_stoch'
     arm_expiry_bars: int = 2  # ile barów po dotknięciu czekamy na reakcję
-    require_reclaim: bool = False  # dodatkowo: Close reakcji wraca do środka wstęgi
+    require_reclaim: bool = False  # dodatkowo: Close reakcji wraca do wnętrza wstęgi
 
     # Wyjście
     sl_pct: float = 0.02  # stały SL jako frakcja ceny wejścia (2%)
@@ -199,8 +200,9 @@ class Strategy(StrategyBase):
     def _reaction_ok(self, side: str, o: float, c: float, lower: float, upper: float) -> bool:
         """Świeca reakcyjna: korpus w stronę przeciwną do dotknięcia.
 
-        Opcjonalny ``require_reclaim`` dokłada warunek powrotu Close do środka
-        wstęgi (dla long: nad dolną; dla short: pod górną).
+        Opcjonalny ``require_reclaim`` dokłada warunek powrotu Close do wnętrza
+        wstęgi (dla long: nad dolną; dla short: pod górną). Uwaga: wnętrze
+        wstęgi, nie linia środkowa (mid) — próg to przekroczona wstęga.
         """
         if side == "long":
             if not (c > o):  # byczy korpus

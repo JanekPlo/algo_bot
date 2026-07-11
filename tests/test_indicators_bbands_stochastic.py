@@ -179,6 +179,19 @@ class TestBBands:
         assert (upper[valid] >= mid[valid]).all()
         assert (mid[valid] >= lower[valid]).all()
 
+    def test_window2_numstd1_minmax_identity(self):
+        """Wyrocznia-tożsamość (audyt MR-Session 1): dla window=2, num_std=1
+        sd populacyjne pary {a,b} to |a-b|/2, więc upper = mean + sd = max(a,b),
+        a lower = min(a,b). Oczekiwania wyprowadzalne w pamięci — zero
+        arytmetyki maszynowej po stronie wyroczni."""
+        idx = pd.date_range("2026-01-01", periods=5, freq="1h", tz="UTC")
+        close = pd.Series([100.0, 104.0, 98.0, 98.0, 101.0], index=idx)
+        upper, mid, lower = bbands(close, window=2, num_std=1.0)
+        assert math.isnan(upper.iloc[0]) and math.isnan(lower.iloc[0])
+        np.testing.assert_allclose(upper.to_numpy()[1:], [104.0, 104.0, 98.0, 101.0], rtol=1e-12)
+        np.testing.assert_allclose(lower.to_numpy()[1:], [100.0, 98.0, 98.0, 98.0], rtol=1e-12)
+        np.testing.assert_allclose(mid.to_numpy()[1:], [102.0, 101.0, 98.0, 99.5], rtol=1e-12)
+
     def test_prefix_invariance(self):
         """Kauzalność: bbands(full).iloc[:m] == bbands(prefix). Warunek
         bezpiecznego cache'owania w precompute."""
