@@ -1,5 +1,5 @@
 # Implied timeframe: 1h (mr_b1 = MR baseline STRICT; patrz docs/reference/modules/strategy-mean-reversion-bb-stoch.md)
-# Oś selektywności: b1 strict (wymaga Stocha, głębsze wstęgi) vs b2 relaxed.
+# Oś selektywności: b1 strict (głębsze wstęgi) vs b2 relaxed.
 # Zakresy z priora Mastermind MMS: BB 20±..., num_std 2.0±..., Stoch 14/3/3, SL ~2%.
 __implied_tf: "1h"
 __mode: random
@@ -17,8 +17,9 @@ stoch_smooth:     {type: choice, values: [3]}
 stoch_oversold:   {type: choice, values: [20.0]}
 stoch_overbought: {type: choice, values: [80.0]}
 
-# Wejście — strict: gate Stocha wymagany (bb_stoch), krótkie okno reakcji
-entry_mode:      {type: choice, values: ["bb_stoch"]}
+# Wejście — MMS-consistent bare core: Stoch filtruje dokładki, nie bazowe wejście.
+# Jedyny empiryczny split bb_only vs bb_stoch pozostaje w b2.
+entry_mode:      {type: choice, values: ["bb_only"]}
 arm_expiry_bars: {type: choice, values: [1, 2]}
 require_reclaim: {type: choice, values: [false, true]}
 

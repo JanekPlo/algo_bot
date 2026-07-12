@@ -173,10 +173,22 @@ def log_returns(equity: pd.Series) -> pd.Series:
         Log returns sa additywne w czasie. Standardowa konwencja w quant dla
         Sharpe/Sortino — annualizacja przez ``√n`` jest dokladna, nie aproksymacja.
     """
+    # Logarytm equity <= 0 jest niezdefiniowany. Bez jawnego guarda pandas
+    # odrzuca NaN-y po bankructwie, a Sharpe bywa wtedy liczony tylko na prefiksie
+    # przed ruiną i może wyglądać dodatnio. Cała ścieżka log-return jest w takim
+    # przypadku nieważna — fail closed zamiast cichego skracania próbki.
+    values = pd.to_numeric(equity, errors="coerce")
+    if values.isna().any() or not np.isfinite(values.to_numpy(dtype=float)).all():
+        logger.warning("log_returns: equity zawiera NaN/inf → pusta seria")
+        return pd.Series(dtype=float, name=equity.name)
+    if (values <= 0).any():
+        logger.warning("log_returns: equity <= 0 (bankructwo) → pusta seria")
+        return pd.Series(dtype=float, name=equity.name)
+
     # cast: numpy/pandas stubs widzą np.log(Series) jako ndarray → Any. Runtime
     # to pd.Series (numpy fall-through dla pandas operands), więc .diff()/.dropna()
     # są poprawne.
-    return cast(pd.Series, np.log(equity).diff().dropna())
+    return cast(pd.Series, np.log(values).diff().dropna())
 
 
 def simple_returns(equity: pd.Series) -> pd.Series:

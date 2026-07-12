@@ -108,6 +108,14 @@ class TestReturns:
         assert len(rets) == 2
         np.testing.assert_allclose(rets.values, [1.0, 1.0], atol=1e-10)
 
+    @pytest.mark.parametrize("bad", [0.0, -1.0, float("nan"), float("inf")])
+    def test_log_returns_fail_closed_for_invalid_equity(self, bad, caplog):
+        equity = pd.Series([100.0, 90.0, bad, 80.0], index=_daily_index(4))
+        with caplog.at_level(logging.WARNING, logger="algo_bot.metrics"):
+            result = log_returns(equity)
+        assert result.empty
+        assert any("log_returns" in rec.message for rec in caplog.records)
+
     def test_simple_returns_basic(self):
         equity = pd.Series([100.0, 110.0, 121.0], index=_daily_index(3))
         rets = simple_returns(equity)
@@ -168,6 +176,15 @@ class TestCAGR:
 
 
 class TestSharpe:
+    def test_bankrupt_equity_returns_nan_instead_of_prefix_sharpe(self, caplog):
+        # Regression: dawniej log(ujemnego equity) dawał NaN, dropna() ucinało
+        # próbkę do prefiksu sprzed bankructwa i potrafiło zwrócić dodatni Sharpe.
+        equity = pd.Series([100.0, 120.0, 110.0, -5.0, -10.0], index=_daily_index(5))
+        with caplog.at_level(logging.WARNING, logger="algo_bot.metrics"):
+            result = sharpe(equity)
+        assert math.isnan(result)
+        assert any("bankructwo" in rec.message for rec in caplog.records)
+
     def test_zero_variance_returns_nan_with_warning(self, caplog):
         # equity rosnie geometrycznie ze stalym log_return → zero variance
         eq_values = [100.0 * math.exp(0.001 * i) for i in range(50)]

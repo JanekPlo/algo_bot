@@ -42,6 +42,8 @@ stats, equity, trades = run_backtest(
 - **What it trades:** one symbol, one position at a time, either side (`side="both"`).
 - **Timeframe:** TF-agnostic in code; configs tuned per TF — `mr_b1` (1h, strict),
   `mr_b2` (1h, relaxed), `mr_b3` (15m, fast). All carry `__implied_tf` meta-keys.
+  The MMS-consistent baseline fixes `entry_mode="bb_only"` in b1/b3; b2 alone
+  retains the empirical `bb_only` vs `bb_stoch` split.
 - **Cadence:** once per closed bar via `on_bar(df) -> Signal`; position management
   runs before entry logic.
 - **Indicators:** [`bbands`](indicators-bbands.md) (SMA ± num_std·σ, population σ) +
@@ -170,7 +172,7 @@ MR-Session 2 interpretation.
 | `bb_num_std` | float, 2.0 | 2.0–2.5 / 1.5–2.0 / 1.5–2.2 (step 0.1) | **core** ⚠ | Stretch threshold = statistical rarity of the touch; ⚠ 0.1-stepping invites cherry-picking a lucky band width — read clusters, not single best |
 | `stoch_k`/`stoch_d`/`stoch_smooth` | 14/3/3 | frozen / frozen / k∈{9,14} | tuning | MMS prior verbatim (classic 14/3/3 on H1) [[mms/02](../../references/mms/02-position-management-filters.md)] |
 | `stoch_oversold`/`stoch_overbought` | 20/80 | frozen / {20,25}&{75,80} / {20,25}&{75,80} | tuning ⚠ | Classic thresholds; ⚠ threshold pairs are archetypal overfit knobs — expect near-flat response or distrust the result |
-| `entry_mode` | `"bb_stoch"` | {bb_stoch} / both / both | **core** | THE structural sweep dimension: does oscillator confirmation add edge over bare bands? Deliberate adaptation of the MMS add-on filter to a base-entry gate (see alignment row 8) |
+| `entry_mode` | `"bb_stoch"` | {bb_only} / both / {bb_only} | **core** | Structural diagnostic retained in b2 only: does oscillator confirmation add edge over bare bands? b1/b3 freeze the MMS-consistent baseline because MMS assigns Stoch to add-ons, not the base entry (see alignment row 8) |
 | `arm_expiry_bars` | int, 2 | {1,2} / {2,3,4} / {1,2,3} | ambiguous ⚠ | Proxy for "reaction promptness" (MMS: *first* reaction candle ⇒ 1); >1 tolerates one-bar noise at the cost of staler setups. No hard MMS anchor beyond "first" |
 | `require_reclaim` | bool, False | {F,T} / {F} / {F} | ambiguous ⚠ | Strictness toggle (Close back inside the band); plausible, but no MMS anchor — pure selectivity knob |
 | `sl_pct` | float, 0.02 | 0.015–0.025 / 0.015–0.030 / 0.010–0.025 | **core** | The MMS hard rule: initial SL = 2% of price from base entry [[mms/01](../../references/mms/01-position-building.md)]; range spans TF-scaled variants (author's EA: 1.7% [[mms/06](../../references/mms/06-algotrading-semi-auto.md)]) |
@@ -236,7 +238,7 @@ end-to-end: code → this reference → mms extraction → screenshots in `mms/r
 | 5 | TP = opposite band, simultaneously arming of the reverse setup [[mms/01](../../references/mms/01-position-building.md)] | `tp_band`, live (recomputed per bar) | **Y** | Live-band reading chosen in Beta (Decision 3); exit bar cannot arm the reversal (audit seam 2) — MMS flow would allow immediate re-setup, ours re-arms earliest next bar |
 | 6 | Initial SL = **2%** price move from base position [[mms/01](../../references/mms/01-position-building.md)] | `sl_pct=0.02` default, swept 1–3% | **Y** | Range spans TF variants; author's own EA uses 1.7% [[mms/06](../../references/mms/06-algotrading-semi-auto.md)] |
 | 7 | No trailing stops (parametrization showed worse results) [[mms/01](../../references/mms/01-position-building.md)] | No trail / BE / timeout | **Y** | — |
-| 8 | Stochastic = **add-on (dokładka) filter**: %K & %D cross below 20 / above 80, 14/3/3 on H1, applied while position open [[mms/02](../../references/mms/02-position-management-filters.md)] | Optional **base-entry** gate at arming, **%K only**, `entry_mode` sweep dimension | **N — deliberate adaptation** | Beta has no pyramiding (deferred), so the oscillator was repurposed as a base-entry quality filter; %D cross dropped for simplicity (%D computed, available). MR-Session 2 resolves empirically whether it adds edge |
+| 8 | Stochastic = **add-on (dokładka) filter**: %K & %D cross below 20 / above 80, 14/3/3 on H1, applied while position open [[mms/02](../../references/mms/02-position-management-filters.md)] | Optional **base-entry** gate at arming, **%K only**; swept only in b2, while b1/b3 use `bb_only` | **N — deliberate adaptation** | Beta has no pyramiding (deferred), so the oscillator was repurposed as a base-entry quality filter; %D cross dropped for simplicity (%D computed, available). MR-Session 2 b2 resolves empirically whether it adds edge |
 | 9 | Stochastic defaults 14/3/3, thresholds 20/80 [[mms/02](../../references/mms/02-position-management-filters.md)] | Same defaults; frozen in b1, thresholds mildly swept in b2/b3 | **Y** | — |
 | 10 | TF: H1 manual base; algo target M10–M30; H4/D1 = context [[mms/01](../../references/mms/01-position-building.md), [mms/05](../../references/mms/05-market-mechanics-patterns.md)] | b1/b2 = 1h, b3 = 15m (`__implied_tf`) | **Y (partial)** | 15m sits in the M10–M30 algo band; H4/D1 context layer not modelled (row 15) |
 | 11 | Pyramiding: add-on #1 after first confirming candle, add-on #2 on Stoch signal, x1 each [[mms/02](../../references/mms/02-position-management-filters.md)] | Not implemented | **N (deferred)** | Single-position `backtesting.py` cannot express it; separate ADR post-Sweep (Decision 6) |

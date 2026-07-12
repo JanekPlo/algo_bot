@@ -1,0 +1,2716 @@
+{
+  "clustering_top10": {
+    "mr_b1.yaml|BTC/USDT|1h": {
+      "arm_expiry_bars": {
+        "1": 9,
+        "2": 1
+      },
+      "bb_num_std": {
+        "2.0": 2,
+        "2.1": 2,
+        "2.2": 5,
+        "2.4": 1
+      },
+      "bb_window": {
+        "18": 3,
+        "20": 2,
+        "22": 5
+      },
+      "entry_mode": {
+        "bb_only": 10
+      },
+      "require_reclaim": {
+        "False": 5,
+        "True": 5
+      },
+      "side": {
+        "both": 10
+      },
+      "sl_pct": {
+        "0.015": 2,
+        "0.02": 5,
+        "0.025": 3
+      },
+      "stoch_overbought": {
+        "80.0": 10
+      },
+      "stoch_oversold": {
+        "20.0": 10
+      }
+    },
+    "mr_b1.yaml|ETH/USDT|1h": {
+      "arm_expiry_bars": {
+        "1": 6,
+        "2": 4
+      },
+      "bb_num_std": {
+        "2.2": 7,
+        "2.3": 1,
+        "2.4": 1,
+        "2.5": 1
+      },
+      "bb_window": {
+        "18": 1,
+        "20": 2,
+        "22": 7
+      },
+      "entry_mode": {
+        "bb_only": 10
+      },
+      "require_reclaim": {
+        "False": 7,
+        "True": 3
+      },
+      "side": {
+        "both": 10
+      },
+      "sl_pct": {
+        "0.02": 4,
+        "0.025": 6
+      },
+      "stoch_overbought": {
+        "80.0": 10
+      },
+      "stoch_oversold": {
+        "20.0": 10
+      }
+    },
+    "mr_b2.yaml|BTC/USDT|1h": {
+      "arm_expiry_bars": {
+        "2": 5,
+        "3": 3,
+        "4": 2
+      },
+      "bb_num_std": {
+        "1.7": 1,
+        "1.8": 4,
+        "1.9": 4,
+        "2.0": 1
+      },
+      "bb_window": {
+        "15": 4,
+        "20": 3,
+        "25": 3
+      },
+      "entry_mode": {
+        "bb_only": 6,
+        "bb_stoch": 4
+      },
+      "require_reclaim": {
+        "False": 10
+      },
+      "side": {
+        "both": 10
+      },
+      "sl_pct": {
+        "0.015": 1,
+        "0.02": 5,
+        "0.025": 1,
+        "0.03": 3
+      },
+      "stoch_overbought": {
+        "75.0": 3,
+        "80.0": 7
+      },
+      "stoch_oversold": {
+        "20.0": 3,
+        "25.0": 7
+      }
+    },
+    "mr_b2.yaml|ETH/USDT|1h": {
+      "arm_expiry_bars": {
+        "2": 6,
+        "3": 3,
+        "4": 1
+      },
+      "bb_num_std": {
+        "1.7": 1,
+        "1.8": 5,
+        "1.9": 2,
+        "2.0": 2
+      },
+      "bb_window": {
+        "15": 2,
+        "20": 5,
+        "25": 3
+      },
+      "entry_mode": {
+        "bb_only": 3,
+        "bb_stoch": 7
+      },
+      "require_reclaim": {
+        "False": 10
+      },
+      "side": {
+        "both": 10
+      },
+      "sl_pct": {
+        "0.02": 3,
+        "0.025": 3,
+        "0.03": 4
+      },
+      "stoch_overbought": {
+        "75.0": 5,
+        "80.0": 5
+      },
+      "stoch_oversold": {
+        "20.0": 4,
+        "25.0": 6
+      }
+    },
+    "mr_b3.yaml|BTC/USDT|15m": {
+      "arm_expiry_bars": {
+        "1": 5,
+        "2": 3,
+        "3": 2
+      },
+      "bb_num_std": {
+        "1.8": 1,
+        "1.9": 5,
+        "2.0": 2,
+        "2.1": 1,
+        "2.2": 1
+      },
+      "bb_window": {
+        "10": 1,
+        "14": 4,
+        "20": 5
+      },
+      "entry_mode": {
+        "bb_only": 10
+      },
+      "require_reclaim": {
+        "False": 10
+      },
+      "side": {
+        "both": 10
+      },
+      "sl_pct": {
+        "0.015": 4,
+        "0.02": 3,
+        "0.025": 3
+      },
+      "stoch_overbought": {
+        "75.0": 7,
+        "80.0": 3
+      },
+      "stoch_oversold": {
+        "20.0": 6,
+        "25.0": 4
+      }
+    },
+    "mr_b3.yaml|ETH/USDT|15m": {
+      "arm_expiry_bars": {
+        "1": 2,
+        "2": 5,
+        "3": 3
+      },
+      "bb_num_std": {
+        "1.7": 1,
+        "1.8": 1,
+        "1.9": 3,
+        "2.0": 3,
+        "2.1": 1,
+        "2.2": 1
+      },
+      "bb_window": {
+        "10": 1,
+        "14": 4,
+        "20": 5
+      },
+      "entry_mode": {
+        "bb_only": 10
+      },
+      "require_reclaim": {
+        "False": 10
+      },
+      "side": {
+        "both": 10
+      },
+      "sl_pct": {
+        "0.015": 2,
+        "0.02": 4,
+        "0.025": 4
+      },
+      "stoch_overbought": {
+        "75.0": 6,
+        "80.0": 4
+      },
+      "stoch_oversold": {
+        "20.0": 4,
+        "25.0": 6
+      }
+    }
+  },
+  "cross_symbol_consistency": {
+    "mr_b1.yaml": {
+      "both_positive": false,
+      "mean_core_jaccard": 0.7666666666666666,
+      "parameter_overlap": {
+        "bb_num_std": {
+          "btc": [
+            "2.1",
+            "2.2"
+          ],
+          "eth": [
+            "2.2",
+            "2.5"
+          ],
+          "jaccard": 0.3333333333333333
+        },
+        "bb_window": {
+          "btc": [
+            "20",
+            "22"
+          ],
+          "eth": [
+            "22"
+          ],
+          "jaccard": 0.5
+        },
+        "entry_mode": {
+          "btc": [
+            "bb_only"
+          ],
+          "eth": [
+            "bb_only"
+          ],
+          "jaccard": 1.0
+        },
+        "side": {
+          "btc": [
+            "both"
+          ],
+          "eth": [
+            "both"
+          ],
+          "jaccard": 1.0
+        },
+        "sl_pct": {
+          "btc": [
+            "0.02",
+            "0.025"
+          ],
+          "eth": [
+            "0.02",
+            "0.025"
+          ],
+          "jaccard": 1.0
+        }
+      },
+      "ranking_metric": "sharpe_raw (post-cost Sharpe invalid after bankruptcy)",
+      "raw_top5_mean_by_symbol": {
+        "BTC/USDT": -0.3804252218001764,
+        "ETH/USDT": -0.8477185378411833
+      }
+    },
+    "mr_b2.yaml": {
+      "both_positive": false,
+      "mean_core_jaccard": 0.7166666666666667,
+      "parameter_overlap": {
+        "bb_num_std": {
+          "btc": [
+            "1.9",
+            "2.0"
+          ],
+          "eth": [
+            "1.7",
+            "1.8",
+            "1.9"
+          ],
+          "jaccard": 0.25
+        },
+        "bb_window": {
+          "btc": [
+            "20",
+            "25"
+          ],
+          "eth": [
+            "20",
+            "25"
+          ],
+          "jaccard": 1.0
+        },
+        "entry_mode": {
+          "btc": [
+            "bb_only",
+            "bb_stoch"
+          ],
+          "eth": [
+            "bb_only",
+            "bb_stoch"
+          ],
+          "jaccard": 1.0
+        },
+        "side": {
+          "btc": [
+            "both"
+          ],
+          "eth": [
+            "both"
+          ],
+          "jaccard": 1.0
+        },
+        "sl_pct": {
+          "btc": [
+            "0.02",
+            "0.025"
+          ],
+          "eth": [
+            "0.025",
+            "0.03"
+          ],
+          "jaccard": 0.3333333333333333
+        }
+      },
+      "ranking_metric": "sharpe_raw (post-cost Sharpe invalid after bankruptcy)",
+      "raw_top5_mean_by_symbol": {
+        "BTC/USDT": -1.1297016149324384,
+        "ETH/USDT": -1.6295924862769458
+      }
+    },
+    "mr_b3.yaml": {
+      "both_positive": false,
+      "mean_core_jaccard": 0.8333333333333333,
+      "parameter_overlap": {
+        "bb_num_std": {
+          "btc": [
+            "1.9",
+            "2.0"
+          ],
+          "eth": [
+            "1.9",
+            "2.0",
+            "2.1"
+          ],
+          "jaccard": 0.6666666666666666
+        },
+        "bb_window": {
+          "btc": [
+            "20"
+          ],
+          "eth": [
+            "14",
+            "20"
+          ],
+          "jaccard": 0.5
+        },
+        "entry_mode": {
+          "btc": [
+            "bb_only"
+          ],
+          "eth": [
+            "bb_only"
+          ],
+          "jaccard": 1.0
+        },
+        "side": {
+          "btc": [
+            "both"
+          ],
+          "eth": [
+            "both"
+          ],
+          "jaccard": 1.0
+        },
+        "sl_pct": {
+          "btc": [
+            "0.02",
+            "0.025"
+          ],
+          "eth": [
+            "0.02",
+            "0.025"
+          ],
+          "jaccard": 1.0
+        }
+      },
+      "ranking_metric": "sharpe_raw (post-cost Sharpe invalid after bankruptcy)",
+      "raw_top5_mean_by_symbol": {
+        "BTC/USDT": -1.5180461740435196,
+        "ETH/USDT": -1.8597124150611783
+      }
+    }
+  },
+  "eligible_candidates": [],
+  "entry_mode_split_b2": {
+    "BTC/USDT": {
+      "distribution": {
+        "bb_only": {
+          "count": 9,
+          "max": -1.0617891896149114,
+          "mean": -1.2590414378001205,
+          "median": -1.2544853285556
+        },
+        "bb_stoch": {
+          "count": 21,
+          "max": -1.112369875470555,
+          "mean": -1.4439003374915846,
+          "median": -1.4731386311246903
+        }
+      },
+      "ranking_metric": "sharpe_raw",
+      "top10_counts": {
+        "bb_only": 6,
+        "bb_stoch": 4
+      }
+    },
+    "ETH/USDT": {
+      "distribution": {
+        "bb_only": {
+          "count": 9,
+          "max": -1.6225455642370883,
+          "mean": -1.8900342057832031,
+          "median": -1.9473338391321853
+        },
+        "bb_stoch": {
+          "count": 21,
+          "max": -1.393524828660917,
+          "mean": -2.0112788547782863,
+          "median": -2.051733264900085
+        }
+      },
+      "ranking_metric": "sharpe_raw",
+      "top10_counts": {
+        "bb_only": 3,
+        "bb_stoch": 7
+      }
+    }
+  },
+  "generated_at": "2026-07-12T23:47:50.774255+00:00",
+  "groups": {
+    "mr_b1.yaml|BTC/USDT|1h": 30,
+    "mr_b1.yaml|ETH/USDT|1h": 30,
+    "mr_b2.yaml|BTC/USDT|1h": 30,
+    "mr_b2.yaml|ETH/USDT|1h": 30,
+    "mr_b3.yaml|BTC/USDT|15m": 30,
+    "mr_b3.yaml|ETH/USDT|15m": 30
+  },
+  "n_rows": 180,
+  "post_equity_audit": {
+    "n_bankrupt_or_zero": 169,
+    "n_valid_positive_throughout": 11,
+    "reported_sharpe_warning": "sharpe_post from the original sweep is invalid when post_equity_min <= 0"
+  },
+  "regime_robustness_top3_per_group": {
+    "mr_b1.yaml|BTC/USDT|1h": [
+      {
+        "full_sharpe_post_reported": -0.496965116137582,
+        "full_sharpe_post_valid": -0.496965116137582,
+        "full_sharpe_raw": -0.2905044829730988,
+        "hard_filter_pass": false,
+        "n_positive_years": 2,
+        "post_equity_min": 156534.9336908115,
+        "post_equity_valid": true,
+        "rank_raw": 1,
+        "run_id": "20260712_183518_mean_reversion_bb_stoch_BTCUSDT_1h_f152d5c0",
+        "soft_gate_pass": false,
+        "yearly_sharpe_post": {
+          "2019": -1.7572058839242168,
+          "2020": -1.1985886255648805,
+          "2021": 0.596061855741705,
+          "2022": -0.1922268855359933,
+          "2023": -0.8969840650549837,
+          "2024": 0.05859938030244731,
+          "2025": -0.885128589924569
+        }
+      },
+      {
+        "full_sharpe_post_reported": -0.6997433304566935,
+        "full_sharpe_post_valid": -0.6997433304566935,
+        "full_sharpe_raw": -0.3471102493524175,
+        "hard_filter_pass": false,
+        "n_positive_years": 1,
+        "post_equity_min": 50138.293523831,
+        "post_equity_valid": true,
+        "rank_raw": 2,
+        "run_id": "20260712_183338_mean_reversion_bb_stoch_BTCUSDT_1h_4d487639",
+        "soft_gate_pass": false,
+        "yearly_sharpe_post": {
+          "2019": -1.2533504454448436,
+          "2020": -0.895585557810718,
+          "2021": 0.48162606722213036,
+          "2022": -0.3062223675621446,
+          "2023": -0.11179644023604943,
+          "2024": -0.5945837444443234,
+          "2025": -1.0953247947405236
+        }
+      },
+      {
+        "full_sharpe_post_reported": -0.7524834300685248,
+        "full_sharpe_post_valid": -0.7524834300685248,
+        "full_sharpe_raw": -0.3640960660760587,
+        "hard_filter_pass": false,
+        "n_positive_years": 2,
+        "post_equity_min": 6797.617806631257,
+        "post_equity_valid": true,
+        "rank_raw": 3,
+        "run_id": "20260712_182949_mean_reversion_bb_stoch_BTCUSDT_1h_29ab1c14",
+        "soft_gate_pass": false,
+        "yearly_sharpe_post": {
+          "2019": -1.5967060150638488,
+          "2020": -1.498937279504476,
+          "2021": 0.8734568416429879,
+          "2022": 0.1784263681212702,
+          "2023": -0.40404252037038807,
+          "2024": -0.21698291134716075,
+          "2025": -1.5889145938772824
+        }
+      }
+    ],
+    "mr_b1.yaml|ETH/USDT|1h": [
+      {
+        "full_sharpe_post_reported": -0.0342693973056736,
+        "full_sharpe_post_valid": null,
+        "full_sharpe_raw": -0.7830562033377103,
+        "hard_filter_pass": false,
+        "n_positive_years": 1,
+        "post_equity_min": -23205.131510561463,
+        "post_equity_valid": false,
+        "rank_raw": 1,
+        "run_id": "20260712_185056_mean_reversion_bb_stoch_ETHUSDT_1h_f152d5c0",
+        "soft_gate_pass": false,
+        "yearly_sharpe_post": {
+          "2019": -2.0622224143047285,
+          "2020": -1.2755203617905473,
+          "2021": -1.0575586397642556,
+          "2022": -1.600798682128413,
+          "2023": 0.8545158358409947,
+          "2024": null,
+          "2025": null
+        }
+      },
+      {
+        "full_sharpe_post_reported": 0.1489459014716101,
+        "full_sharpe_post_valid": null,
+        "full_sharpe_raw": -0.8012085932873777,
+        "hard_filter_pass": false,
+        "n_positive_years": 0,
+        "post_equity_min": -41878.968713051625,
+        "post_equity_valid": false,
+        "rank_raw": 2,
+        "run_id": "20260712_184651_mean_reversion_bb_stoch_ETHUSDT_1h_8557c454",
+        "soft_gate_pass": false,
+        "yearly_sharpe_post": {
+          "2019": -2.554125069090465,
+          "2020": -0.12689237389517607,
+          "2021": -1.6354912967763748,
+          "2022": -1.2609047529137203,
+          "2023": null,
+          "2024": null,
+          "2025": null
+        }
+      },
+      {
+        "full_sharpe_post_reported": 0.0582453547220172,
+        "full_sharpe_post_valid": null,
+        "full_sharpe_raw": -0.8302378149447273,
+        "hard_filter_pass": false,
+        "n_positive_years": 0,
+        "post_equity_min": -52025.442684521695,
+        "post_equity_valid": false,
+        "rank_raw": 3,
+        "run_id": "20260712_185537_mean_reversion_bb_stoch_ETHUSDT_1h_d90a464a",
+        "soft_gate_pass": false,
+        "yearly_sharpe_post": {
+          "2019": -4.261767901028819,
+          "2020": -0.23237057255582821,
+          "2021": -1.5883181863674778,
+          "2022": null,
+          "2023": null,
+          "2024": null,
+          "2025": null
+        }
+      }
+    ],
+    "mr_b2.yaml|BTC/USDT|1h": [
+      {
+        "full_sharpe_post_reported": -0.420782068802447,
+        "full_sharpe_post_valid": null,
+        "full_sharpe_raw": -1.0617891896149114,
+        "hard_filter_pass": false,
+        "n_positive_years": 0,
+        "post_equity_min": -71605.82336196888,
+        "post_equity_valid": false,
+        "rank_raw": 1,
+        "run_id": "20260712_190537_mean_reversion_bb_stoch_BTCUSDT_1h_1153a4df",
+        "soft_gate_pass": false,
+        "yearly_sharpe_post": {
+          "2019": -1.2658849848943377,
+          "2020": -2.398720284409569,
+          "2021": -0.35566459756995966,
+          "2022": -1.3490292316659689,
+          "2023": null,
+          "2024": null,
+          "2025": null
+        }
+      },
+      {
+        "full_sharpe_post_reported": -1.1113117574343965,
+        "full_sharpe_post_valid": -1.1113117574343965,
+        "full_sharpe_raw": -1.112369875470555,
+        "hard_filter_pass": false,
+        "n_positive_years": 1,
+        "post_equity_min": 23850.144421902784,
+        "post_equity_valid": true,
+        "rank_raw": 2,
+        "run_id": "20260712_191154_mean_reversion_bb_stoch_BTCUSDT_1h_a99b9ad7",
+        "soft_gate_pass": false,
+        "yearly_sharpe_post": {
+          "2019": -3.244822078043001,
+          "2020": -3.7070650560081737,
+          "2021": -0.5435403625353684,
+          "2022": 0.06027187160079824,
+          "2023": -0.7798254008989757,
+          "2024": -0.8108376981069351,
+          "2025": null
+        }
+      },
+      {
+        "full_sharpe_post_reported": -0.4448914148724088,
+        "full_sharpe_post_valid": null,
+        "full_sharpe_raw": -1.1536478255428977,
+        "hard_filter_pass": false,
+        "n_positive_years": 0,
+        "post_equity_min": -43832.59993079289,
+        "post_equity_valid": false,
+        "rank_raw": 3,
+        "run_id": "20260712_191123_mean_reversion_bb_stoch_BTCUSDT_1h_26794d6b",
+        "soft_gate_pass": false,
+        "yearly_sharpe_post": {
+          "2019": -2.8953118848486845,
+          "2020": -2.961165065793904,
+          "2021": -0.32049974589167607,
+          "2022": -1.4047653686309243,
+          "2023": null,
+          "2024": null,
+          "2025": null
+        }
+      }
+    ],
+    "mr_b2.yaml|ETH/USDT|1h": [
+      {
+        "full_sharpe_post_reported": -0.5509624608894131,
+        "full_sharpe_post_valid": null,
+        "full_sharpe_raw": -1.393524828660917,
+        "hard_filter_pass": false,
+        "n_positive_years": 0,
+        "post_equity_min": -15401.919371231208,
+        "post_equity_valid": false,
+        "rank_raw": 1,
+        "run_id": "20260712_192706_mean_reversion_bb_stoch_ETHUSDT_1h_a99b9ad7",
+        "soft_gate_pass": false,
+        "yearly_sharpe_post": {
+          "2019": -2.6693675958034846,
+          "2020": -2.866228888399641,
+          "2021": -1.4596689456926082,
+          "2022": null,
+          "2023": null,
+          "2024": null,
+          "2025": null
+        }
+      },
+      {
+        "full_sharpe_post_reported": -0.2936340357475728,
+        "full_sharpe_post_valid": null,
+        "full_sharpe_raw": -1.6225455642370883,
+        "hard_filter_pass": false,
+        "n_positive_years": 0,
+        "post_equity_min": -60284.6284391387,
+        "post_equity_valid": false,
+        "rank_raw": 2,
+        "run_id": "20260712_192433_mean_reversion_bb_stoch_ETHUSDT_1h_941288fc",
+        "soft_gate_pass": false,
+        "yearly_sharpe_post": {
+          "2019": -1.9863412917501944,
+          "2020": -2.133686530303105,
+          "2021": null,
+          "2022": null,
+          "2023": null,
+          "2024": null,
+          "2025": null
+        }
+      },
+      {
+        "full_sharpe_post_reported": -1.0344052150869414,
+        "full_sharpe_post_valid": null,
+        "full_sharpe_raw": -1.6727516572094472,
+        "hard_filter_pass": false,
+        "n_positive_years": 0,
+        "post_equity_min": -48995.06654624728,
+        "post_equity_valid": false,
+        "rank_raw": 3,
+        "run_id": "20260712_192330_mean_reversion_bb_stoch_ETHUSDT_1h_c8330c26",
+        "soft_gate_pass": false,
+        "yearly_sharpe_post": {
+          "2019": -2.5794734245852196,
+          "2020": -2.428468512436177,
+          "2021": -0.9725410544838959,
+          "2022": null,
+          "2023": null,
+          "2024": null,
+          "2025": null
+        }
+      }
+    ],
+    "mr_b3.yaml|BTC/USDT|15m": [
+      {
+        "full_sharpe_post_reported": 0.0224177422039451,
+        "full_sharpe_post_valid": null,
+        "full_sharpe_raw": -1.398858188880947,
+        "hard_filter_pass": false,
+        "n_positive_years": 0,
+        "post_equity_min": -267663.2164628423,
+        "post_equity_valid": false,
+        "rank_raw": 1,
+        "run_id": "20260712_195847_mean_reversion_bb_stoch_BTCUSDT_15m_a44f42e5",
+        "soft_gate_pass": false,
+        "yearly_sharpe_post": {
+          "2019": -3.961073568021033,
+          "2020": -2.586405267023095,
+          "2021": null,
+          "2022": null,
+          "2023": null,
+          "2024": null,
+          "2025": null
+        }
+      },
+      {
+        "full_sharpe_post_reported": -0.8539709525217324,
+        "full_sharpe_post_valid": null,
+        "full_sharpe_raw": -1.4125100751424262,
+        "hard_filter_pass": false,
+        "n_positive_years": 0,
+        "post_equity_min": -193890.86202371356,
+        "post_equity_valid": false,
+        "rank_raw": 2,
+        "run_id": "20260712_193651_mean_reversion_bb_stoch_BTCUSDT_15m_660e0d7d",
+        "soft_gate_pass": false,
+        "yearly_sharpe_post": {
+          "2019": -5.072234894836702,
+          "2020": null,
+          "2021": null,
+          "2022": null,
+          "2023": null,
+          "2024": null,
+          "2025": null
+        }
+      },
+      {
+        "full_sharpe_post_reported": -1.0672626255370985,
+        "full_sharpe_post_valid": null,
+        "full_sharpe_raw": -1.4882140334750436,
+        "hard_filter_pass": false,
+        "n_positive_years": 0,
+        "post_equity_min": -190775.55892295035,
+        "post_equity_valid": false,
+        "rank_raw": 3,
+        "run_id": "20260712_200052_mean_reversion_bb_stoch_BTCUSDT_15m_d1442b94",
+        "soft_gate_pass": false,
+        "yearly_sharpe_post": {
+          "2019": -3.28074538379245,
+          "2020": null,
+          "2021": null,
+          "2022": null,
+          "2023": null,
+          "2024": null,
+          "2025": null
+        }
+      }
+    ],
+    "mr_b3.yaml|ETH/USDT|15m": [
+      {
+        "full_sharpe_post_reported": -0.65355991463927,
+        "full_sharpe_post_valid": null,
+        "full_sharpe_raw": -1.797998265082135,
+        "hard_filter_pass": false,
+        "n_positive_years": 0,
+        "post_equity_min": -287253.3504850656,
+        "post_equity_valid": false,
+        "rank_raw": 1,
+        "run_id": "20260712_211310_mean_reversion_bb_stoch_ETHUSDT_15m_e6fb45d4",
+        "soft_gate_pass": false,
+        "yearly_sharpe_post": {
+          "2019": -3.0708096412641677,
+          "2020": -1.3167870757535705,
+          "2021": null,
+          "2022": null,
+          "2023": null,
+          "2024": null,
+          "2025": null
+        }
+      },
+      {
+        "full_sharpe_post_reported": -0.4555843070032865,
+        "full_sharpe_post_valid": null,
+        "full_sharpe_raw": -1.8595371558940088,
+        "hard_filter_pass": false,
+        "n_positive_years": 0,
+        "post_equity_min": -223198.10489554697,
+        "post_equity_valid": false,
+        "rank_raw": 2,
+        "run_id": "20260712_211707_mean_reversion_bb_stoch_ETHUSDT_15m_8c6092d8",
+        "soft_gate_pass": false,
+        "yearly_sharpe_post": {
+          "2019": -4.655146704860394,
+          "2020": null,
+          "2021": null,
+          "2022": null,
+          "2023": null,
+          "2024": null,
+          "2025": null
+        }
+      },
+      {
+        "full_sharpe_post_reported": -0.22476330731366,
+        "full_sharpe_post_valid": null,
+        "full_sharpe_raw": -1.869136763433174,
+        "hard_filter_pass": false,
+        "n_positive_years": 0,
+        "post_equity_min": -173938.1468953663,
+        "post_equity_valid": false,
+        "rank_raw": 3,
+        "run_id": "20260712_203634_mean_reversion_bb_stoch_ETHUSDT_15m_660e0d7d",
+        "soft_gate_pass": false,
+        "yearly_sharpe_post": {
+          "2019": -2.6815709960250347,
+          "2020": null,
+          "2021": null,
+          "2022": null,
+          "2023": null,
+          "2024": null,
+          "2025": null
+        }
+      }
+    ]
+  },
+  "strategy": "mean_reversion_bb_stoch",
+  "summary": [
+    {
+      "median": -0.8872674505640603,
+      "n": 30,
+      "n_post_bankrupt": 24,
+      "n_post_equity_valid": 6,
+      "pct_n_trades_gt_100": 1.0,
+      "pct_positive": 0.0,
+      "raw_median": -1.0837922118995589,
+      "raw_post_spread_mean": 0.2231432983280477,
+      "raw_post_spread_std": 0.18026992953325882,
+      "raw_top1": -0.2905044829730988,
+      "raw_top5_mean": -0.3804252218001764,
+      "reported_post_top1_invalid_if_bankrupt": 0.1762235553102451,
+      "space_file": "mr_b1.yaml",
+      "symbol": "BTC/USDT",
+      "timeframe": "1h",
+      "top1": -0.496965116137582,
+      "top1_n_trades": 2391.0,
+      "top1_top5_gap": 0.3350852867986295,
+      "top5_mean": -0.8320504029362115
+    },
+    {
+      "median": null,
+      "n": 30,
+      "n_post_bankrupt": 30,
+      "n_post_equity_valid": 0,
+      "pct_n_trades_gt_100": 1.0,
+      "pct_positive": 0.0,
+      "raw_median": -1.2374700703661339,
+      "raw_post_spread_mean": null,
+      "raw_post_spread_std": null,
+      "raw_top1": -0.7830562033377103,
+      "raw_top5_mean": -0.8477185378411833,
+      "reported_post_top1_invalid_if_bankrupt": 0.2143824642125493,
+      "space_file": "mr_b1.yaml",
+      "symbol": "ETH/USDT",
+      "timeframe": "1h",
+      "top1": null,
+      "top1_n_trades": null,
+      "top1_top5_gap": null,
+      "top5_mean": null
+    },
+    {
+      "median": -1.2714356963041182,
+      "n": 30,
+      "n_post_bankrupt": 25,
+      "n_post_equity_valid": 5,
+      "pct_n_trades_gt_100": 1.0,
+      "pct_positive": 0.0,
+      "raw_median": -1.3860336490609706,
+      "raw_post_spread_mean": -0.0017402327777086945,
+      "raw_post_spread_std": 0.056135378929189995,
+      "raw_top1": -1.0617891896149114,
+      "raw_top5_mean": -1.1297016149324384,
+      "reported_post_top1_invalid_if_bankrupt": -0.2153029541924527,
+      "space_file": "mr_b2.yaml",
+      "symbol": "BTC/USDT",
+      "timeframe": "1h",
+      "top1": -1.1113117574343965,
+      "top1_n_trades": 1855.0,
+      "top1_top5_gap": 0.22405180594685503,
+      "top5_mean": -1.3353635633812515
+    },
+    {
+      "median": null,
+      "n": 30,
+      "n_post_bankrupt": 30,
+      "n_post_equity_valid": 0,
+      "pct_n_trades_gt_100": 1.0,
+      "pct_positive": 0.0,
+      "raw_median": -1.9933368201598487,
+      "raw_post_spread_mean": null,
+      "raw_post_spread_std": null,
+      "raw_top1": -1.393524828660917,
+      "raw_top5_mean": -1.6295924862769458,
+      "reported_post_top1_invalid_if_bankrupt": 0.0665911461923713,
+      "space_file": "mr_b2.yaml",
+      "symbol": "ETH/USDT",
+      "timeframe": "1h",
+      "top1": null,
+      "top1_n_trades": null,
+      "top1_top5_gap": null,
+      "top5_mean": null
+    },
+    {
+      "median": null,
+      "n": 30,
+      "n_post_bankrupt": 30,
+      "n_post_equity_valid": 0,
+      "pct_n_trades_gt_100": 1.0,
+      "pct_positive": 0.0,
+      "raw_median": -2.0401047828956687,
+      "raw_post_spread_mean": null,
+      "raw_post_spread_std": null,
+      "raw_top1": -1.398858188880947,
+      "raw_top5_mean": -1.5180461740435196,
+      "reported_post_top1_invalid_if_bankrupt": 0.0224177422039451,
+      "space_file": "mr_b3.yaml",
+      "symbol": "BTC/USDT",
+      "timeframe": "15m",
+      "top1": null,
+      "top1_n_trades": null,
+      "top1_top5_gap": null,
+      "top5_mean": null
+    },
+    {
+      "median": null,
+      "n": 30,
+      "n_post_bankrupt": 30,
+      "n_post_equity_valid": 0,
+      "pct_n_trades_gt_100": 1.0,
+      "pct_positive": 0.0,
+      "raw_median": -2.251334536205749,
+      "raw_post_spread_mean": null,
+      "raw_post_spread_std": null,
+      "raw_top1": -1.797998265082135,
+      "raw_top5_mean": -1.8597124150611783,
+      "reported_post_top1_invalid_if_bankrupt": 0.2548525925400297,
+      "space_file": "mr_b3.yaml",
+      "symbol": "ETH/USDT",
+      "timeframe": "15m",
+      "top1": null,
+      "top1_n_trades": null,
+      "top1_top5_gap": null,
+      "top5_mean": null
+    }
+  ],
+  "top10_params": {
+    "mr_b1.yaml|BTC/USDT|1h": [
+      {
+        "max_drawdown_pct_post": -0.8617480847540817,
+        "n_trades_post": 2391,
+        "params": {
+          "arm_expiry_bars": 1,
+          "bb_num_std": 2.2,
+          "bb_window": 22,
+          "entry_mode": "bb_only",
+          "require_reclaim": true,
+          "side": "both",
+          "sl_pct": 0.02,
+          "stoch_d": 3,
+          "stoch_k": 14,
+          "stoch_overbought": 80.0,
+          "stoch_oversold": 20.0,
+          "stoch_smooth": 3,
+          "tp_has_priority": false,
+          "trade_on_close": true
+        },
+        "post_equity_min": 156534.9336908115,
+        "post_equity_valid": true,
+        "profit_factor_post": 0.9403838219471744,
+        "rank_raw": 1,
+        "run_id": "20260712_183518_mean_reversion_bb_stoch_BTCUSDT_1h_f152d5c0",
+        "sharpe_post_reported": -0.496965116137582,
+        "sharpe_post_valid": -0.496965116137582,
+        "sharpe_raw": -0.2905044829730988
+      },
+      {
+        "max_drawdown_pct_post": -0.9560299453378098,
+        "n_trades_post": 2358,
+        "params": {
+          "arm_expiry_bars": 1,
+          "bb_num_std": 2.2,
+          "bb_window": 20,
+          "entry_mode": "bb_only",
+          "require_reclaim": true,
+          "side": "both",
+          "sl_pct": 0.025,
+          "stoch_d": 3,
+          "stoch_k": 14,
+          "stoch_overbought": 80.0,
+          "stoch_oversold": 20.0,
+          "stoch_smooth": 3,
+          "tp_has_priority": false,
+          "trade_on_close": true
+        },
+        "post_equity_min": 50138.293523831,
+        "post_equity_valid": true,
+        "profit_factor_post": 0.937862975516354,
+        "rank_raw": 2,
+        "run_id": "20260712_183338_mean_reversion_bb_stoch_BTCUSDT_1h_4d487639",
+        "sharpe_post_reported": -0.6997433304566935,
+        "sharpe_post_valid": -0.6997433304566935,
+        "sharpe_raw": -0.3471102493524175
+      },
+      {
+        "max_drawdown_pct_post": -0.9938356149901914,
+        "n_trades_post": 2531,
+        "params": {
+          "arm_expiry_bars": 1,
+          "bb_num_std": 2.1,
+          "bb_window": 20,
+          "entry_mode": "bb_only",
+          "require_reclaim": true,
+          "side": "both",
+          "sl_pct": 0.025,
+          "stoch_d": 3,
+          "stoch_k": 14,
+          "stoch_overbought": 80.0,
+          "stoch_oversold": 20.0,
+          "stoch_smooth": 3,
+          "tp_has_priority": false,
+          "trade_on_close": true
+        },
+        "post_equity_min": 6797.617806631257,
+        "post_equity_valid": true,
+        "profit_factor_post": 0.9360774483818192,
+        "rank_raw": 3,
+        "run_id": "20260712_182949_mean_reversion_bb_stoch_BTCUSDT_1h_29ab1c14",
+        "sharpe_post_reported": -0.7524834300685248,
+        "sharpe_post_valid": -0.7524834300685248,
+        "sharpe_raw": -0.3640960660760587
+      },
+      {
+        "max_drawdown_pct_post": -1.0796374429116118,
+        "n_trades_post": 2953,
+        "params": {
+          "arm_expiry_bars": 1,
+          "bb_num_std": 2.0,
+          "bb_window": 22,
+          "entry_mode": "bb_only",
+          "require_reclaim": true,
+          "side": "both",
+          "sl_pct": 0.015,
+          "stoch_d": 3,
+          "stoch_k": 14,
+          "stoch_overbought": 80.0,
+          "stoch_oversold": 20.0,
+          "stoch_smooth": 3,
+          "tp_has_priority": false,
+          "trade_on_close": true
+        },
+        "post_equity_min": -112284.91657444036,
+        "post_equity_valid": false,
+        "profit_factor_post": 0.9427981582289234,
+        "rank_raw": 4,
+        "run_id": "20260712_183445_mean_reversion_bb_stoch_BTCUSDT_1h_cc2f836a",
+        "sharpe_post_reported": 0.1762235553102451,
+        "sharpe_post_valid": null,
+        "sharpe_raw": -0.3840063389973463
+      },
+      {
+        "max_drawdown_pct_post": -1.0219939682884385,
+        "n_trades_post": 2673,
+        "params": {
+          "arm_expiry_bars": 1,
+          "bb_num_std": 2.1,
+          "bb_window": 22,
+          "entry_mode": "bb_only",
+          "require_reclaim": false,
+          "side": "both",
+          "sl_pct": 0.02,
+          "stoch_d": 3,
+          "stoch_k": 14,
+          "stoch_overbought": 80.0,
+          "stoch_oversold": 20.0,
+          "stoch_smooth": 3,
+          "tp_has_priority": false,
+          "trade_on_close": true
+        },
+        "post_equity_min": -28346.11724226977,
+        "post_equity_valid": false,
+        "profit_factor_post": 0.9233743663194248,
+        "rank_raw": 5,
+        "run_id": "20260712_183411_mean_reversion_bb_stoch_BTCUSDT_1h_c1cc781c",
+        "sharpe_post_reported": -0.5147808729788227,
+        "sharpe_post_valid": null,
+        "sharpe_raw": -0.5164089716019608
+      },
+      {
+        "max_drawdown_pct_post": -1.0271506536087596,
+        "n_trades_post": 2288,
+        "params": {
+          "arm_expiry_bars": 1,
+          "bb_num_std": 2.4,
+          "bb_window": 18,
+          "entry_mode": "bb_only",
+          "require_reclaim": true,
+          "side": "both",
+          "sl_pct": 0.02,
+          "stoch_d": 3,
+          "stoch_k": 14,
+          "stoch_overbought": 80.0,
+          "stoch_oversold": 20.0,
+          "stoch_smooth": 3,
+          "tp_has_priority": false,
+          "trade_on_close": true
+        },
+        "post_equity_min": -41873.93806228272,
+        "post_equity_valid": false,
+        "profit_factor_post": 0.9031958583902764,
+        "rank_raw": 6,
+        "run_id": "20260712_184143_mean_reversion_bb_stoch_BTCUSDT_1h_6058203c",
+        "sharpe_post_reported": -0.089820309662756,
+        "sharpe_post_valid": null,
+        "sharpe_raw": -0.696802681705348
+      },
+      {
+        "max_drawdown_pct_post": -1.0198303481671145,
+        "n_trades_post": 2482,
+        "params": {
+          "arm_expiry_bars": 1,
+          "bb_num_std": 2.2,
+          "bb_window": 22,
+          "entry_mode": "bb_only",
+          "require_reclaim": false,
+          "side": "both",
+          "sl_pct": 0.02,
+          "stoch_d": 3,
+          "stoch_k": 14,
+          "stoch_overbought": 80.0,
+          "stoch_oversold": 20.0,
+          "stoch_smooth": 3,
+          "tp_has_priority": false,
+          "trade_on_close": true
+        },
+        "post_equity_min": -21238.08636081498,
+        "post_equity_valid": false,
+        "profit_factor_post": 0.8758294102114719,
+        "rank_raw": 7,
+        "run_id": "20260712_183903_mean_reversion_bb_stoch_BTCUSDT_1h_d762cc26",
+        "sharpe_post_reported": 0.0308817588220022,
+        "sharpe_post_valid": null,
+        "sharpe_raw": -0.7759963705817208
+      },
+      {
+        "max_drawdown_pct_post": -1.0699709664783674,
+        "n_trades_post": 2585,
+        "params": {
+          "arm_expiry_bars": 1,
+          "bb_num_std": 2.2,
+          "bb_window": 18,
+          "entry_mode": "bb_only",
+          "require_reclaim": false,
+          "side": "both",
+          "sl_pct": 0.025,
+          "stoch_d": 3,
+          "stoch_k": 14,
+          "stoch_overbought": 80.0,
+          "stoch_oversold": 20.0,
+          "stoch_smooth": 3,
+          "tp_has_priority": false,
+          "trade_on_close": true
+        },
+        "post_equity_min": -72475.66324275802,
+        "post_equity_valid": false,
+        "profit_factor_post": 0.8825264745004386,
+        "rank_raw": 8,
+        "run_id": "20260712_183127_mean_reversion_bb_stoch_BTCUSDT_1h_564d4637",
+        "sharpe_post_reported": -0.2959673676201631,
+        "sharpe_post_valid": null,
+        "sharpe_raw": -0.7790277299811276
+      },
+      {
+        "max_drawdown_pct_post": -1.0782635525529036,
+        "n_trades_post": 3030,
+        "params": {
+          "arm_expiry_bars": 2,
+          "bb_num_std": 2.2,
+          "bb_window": 22,
+          "entry_mode": "bb_only",
+          "require_reclaim": false,
+          "side": "both",
+          "sl_pct": 0.015,
+          "stoch_d": 3,
+          "stoch_k": 14,
+          "stoch_overbought": 80.0,
+          "stoch_oversold": 20.0,
+          "stoch_smooth": 3,
+          "tp_has_priority": false,
+          "trade_on_close": true
+        },
+        "post_equity_min": -85446.17212833485,
+        "post_equity_valid": false,
+        "profit_factor_post": 0.8781619458626747,
+        "rank_raw": 9,
+        "run_id": "20260712_183200_mean_reversion_bb_stoch_BTCUSDT_1h_fce777cd",
+        "sharpe_post_reported": -0.2295561218492406,
+        "sharpe_post_valid": null,
+        "sharpe_raw": -0.9012249617316628
+      },
+      {
+        "max_drawdown_pct_post": -1.073035358752297,
+        "n_trades_post": 2962,
+        "params": {
+          "arm_expiry_bars": 1,
+          "bb_num_std": 2.0,
+          "bb_window": 18,
+          "entry_mode": "bb_only",
+          "require_reclaim": false,
+          "side": "both",
+          "sl_pct": 0.02,
+          "stoch_d": 3,
+          "stoch_k": 14,
+          "stoch_overbought": 80.0,
+          "stoch_oversold": 20.0,
+          "stoch_smooth": 3,
+          "tp_has_priority": false,
+          "trade_on_close": true
+        },
+        "post_equity_min": -73035.35875229692,
+        "post_equity_valid": false,
+        "profit_factor_post": 0.8604139578492029,
+        "rank_raw": 10,
+        "run_id": "20260712_182844_mean_reversion_bb_stoch_BTCUSDT_1h_89899d40",
+        "sharpe_post_reported": -0.4365713649618091,
+        "sharpe_post_valid": null,
+        "sharpe_raw": -0.9227112462328853
+      }
+    ],
+    "mr_b1.yaml|ETH/USDT|1h": [
+      {
+        "max_drawdown_pct_post": -1.022869995156665,
+        "n_trades_post": 2492,
+        "params": {
+          "arm_expiry_bars": 1,
+          "bb_num_std": 2.2,
+          "bb_window": 22,
+          "entry_mode": "bb_only",
+          "require_reclaim": true,
+          "side": "both",
+          "sl_pct": 0.02,
+          "stoch_d": 3,
+          "stoch_k": 14,
+          "stoch_overbought": 80.0,
+          "stoch_oversold": 20.0,
+          "stoch_smooth": 3,
+          "tp_has_priority": false,
+          "trade_on_close": true
+        },
+        "post_equity_min": -23205.131510561463,
+        "post_equity_valid": false,
+        "profit_factor_post": 0.8612198502067695,
+        "rank_raw": 1,
+        "run_id": "20260712_185056_mean_reversion_bb_stoch_ETHUSDT_1h_f152d5c0",
+        "sharpe_post_reported": -0.0342693973056736,
+        "sharpe_post_valid": null,
+        "sharpe_raw": -0.7830562033377103
+      },
+      {
+        "max_drawdown_pct_post": -1.0361571181752038,
+        "n_trades_post": 2682,
+        "params": {
+          "arm_expiry_bars": 2,
+          "bb_num_std": 2.2,
+          "bb_window": 22,
+          "entry_mode": "bb_only",
+          "require_reclaim": true,
+          "side": "both",
+          "sl_pct": 0.025,
+          "stoch_d": 3,
+          "stoch_k": 14,
+          "stoch_overbought": 80.0,
+          "stoch_oversold": 20.0,
+          "stoch_smooth": 3,
+          "tp_has_priority": false,
+          "trade_on_close": true
+        },
+        "post_equity_min": -41878.968713051625,
+        "post_equity_valid": false,
+        "profit_factor_post": 0.8859849252126105,
+        "rank_raw": 2,
+        "run_id": "20260712_184651_mean_reversion_bb_stoch_ETHUSDT_1h_8557c454",
+        "sharpe_post_reported": 0.1489459014716101,
+        "sharpe_post_valid": null,
+        "sharpe_raw": -0.8012085932873777
+      },
+      {
+        "max_drawdown_pct_post": -1.0496548301349338,
+        "n_trades_post": 2153,
+        "params": {
+          "arm_expiry_bars": 2,
+          "bb_num_std": 2.5,
+          "bb_window": 22,
+          "entry_mode": "bb_only",
+          "require_reclaim": false,
+          "side": "both",
+          "sl_pct": 0.025,
+          "stoch_d": 3,
+          "stoch_k": 14,
+          "stoch_overbought": 80.0,
+          "stoch_oversold": 20.0,
+          "stoch_smooth": 3,
+          "tp_has_priority": false,
+          "trade_on_close": true
+        },
+        "post_equity_min": -52025.442684521695,
+        "post_equity_valid": false,
+        "profit_factor_post": 0.8699826915872604,
+        "rank_raw": 3,
+        "run_id": "20260712_185537_mean_reversion_bb_stoch_ETHUSDT_1h_d90a464a",
+        "sharpe_post_reported": 0.0582453547220172,
+        "sharpe_post_valid": null,
+        "sharpe_raw": -0.8302378149447273
+      },
+      {
+        "max_drawdown_pct_post": -1.0378326246313851,
+        "n_trades_post": 2753,
+        "params": {
+          "arm_expiry_bars": 2,
+          "bb_num_std": 2.2,
+          "bb_window": 22,
+          "entry_mode": "bb_only",
+          "require_reclaim": false,
+          "side": "both",
+          "sl_pct": 0.025,
+          "stoch_d": 3,
+          "stoch_k": 14,
+          "stoch_overbought": 80.0,
+          "stoch_oversold": 20.0,
+          "stoch_smooth": 3,
+          "tp_has_priority": false,
+          "trade_on_close": true
+        },
+        "post_equity_min": -38687.233417221134,
+        "post_equity_valid": false,
+        "profit_factor_post": 0.8579800027093546,
+        "rank_raw": 4,
+        "run_id": "20260712_185403_mean_reversion_bb_stoch_ETHUSDT_1h_0ee49301",
+        "sharpe_post_reported": 0.2143824642125493,
+        "sharpe_post_valid": null,
+        "sharpe_raw": -0.8740939876709886
+      },
+      {
+        "max_drawdown_pct_post": -1.0609363606135658,
+        "n_trades_post": 2485,
+        "params": {
+          "arm_expiry_bars": 1,
+          "bb_num_std": 2.2,
+          "bb_window": 20,
+          "entry_mode": "bb_only",
+          "require_reclaim": true,
+          "side": "both",
+          "sl_pct": 0.025,
+          "stoch_d": 3,
+          "stoch_k": 14,
+          "stoch_overbought": 80.0,
+          "stoch_oversold": 20.0,
+          "stoch_smooth": 3,
+          "tp_has_priority": false,
+          "trade_on_close": true
+        },
+        "post_equity_min": -70352.27780970102,
+        "post_equity_valid": false,
+        "profit_factor_post": 0.8607275700728397,
+        "rank_raw": 5,
+        "run_id": "20260712_184925_mean_reversion_bb_stoch_ETHUSDT_1h_4d487639",
+        "sharpe_post_reported": -0.0871230940808124,
+        "sharpe_post_valid": null,
+        "sharpe_raw": -0.9499960899651134
+      },
+      {
+        "max_drawdown_pct_post": -1.0425879274823582,
+        "n_trades_post": 2180,
+        "params": {
+          "arm_expiry_bars": 1,
+          "bb_num_std": 2.4,
+          "bb_window": 22,
+          "entry_mode": "bb_only",
+          "require_reclaim": false,
+          "side": "both",
+          "sl_pct": 0.02,
+          "stoch_d": 3,
+          "stoch_k": 14,
+          "stoch_overbought": 80.0,
+          "stoch_oversold": 20.0,
+          "stoch_smooth": 3,
+          "tp_has_priority": false,
+          "trade_on_close": true
+        },
+        "post_equity_min": -43212.009937936586,
+        "post_equity_valid": false,
+        "profit_factor_post": 0.8511212744787167,
+        "rank_raw": 6,
+        "run_id": "20260712_184317_mean_reversion_bb_stoch_ETHUSDT_1h_3d0385b7",
+        "sharpe_post_reported": -0.3379735650760814,
+        "sharpe_post_valid": null,
+        "sharpe_raw": -0.960318982067448
+      },
+      {
+        "max_drawdown_pct_post": -1.0471357189225612,
+        "n_trades_post": 2554,
+        "params": {
+          "arm_expiry_bars": 2,
+          "bb_num_std": 2.3,
+          "bb_window": 22,
+          "entry_mode": "bb_only",
+          "require_reclaim": false,
+          "side": "both",
+          "sl_pct": 0.025,
+          "stoch_d": 3,
+          "stoch_k": 14,
+          "stoch_overbought": 80.0,
+          "stoch_oversold": 20.0,
+          "stoch_smooth": 3,
+          "tp_has_priority": false,
+          "trade_on_close": true
+        },
+        "post_equity_min": -50897.105457834536,
+        "post_equity_valid": false,
+        "profit_factor_post": 0.8606316384897276,
+        "rank_raw": 7,
+        "run_id": "20260712_185505_mean_reversion_bb_stoch_ETHUSDT_1h_7b28ecff",
+        "sharpe_post_reported": -0.7734826215309757,
+        "sharpe_post_valid": null,
+        "sharpe_raw": -1.0030679431306222
+      },
+      {
+        "max_drawdown_pct_post": -1.0360465776183303,
+        "n_trades_post": 2594,
+        "params": {
+          "arm_expiry_bars": 1,
+          "bb_num_std": 2.2,
+          "bb_window": 22,
+          "entry_mode": "bb_only",
+          "require_reclaim": false,
+          "side": "both",
+          "sl_pct": 0.02,
+          "stoch_d": 3,
+          "stoch_k": 14,
+          "stoch_overbought": 80.0,
+          "stoch_oversold": 20.0,
+          "stoch_smooth": 3,
+          "tp_has_priority": false,
+          "trade_on_close": true
+        },
+        "post_equity_min": -36574.80329178107,
+        "post_equity_valid": false,
+        "profit_factor_post": 0.8020431508382052,
+        "rank_raw": 8,
+        "run_id": "20260712_185434_mean_reversion_bb_stoch_ETHUSDT_1h_d762cc26",
+        "sharpe_post_reported": 0.0070721520999571,
+        "sharpe_post_valid": null,
+        "sharpe_raw": -1.0575439584325812
+      },
+      {
+        "max_drawdown_pct_post": -1.0570858960008978,
+        "n_trades_post": 2666,
+        "params": {
+          "arm_expiry_bars": 1,
+          "bb_num_std": 2.2,
+          "bb_window": 18,
+          "entry_mode": "bb_only",
+          "require_reclaim": false,
+          "side": "both",
+          "sl_pct": 0.025,
+          "stoch_d": 3,
+          "stoch_k": 14,
+          "stoch_overbought": 80.0,
+          "stoch_oversold": 20.0,
+          "stoch_smooth": 3,
+          "tp_has_priority": false,
+          "trade_on_close": true
+        },
+        "post_equity_min": -58102.73724922931,
+        "post_equity_valid": false,
+        "profit_factor_post": 0.8236298393967574,
+        "rank_raw": 9,
+        "run_id": "20260712_184722_mean_reversion_bb_stoch_ETHUSDT_1h_564d4637",
+        "sharpe_post_reported": -0.6166211010149092,
+        "sharpe_post_valid": null,
+        "sharpe_raw": -1.0801370549559022
+      },
+      {
+        "max_drawdown_pct_post": -1.0636889540499928,
+        "n_trades_post": 2692,
+        "params": {
+          "arm_expiry_bars": 1,
+          "bb_num_std": 2.2,
+          "bb_window": 20,
+          "entry_mode": "bb_only",
+          "require_reclaim": false,
+          "side": "both",
+          "sl_pct": 0.02,
+          "stoch_d": 3,
+          "stoch_k": 14,
+          "stoch_overbought": 80.0,
+          "stoch_oversold": 20.0,
+          "stoch_smooth": 3,
+          "tp_has_priority": false,
+          "trade_on_close": true
+        },
+        "post_equity_min": -67990.49811442404,
+        "post_equity_valid": false,
+        "profit_factor_post": 0.8318443829384886,
+        "rank_raw": 10,
+        "run_id": "20260712_184418_mean_reversion_bb_stoch_ETHUSDT_1h_d2ceb017",
+        "sharpe_post_reported": -0.5282167471865798,
+        "sharpe_post_valid": null,
+        "sharpe_raw": -1.1223770884319757
+      }
+    ],
+    "mr_b2.yaml|BTC/USDT|1h": [
+      {
+        "max_drawdown_pct_post": -1.0671816042544775,
+        "n_trades_post": 2807,
+        "params": {
+          "arm_expiry_bars": 2,
+          "bb_num_std": 2.0,
+          "bb_window": 20,
+          "entry_mode": "bb_only",
+          "require_reclaim": false,
+          "side": "both",
+          "sl_pct": 0.02,
+          "stoch_d": 3,
+          "stoch_k": 14,
+          "stoch_overbought": 80.0,
+          "stoch_oversold": 20.0,
+          "stoch_smooth": 3,
+          "tp_has_priority": false,
+          "trade_on_close": true
+        },
+        "post_equity_min": -71605.82336196888,
+        "post_equity_valid": false,
+        "profit_factor_post": 0.8463031271299267,
+        "rank_raw": 1,
+        "run_id": "20260712_190537_mean_reversion_bb_stoch_BTCUSDT_1h_1153a4df",
+        "sharpe_post_reported": -0.420782068802447,
+        "sharpe_post_valid": null,
+        "sharpe_raw": -1.0617891896149114
+      },
+      {
+        "max_drawdown_pct_post": -0.9761498555780972,
+        "n_trades_post": 1855,
+        "params": {
+          "arm_expiry_bars": 3,
+          "bb_num_std": 1.9,
+          "bb_window": 25,
+          "entry_mode": "bb_stoch",
+          "require_reclaim": false,
+          "side": "both",
+          "sl_pct": 0.025,
+          "stoch_d": 3,
+          "stoch_k": 14,
+          "stoch_overbought": 80.0,
+          "stoch_oversold": 25.0,
+          "stoch_smooth": 3,
+          "tp_has_priority": false,
+          "trade_on_close": true
+        },
+        "post_equity_min": 23850.144421902784,
+        "post_equity_valid": true,
+        "profit_factor_post": 0.7108629025378052,
+        "rank_raw": 2,
+        "run_id": "20260712_191154_mean_reversion_bb_stoch_BTCUSDT_1h_a99b9ad7",
+        "sharpe_post_reported": -1.1113117574343965,
+        "sharpe_post_valid": -1.1113117574343965,
+        "sharpe_raw": -1.112369875470555
+      },
+      {
+        "max_drawdown_pct_post": -1.0430290391804304,
+        "n_trades_post": 2548,
+        "params": {
+          "arm_expiry_bars": 4,
+          "bb_num_std": 1.9,
+          "bb_window": 20,
+          "entry_mode": "bb_only",
+          "require_reclaim": false,
+          "side": "both",
+          "sl_pct": 0.02,
+          "stoch_d": 3,
+          "stoch_k": 14,
+          "stoch_overbought": 80.0,
+          "stoch_oversold": 25.0,
+          "stoch_smooth": 3,
+          "tp_has_priority": false,
+          "trade_on_close": true
+        },
+        "post_equity_min": -43832.59993079289,
+        "post_equity_valid": false,
+        "profit_factor_post": 0.7981534954916423,
+        "rank_raw": 3,
+        "run_id": "20260712_191123_mean_reversion_bb_stoch_BTCUSDT_1h_26794d6b",
+        "sharpe_post_reported": -0.4448914148724088,
+        "sharpe_post_valid": null,
+        "sharpe_raw": -1.1536478255428977
+      },
+      {
+        "max_drawdown_pct_post": -1.002031641764913,
+        "n_trades_post": 2041,
+        "params": {
+          "arm_expiry_bars": 2,
+          "bb_num_std": 1.8,
+          "bb_window": 25,
+          "entry_mode": "bb_stoch",
+          "require_reclaim": false,
+          "side": "both",
+          "sl_pct": 0.02,
+          "stoch_d": 3,
+          "stoch_k": 14,
+          "stoch_overbought": 80.0,
+          "stoch_oversold": 25.0,
+          "stoch_smooth": 3,
+          "tp_has_priority": false,
+          "trade_on_close": true
+        },
+        "post_equity_min": -2031.641764913271,
+        "post_equity_valid": false,
+        "profit_factor_post": 0.7705784514005977,
+        "rank_raw": 4,
+        "run_id": "20260712_190506_mean_reversion_bb_stoch_BTCUSDT_1h_3aa5a6ab",
+        "sharpe_post_reported": -0.972434603009552,
+        "sharpe_post_valid": null,
+        "sharpe_raw": -1.155693808123188
+      },
+      {
+        "max_drawdown_pct_post": -1.0883050424506238,
+        "n_trades_post": 2765,
+        "params": {
+          "arm_expiry_bars": 2,
+          "bb_num_std": 1.8,
+          "bb_window": 15,
+          "entry_mode": "bb_only",
+          "require_reclaim": false,
+          "side": "both",
+          "sl_pct": 0.03,
+          "stoch_d": 3,
+          "stoch_k": 14,
+          "stoch_overbought": 80.0,
+          "stoch_oversold": 25.0,
+          "stoch_smooth": 3,
+          "tp_has_priority": false,
+          "trade_on_close": true
+        },
+        "post_equity_min": -90772.6278795914,
+        "post_equity_valid": false,
+        "profit_factor_post": 0.8242308727624644,
+        "rank_raw": 5,
+        "run_id": "20260712_185951_mean_reversion_bb_stoch_BTCUSDT_1h_466e8b4e",
+        "sharpe_post_reported": -0.5300917329110426,
+        "sharpe_post_valid": null,
+        "sharpe_raw": -1.1650073759106394
+      },
+      {
+        "max_drawdown_pct_post": -0.9897860195446436,
+        "n_trades_post": 1854,
+        "params": {
+          "arm_expiry_bars": 4,
+          "bb_num_std": 1.8,
+          "bb_window": 25,
+          "entry_mode": "bb_stoch",
+          "require_reclaim": false,
+          "side": "both",
+          "sl_pct": 0.02,
+          "stoch_d": 3,
+          "stoch_k": 14,
+          "stoch_overbought": 75.0,
+          "stoch_oversold": 20.0,
+          "stoch_smooth": 3,
+          "tp_has_priority": false,
+          "trade_on_close": true
+        },
+        "post_equity_min": 10412.618726292632,
+        "post_equity_valid": true,
+        "profit_factor_post": 0.7765089220350404,
+        "rank_raw": 6,
+        "run_id": "20260712_190058_mean_reversion_bb_stoch_BTCUSDT_1h_5cadb481",
+        "sharpe_post_reported": -1.178800111853779,
+        "sharpe_post_valid": -1.178800111853779,
+        "sharpe_raw": -1.184822117995327
+      },
+      {
+        "max_drawdown_pct_post": -1.106133686433203,
+        "n_trades_post": 3657,
+        "params": {
+          "arm_expiry_bars": 3,
+          "bb_num_std": 1.7,
+          "bb_window": 15,
+          "entry_mode": "bb_only",
+          "require_reclaim": false,
+          "side": "both",
+          "sl_pct": 0.015,
+          "stoch_d": 3,
+          "stoch_k": 14,
+          "stoch_overbought": 75.0,
+          "stoch_oversold": 20.0,
+          "stoch_smooth": 3,
+          "tp_has_priority": false,
+          "trade_on_close": true
+        },
+        "post_equity_min": -106541.54913229236,
+        "post_equity_valid": false,
+        "profit_factor_post": 0.8095524280094596,
+        "rank_raw": 7,
+        "run_id": "20260712_190846_mean_reversion_bb_stoch_BTCUSDT_1h_5d87d286",
+        "sharpe_post_reported": -0.4374654880194994,
+        "sharpe_post_valid": null,
+        "sharpe_raw": -1.2294761910852603
+      },
+      {
+        "max_drawdown_pct_post": -1.0895561123351285,
+        "n_trades_post": 2963,
+        "params": {
+          "arm_expiry_bars": 3,
+          "bb_num_std": 1.9,
+          "bb_window": 15,
+          "entry_mode": "bb_only",
+          "require_reclaim": false,
+          "side": "both",
+          "sl_pct": 0.02,
+          "stoch_d": 3,
+          "stoch_k": 14,
+          "stoch_overbought": 80.0,
+          "stoch_oversold": 25.0,
+          "stoch_smooth": 3,
+          "tp_has_priority": false,
+          "trade_on_close": true
+        },
+        "post_equity_min": -90022.18614701877,
+        "post_equity_valid": false,
+        "profit_factor_post": 0.8032217886141119,
+        "rank_raw": 8,
+        "run_id": "20260712_185918_mean_reversion_bb_stoch_BTCUSDT_1h_b40e3314",
+        "sharpe_post_reported": -0.4383483987125732,
+        "sharpe_post_valid": null,
+        "sharpe_raw": -1.2544853285556
+      },
+      {
+        "max_drawdown_pct_post": -1.0257332139340394,
+        "n_trades_post": 1883,
+        "params": {
+          "arm_expiry_bars": 2,
+          "bb_num_std": 1.9,
+          "bb_window": 15,
+          "entry_mode": "bb_stoch",
+          "require_reclaim": false,
+          "side": "both",
+          "sl_pct": 0.03,
+          "stoch_d": 3,
+          "stoch_k": 14,
+          "stoch_overbought": 75.0,
+          "stoch_oversold": 25.0,
+          "stoch_smooth": 3,
+          "tp_has_priority": false,
+          "trade_on_close": true
+        },
+        "post_equity_min": -25813.54335086338,
+        "post_equity_valid": false,
+        "profit_factor_post": 0.7622063413359836,
+        "rank_raw": 9,
+        "run_id": "20260712_190712_mean_reversion_bb_stoch_BTCUSDT_1h_d578c144",
+        "sharpe_post_reported": -0.4770079516020224,
+        "sharpe_post_valid": null,
+        "sharpe_raw": -1.297857737787187
+      },
+      {
+        "max_drawdown_pct_post": -1.0301749700112686,
+        "n_trades_post": 2131,
+        "params": {
+          "arm_expiry_bars": 2,
+          "bb_num_std": 1.8,
+          "bb_window": 20,
+          "entry_mode": "bb_only",
+          "require_reclaim": false,
+          "side": "both",
+          "sl_pct": 0.03,
+          "stoch_d": 3,
+          "stoch_k": 14,
+          "stoch_overbought": 80.0,
+          "stoch_oversold": 25.0,
+          "stoch_smooth": 3,
+          "tp_has_priority": false,
+          "trade_on_close": true
+        },
+        "post_equity_min": -31847.023567241304,
+        "post_equity_valid": false,
+        "profit_factor_post": 0.7546586595623352,
+        "rank_raw": 10,
+        "run_id": "20260712_190814_mean_reversion_bb_stoch_BTCUSDT_1h_c8330c26",
+        "sharpe_post_reported": -0.6406599810002663,
+        "sharpe_post_valid": null,
+        "sharpe_raw": -1.317214335793641
+      }
+    ],
+    "mr_b2.yaml|ETH/USDT|1h": [
+      {
+        "max_drawdown_pct_post": -1.0150952486566278,
+        "n_trades_post": 2410,
+        "params": {
+          "arm_expiry_bars": 3,
+          "bb_num_std": 1.9,
+          "bb_window": 25,
+          "entry_mode": "bb_stoch",
+          "require_reclaim": false,
+          "side": "both",
+          "sl_pct": 0.025,
+          "stoch_d": 3,
+          "stoch_k": 14,
+          "stoch_overbought": 80.0,
+          "stoch_oversold": 25.0,
+          "stoch_smooth": 3,
+          "tp_has_priority": false,
+          "trade_on_close": true
+        },
+        "post_equity_min": -15401.919371231208,
+        "post_equity_valid": false,
+        "profit_factor_post": 0.695400201531613,
+        "rank_raw": 1,
+        "run_id": "20260712_192706_mean_reversion_bb_stoch_ETHUSDT_1h_a99b9ad7",
+        "sharpe_post_reported": -0.5509624608894131,
+        "sharpe_post_valid": null,
+        "sharpe_raw": -1.393524828660917
+      },
+      {
+        "max_drawdown_pct_post": -1.053704987171119,
+        "n_trades_post": 3458,
+        "params": {
+          "arm_expiry_bars": 2,
+          "bb_num_std": 1.7,
+          "bb_window": 20,
+          "entry_mode": "bb_only",
+          "require_reclaim": false,
+          "side": "both",
+          "sl_pct": 0.03,
+          "stoch_d": 3,
+          "stoch_k": 14,
+          "stoch_overbought": 75.0,
+          "stoch_oversold": 20.0,
+          "stoch_smooth": 3,
+          "tp_has_priority": false,
+          "trade_on_close": true
+        },
+        "post_equity_min": -60284.6284391387,
+        "post_equity_valid": false,
+        "profit_factor_post": 0.8129576216186879,
+        "rank_raw": 2,
+        "run_id": "20260712_192433_mean_reversion_bb_stoch_ETHUSDT_1h_941288fc",
+        "sharpe_post_reported": -0.2936340357475728,
+        "sharpe_post_valid": null,
+        "sharpe_raw": -1.6225455642370883
+      },
+      {
+        "max_drawdown_pct_post": -1.0447126161734412,
+        "n_trades_post": 3337,
+        "params": {
+          "arm_expiry_bars": 2,
+          "bb_num_std": 1.8,
+          "bb_window": 20,
+          "entry_mode": "bb_only",
+          "require_reclaim": false,
+          "side": "both",
+          "sl_pct": 0.03,
+          "stoch_d": 3,
+          "stoch_k": 14,
+          "stoch_overbought": 80.0,
+          "stoch_oversold": 25.0,
+          "stoch_smooth": 3,
+          "tp_has_priority": false,
+          "trade_on_close": true
+        },
+        "post_equity_min": -48995.06654624728,
+        "post_equity_valid": false,
+        "profit_factor_post": 0.7886684534488396,
+        "rank_raw": 3,
+        "run_id": "20260712_192330_mean_reversion_bb_stoch_ETHUSDT_1h_c8330c26",
+        "sharpe_post_reported": -1.0344052150869414,
+        "sharpe_post_valid": null,
+        "sharpe_raw": -1.6727516572094472
+      },
+      {
+        "max_drawdown_pct_post": -1.0605323321261713,
+        "n_trades_post": 3475,
+        "params": {
+          "arm_expiry_bars": 2,
+          "bb_num_std": 2.0,
+          "bb_window": 20,
+          "entry_mode": "bb_only",
+          "require_reclaim": false,
+          "side": "both",
+          "sl_pct": 0.02,
+          "stoch_d": 3,
+          "stoch_k": 14,
+          "stoch_overbought": 80.0,
+          "stoch_oversold": 20.0,
+          "stoch_smooth": 3,
+          "tp_has_priority": false,
+          "trade_on_close": true
+        },
+        "post_equity_min": -64116.21760744909,
+        "post_equity_valid": false,
+        "profit_factor_post": 0.7766110748662183,
+        "rank_raw": 4,
+        "run_id": "20260712_192059_mean_reversion_bb_stoch_ETHUSDT_1h_1153a4df",
+        "sharpe_post_reported": -0.863089803239356,
+        "sharpe_post_valid": null,
+        "sharpe_raw": -1.712925668369213
+      },
+      {
+        "max_drawdown_pct_post": -1.0075441027652392,
+        "n_trades_post": 2628,
+        "params": {
+          "arm_expiry_bars": 4,
+          "bb_num_std": 1.8,
+          "bb_window": 25,
+          "entry_mode": "bb_stoch",
+          "require_reclaim": false,
+          "side": "both",
+          "sl_pct": 0.02,
+          "stoch_d": 3,
+          "stoch_k": 14,
+          "stoch_overbought": 75.0,
+          "stoch_oversold": 20.0,
+          "stoch_smooth": 3,
+          "tp_has_priority": false,
+          "trade_on_close": true
+        },
+        "post_equity_min": -7576.564058704737,
+        "post_equity_valid": false,
+        "profit_factor_post": 0.6258724569206245,
+        "rank_raw": 5,
+        "run_id": "20260712_191632_mean_reversion_bb_stoch_ETHUSDT_1h_5cadb481",
+        "sharpe_post_reported": -0.3905243865019854,
+        "sharpe_post_valid": null,
+        "sharpe_raw": -1.746214712908063
+      },
+      {
+        "max_drawdown_pct_post": -1.0275505321422047,
+        "n_trades_post": 2904,
+        "params": {
+          "arm_expiry_bars": 2,
+          "bb_num_std": 1.9,
+          "bb_window": 15,
+          "entry_mode": "bb_stoch",
+          "require_reclaim": false,
+          "side": "both",
+          "sl_pct": 0.03,
+          "stoch_d": 3,
+          "stoch_k": 14,
+          "stoch_overbought": 75.0,
+          "stoch_oversold": 25.0,
+          "stoch_smooth": 3,
+          "tp_has_priority": false,
+          "trade_on_close": true
+        },
+        "post_equity_min": -27859.93944588443,
+        "post_equity_valid": false,
+        "profit_factor_post": 0.6959666421351467,
+        "rank_raw": 6,
+        "run_id": "20260712_192230_mean_reversion_bb_stoch_ETHUSDT_1h_d578c144",
+        "sharpe_post_reported": -0.8945323500657383,
+        "sharpe_post_valid": null,
+        "sharpe_raw": -1.7670018423713791
+      },
+      {
+        "max_drawdown_pct_post": -1.0201324441478103,
+        "n_trades_post": 2641,
+        "params": {
+          "arm_expiry_bars": 2,
+          "bb_num_std": 1.8,
+          "bb_window": 25,
+          "entry_mode": "bb_stoch",
+          "require_reclaim": false,
+          "side": "both",
+          "sl_pct": 0.02,
+          "stoch_d": 3,
+          "stoch_k": 14,
+          "stoch_overbought": 80.0,
+          "stoch_oversold": 25.0,
+          "stoch_smooth": 3,
+          "tp_has_priority": false,
+          "trade_on_close": true
+        },
+        "post_equity_min": -20518.439417951005,
+        "post_equity_valid": false,
+        "profit_factor_post": 0.6139377886553713,
+        "rank_raw": 7,
+        "run_id": "20260712_192028_mean_reversion_bb_stoch_ETHUSDT_1h_3aa5a6ab",
+        "sharpe_post_reported": -1.3440693461480195,
+        "sharpe_post_valid": null,
+        "sharpe_raw": -1.771701161542378
+      },
+      {
+        "max_drawdown_pct_post": -1.0202381425763574,
+        "n_trades_post": 2903,
+        "params": {
+          "arm_expiry_bars": 3,
+          "bb_num_std": 1.8,
+          "bb_window": 20,
+          "entry_mode": "bb_stoch",
+          "require_reclaim": false,
+          "side": "both",
+          "sl_pct": 0.025,
+          "stoch_d": 3,
+          "stoch_k": 14,
+          "stoch_overbought": 75.0,
+          "stoch_oversold": 25.0,
+          "stoch_smooth": 3,
+          "tp_has_priority": false,
+          "trade_on_close": true
+        },
+        "post_equity_min": -20811.71145917409,
+        "post_equity_valid": false,
+        "profit_factor_post": 0.7013896530152729,
+        "rank_raw": 8,
+        "run_id": "20260712_191359_mean_reversion_bb_stoch_ETHUSDT_1h_acfd21e2",
+        "sharpe_post_reported": -0.509145557542335,
+        "sharpe_post_valid": null,
+        "sharpe_raw": -1.804857842467824
+      },
+      {
+        "max_drawdown_pct_post": -1.034018590194049,
+        "n_trades_post": 2578,
+        "params": {
+          "arm_expiry_bars": 3,
+          "bb_num_std": 2.0,
+          "bb_window": 15,
+          "entry_mode": "bb_stoch",
+          "require_reclaim": false,
+          "side": "both",
+          "sl_pct": 0.03,
+          "stoch_d": 3,
+          "stoch_k": 14,
+          "stoch_overbought": 80.0,
+          "stoch_oversold": 25.0,
+          "stoch_smooth": 3,
+          "tp_has_priority": false,
+          "trade_on_close": true
+        },
+        "post_equity_min": -36384.770799195096,
+        "post_equity_valid": false,
+        "profit_factor_post": 0.7221954138224793,
+        "rank_raw": 9,
+        "run_id": "20260712_192737_mean_reversion_bb_stoch_ETHUSDT_1h_177a98fb",
+        "sharpe_post_reported": -0.9340981585024332,
+        "sharpe_post_valid": null,
+        "sharpe_raw": -1.8142476477418064
+      },
+      {
+        "max_drawdown_pct_post": -1.0091744394923334,
+        "n_trades_post": 2585,
+        "params": {
+          "arm_expiry_bars": 2,
+          "bb_num_std": 1.8,
+          "bb_window": 20,
+          "entry_mode": "bb_stoch",
+          "require_reclaim": false,
+          "side": "both",
+          "sl_pct": 0.025,
+          "stoch_d": 3,
+          "stoch_k": 14,
+          "stoch_overbought": 75.0,
+          "stoch_oversold": 20.0,
+          "stoch_smooth": 3,
+          "tp_has_priority": false,
+          "trade_on_close": true
+        },
+        "post_equity_min": -9583.992275800549,
+        "post_equity_valid": false,
+        "profit_factor_post": 0.6623809041160584,
+        "rank_raw": 10,
+        "run_id": "20260712_191929_mean_reversion_bb_stoch_ETHUSDT_1h_3c6d4336",
+        "sharpe_post_reported": -0.3372311380726054,
+        "sharpe_post_valid": null,
+        "sharpe_raw": -1.8524063465462648
+      }
+    ],
+    "mr_b3.yaml|BTC/USDT|15m": [
+      {
+        "max_drawdown_pct_post": -1.260591098674611,
+        "n_trades_post": 6003,
+        "params": {
+          "arm_expiry_bars": 1,
+          "bb_num_std": 2.0,
+          "bb_window": 20,
+          "entry_mode": "bb_only",
+          "require_reclaim": false,
+          "side": "both",
+          "sl_pct": 0.02,
+          "stoch_d": 3,
+          "stoch_k": 9,
+          "stoch_overbought": 75.0,
+          "stoch_oversold": 25.0,
+          "stoch_smooth": 3,
+          "tp_has_priority": false,
+          "trade_on_close": true
+        },
+        "post_equity_min": -267663.2164628423,
+        "post_equity_valid": false,
+        "profit_factor_post": 0.829781879145783,
+        "rank_raw": 1,
+        "run_id": "20260712_195847_mean_reversion_bb_stoch_BTCUSDT_15m_a44f42e5",
+        "sharpe_post_reported": 0.0224177422039451,
+        "sharpe_post_valid": null,
+        "sharpe_raw": -1.398858188880947
+      },
+      {
+        "max_drawdown_pct_post": -1.1888431423212504,
+        "n_trades_post": 5953,
+        "params": {
+          "arm_expiry_bars": 2,
+          "bb_num_std": 1.9,
+          "bb_window": 20,
+          "entry_mode": "bb_only",
+          "require_reclaim": false,
+          "side": "both",
+          "sl_pct": 0.025,
+          "stoch_d": 3,
+          "stoch_k": 9,
+          "stoch_overbought": 80.0,
+          "stoch_oversold": 20.0,
+          "stoch_smooth": 3,
+          "tp_has_priority": false,
+          "trade_on_close": true
+        },
+        "post_equity_min": -193890.86202371356,
+        "post_equity_valid": false,
+        "profit_factor_post": 0.7804276640552942,
+        "rank_raw": 2,
+        "run_id": "20260712_193651_mean_reversion_bb_stoch_BTCUSDT_15m_660e0d7d",
+        "sharpe_post_reported": -0.8539709525217324,
+        "sharpe_post_valid": null,
+        "sharpe_raw": -1.4125100751424262
+      },
+      {
+        "max_drawdown_pct_post": -1.1864670409990272,
+        "n_trades_post": 5656,
+        "params": {
+          "arm_expiry_bars": 1,
+          "bb_num_std": 1.9,
+          "bb_window": 20,
+          "entry_mode": "bb_only",
+          "require_reclaim": false,
+          "side": "both",
+          "sl_pct": 0.025,
+          "stoch_d": 3,
+          "stoch_k": 9,
+          "stoch_overbought": 75.0,
+          "stoch_oversold": 20.0,
+          "stoch_smooth": 3,
+          "tp_has_priority": false,
+          "trade_on_close": true
+        },
+        "post_equity_min": -190775.55892295035,
+        "post_equity_valid": false,
+        "profit_factor_post": 0.7761702264623067,
+        "rank_raw": 3,
+        "run_id": "20260712_200052_mean_reversion_bb_stoch_BTCUSDT_15m_d1442b94",
+        "sharpe_post_reported": -1.0672626255370985,
+        "sharpe_post_valid": null,
+        "sharpe_raw": -1.4882140334750436
+      },
+      {
+        "max_drawdown_pct_post": -1.183100116359416,
+        "n_trades_post": 6190,
+        "params": {
+          "arm_expiry_bars": 3,
+          "bb_num_std": 2.0,
+          "bb_window": 20,
+          "entry_mode": "bb_only",
+          "require_reclaim": false,
+          "side": "both",
+          "sl_pct": 0.015,
+          "stoch_d": 3,
+          "stoch_k": 14,
+          "stoch_overbought": 75.0,
+          "stoch_oversold": 25.0,
+          "stoch_smooth": 3,
+          "tp_has_priority": false,
+          "trade_on_close": true
+        },
+        "post_equity_min": -189705.60129585155,
+        "post_equity_valid": false,
+        "profit_factor_post": 0.7727454714261239,
+        "rank_raw": 4,
+        "run_id": "20260712_193048_mean_reversion_bb_stoch_BTCUSDT_15m_bcc249c2",
+        "sharpe_post_reported": -0.1497717205705892,
+        "sharpe_post_valid": null,
+        "sharpe_raw": -1.6046251562694125
+      },
+      {
+        "max_drawdown_pct_post": -1.1332505478069677,
+        "n_trades_post": 5078,
+        "params": {
+          "arm_expiry_bars": 3,
+          "bb_num_std": 1.8,
+          "bb_window": 20,
+          "entry_mode": "bb_only",
+          "require_reclaim": false,
+          "side": "both",
+          "sl_pct": 0.02,
+          "stoch_d": 3,
+          "stoch_k": 9,
+          "stoch_overbought": 75.0,
+          "stoch_oversold": 25.0,
+          "stoch_smooth": 3,
+          "tp_has_priority": false,
+          "trade_on_close": true
+        },
+        "post_equity_min": -136943.58286491162,
+        "post_equity_valid": false,
+        "profit_factor_post": 0.7036295981687261,
+        "rank_raw": 5,
+        "run_id": "20260712_202655_mean_reversion_bb_stoch_BTCUSDT_15m_3c2b9554",
+        "sharpe_post_reported": -0.7825397157640975,
+        "sharpe_post_valid": null,
+        "sharpe_raw": -1.6860234164497674
+      },
+      {
+        "max_drawdown_pct_post": -1.2062434270548628,
+        "n_trades_post": 6707,
+        "params": {
+          "arm_expiry_bars": 2,
+          "bb_num_std": 2.2,
+          "bb_window": 10,
+          "entry_mode": "bb_only",
+          "require_reclaim": false,
+          "side": "both",
+          "sl_pct": 0.025,
+          "stoch_d": 3,
+          "stoch_k": 9,
+          "stoch_overbought": 75.0,
+          "stoch_oversold": 20.0,
+          "stoch_smooth": 3,
+          "tp_has_priority": false,
+          "trade_on_close": true
+        },
+        "post_equity_min": -209972.43396283852,
+        "post_equity_valid": false,
+        "profit_factor_post": 0.7142625500815921,
+        "rank_raw": 6,
+        "run_id": "20260712_201056_mean_reversion_bb_stoch_BTCUSDT_15m_e4549504",
+        "sharpe_post_reported": -2.0082180284021725,
+        "sharpe_post_valid": null,
+        "sharpe_raw": -1.7417876664893612
+      },
+      {
+        "max_drawdown_pct_post": -1.1695822382058956,
+        "n_trades_post": 5542,
+        "params": {
+          "arm_expiry_bars": 2,
+          "bb_num_std": 2.1,
+          "bb_window": 14,
+          "entry_mode": "bb_only",
+          "require_reclaim": false,
+          "side": "both",
+          "sl_pct": 0.02,
+          "stoch_d": 3,
+          "stoch_k": 9,
+          "stoch_overbought": 75.0,
+          "stoch_oversold": 25.0,
+          "stoch_smooth": 3,
+          "tp_has_priority": false,
+          "trade_on_close": true
+        },
+        "post_equity_min": -175849.7402285141,
+        "post_equity_valid": false,
+        "profit_factor_post": 0.7160645829217436,
+        "rank_raw": 7,
+        "run_id": "20260712_201454_mean_reversion_bb_stoch_BTCUSDT_15m_e6fb45d4",
+        "sharpe_post_reported": -0.8752129066818722,
+        "sharpe_post_valid": null,
+        "sharpe_raw": -1.800134614122122
+      },
+      {
+        "max_drawdown_pct_post": -1.2005902368212484,
+        "n_trades_post": 6956,
+        "params": {
+          "arm_expiry_bars": 1,
+          "bb_num_std": 1.9,
+          "bb_window": 14,
+          "entry_mode": "bb_only",
+          "require_reclaim": false,
+          "side": "both",
+          "sl_pct": 0.015,
+          "stoch_d": 3,
+          "stoch_k": 14,
+          "stoch_overbought": 75.0,
+          "stoch_oversold": 20.0,
+          "stoch_smooth": 3,
+          "tp_has_priority": false,
+          "trade_on_close": true
+        },
+        "post_equity_min": -208033.2999370999,
+        "post_equity_valid": false,
+        "profit_factor_post": 0.7243358851063403,
+        "rank_raw": 8,
+        "run_id": "20260712_195649_mean_reversion_bb_stoch_BTCUSDT_15m_8360a4fa",
+        "sharpe_post_reported": -2.762793115752914,
+        "sharpe_post_valid": null,
+        "sharpe_raw": -1.8738903683361596
+      },
+      {
+        "max_drawdown_pct_post": -1.20073546746197,
+        "n_trades_post": 6958,
+        "params": {
+          "arm_expiry_bars": 1,
+          "bb_num_std": 1.9,
+          "bb_window": 14,
+          "entry_mode": "bb_only",
+          "require_reclaim": false,
+          "side": "both",
+          "sl_pct": 0.015,
+          "stoch_d": 3,
+          "stoch_k": 9,
+          "stoch_overbought": 80.0,
+          "stoch_oversold": 20.0,
+          "stoch_smooth": 3,
+          "tp_has_priority": false,
+          "trade_on_close": true
+        },
+        "post_equity_min": -209835.47523908204,
+        "post_equity_valid": false,
+        "profit_factor_post": 0.7259358754052542,
+        "rank_raw": 9,
+        "run_id": "20260712_193249_mean_reversion_bb_stoch_BTCUSDT_15m_859c1a3a",
+        "sharpe_post_reported": -2.580762883470601,
+        "sharpe_post_valid": null,
+        "sharpe_raw": -1.87910614957022
+      },
+      {
+        "max_drawdown_pct_post": -1.20073546746197,
+        "n_trades_post": 6958,
+        "params": {
+          "arm_expiry_bars": 1,
+          "bb_num_std": 1.9,
+          "bb_window": 14,
+          "entry_mode": "bb_only",
+          "require_reclaim": false,
+          "side": "both",
+          "sl_pct": 0.015,
+          "stoch_d": 3,
+          "stoch_k": 9,
+          "stoch_overbought": 80.0,
+          "stoch_oversold": 20.0,
+          "stoch_smooth": 3,
+          "tp_has_priority": false,
+          "trade_on_close": true
+        },
+        "post_equity_min": -209835.47523908204,
+        "post_equity_valid": false,
+        "profit_factor_post": 0.7259358754052542,
+        "rank_raw": 10,
+        "run_id": "20260712_200254_mean_reversion_bb_stoch_BTCUSDT_15m_859c1a3a",
+        "sharpe_post_reported": -2.580762883470601,
+        "sharpe_post_valid": null,
+        "sharpe_raw": -1.87910614957022
+      }
+    ],
+    "mr_b3.yaml|ETH/USDT|15m": [
+      {
+        "max_drawdown_pct_post": -1.2742146258879803,
+        "n_trades_post": 10054,
+        "params": {
+          "arm_expiry_bars": 2,
+          "bb_num_std": 2.1,
+          "bb_window": 14,
+          "entry_mode": "bb_only",
+          "require_reclaim": false,
+          "side": "both",
+          "sl_pct": 0.02,
+          "stoch_d": 3,
+          "stoch_k": 9,
+          "stoch_overbought": 75.0,
+          "stoch_oversold": 25.0,
+          "stoch_smooth": 3,
+          "tp_has_priority": false,
+          "trade_on_close": true
+        },
+        "post_equity_min": -287253.3504850656,
+        "post_equity_valid": false,
+        "profit_factor_post": 0.8561309438342336,
+        "rank_raw": 1,
+        "run_id": "20260712_211310_mean_reversion_bb_stoch_ETHUSDT_15m_e6fb45d4",
+        "sharpe_post_reported": -0.65355991463927,
+        "sharpe_post_valid": null,
+        "sharpe_raw": -1.797998265082135
+      },
+      {
+        "max_drawdown_pct_post": -1.2132096636145937,
+        "n_trades_post": 9153,
+        "params": {
+          "arm_expiry_bars": 3,
+          "bb_num_std": 2.0,
+          "bb_window": 14,
+          "entry_mode": "bb_only",
+          "require_reclaim": false,
+          "side": "both",
+          "sl_pct": 0.02,
+          "stoch_d": 3,
+          "stoch_k": 9,
+          "stoch_overbought": 80.0,
+          "stoch_oversold": 20.0,
+          "stoch_smooth": 3,
+          "tp_has_priority": false,
+          "trade_on_close": true
+        },
+        "post_equity_min": -223198.10489554697,
+        "post_equity_valid": false,
+        "profit_factor_post": 0.8221478459153609,
+        "rank_raw": 2,
+        "run_id": "20260712_211707_mean_reversion_bb_stoch_ETHUSDT_15m_8c6092d8",
+        "sharpe_post_reported": -0.4555843070032865,
+        "sharpe_post_valid": null,
+        "sharpe_raw": -1.8595371558940088
+      },
+      {
+        "max_drawdown_pct_post": -1.1703966081393176,
+        "n_trades_post": 6079,
+        "params": {
+          "arm_expiry_bars": 2,
+          "bb_num_std": 1.9,
+          "bb_window": 20,
+          "entry_mode": "bb_only",
+          "require_reclaim": false,
+          "side": "both",
+          "sl_pct": 0.025,
+          "stoch_d": 3,
+          "stoch_k": 9,
+          "stoch_overbought": 80.0,
+          "stoch_oversold": 20.0,
+          "stoch_smooth": 3,
+          "tp_has_priority": false,
+          "trade_on_close": true
+        },
+        "post_equity_min": -173938.1468953663,
+        "post_equity_valid": false,
+        "profit_factor_post": 0.8218920447544152,
+        "rank_raw": 3,
+        "run_id": "20260712_203634_mean_reversion_bb_stoch_ETHUSDT_15m_660e0d7d",
+        "sharpe_post_reported": -0.22476330731366,
+        "sharpe_post_valid": null,
+        "sharpe_raw": -1.869136763433174
+      },
+      {
+        "max_drawdown_pct_post": -1.1681285333512643,
+        "n_trades_post": 6597,
+        "params": {
+          "arm_expiry_bars": 1,
+          "bb_num_std": 1.9,
+          "bb_window": 20,
+          "entry_mode": "bb_only",
+          "require_reclaim": false,
+          "side": "both",
+          "sl_pct": 0.025,
+          "stoch_d": 3,
+          "stoch_k": 9,
+          "stoch_overbought": 75.0,
+          "stoch_oversold": 20.0,
+          "stoch_smooth": 3,
+          "tp_has_priority": false,
+          "trade_on_close": true
+        },
+        "post_equity_min": -180854.74702868357,
+        "post_equity_valid": false,
+        "profit_factor_post": 0.8243981782843061,
+        "rank_raw": 4,
+        "run_id": "20260712_205934_mean_reversion_bb_stoch_ETHUSDT_15m_d1442b94",
+        "sharpe_post_reported": -0.907697355509128,
+        "sharpe_post_valid": null,
+        "sharpe_raw": -1.871697000927178
+      },
+      {
+        "max_drawdown_pct_post": -1.1950457195571036,
+        "n_trades_post": 7280,
+        "params": {
+          "arm_expiry_bars": 1,
+          "bb_num_std": 2.0,
+          "bb_window": 20,
+          "entry_mode": "bb_only",
+          "require_reclaim": false,
+          "side": "both",
+          "sl_pct": 0.02,
+          "stoch_d": 3,
+          "stoch_k": 9,
+          "stoch_overbought": 75.0,
+          "stoch_oversold": 25.0,
+          "stoch_smooth": 3,
+          "tp_has_priority": false,
+          "trade_on_close": true
+        },
+        "post_equity_min": -196869.9138193239,
+        "post_equity_valid": false,
+        "profit_factor_post": 0.8370617315155636,
+        "rank_raw": 5,
+        "run_id": "20260712_205738_mean_reversion_bb_stoch_ETHUSDT_15m_a44f42e5",
+        "sharpe_post_reported": 0.2548525925400297,
+        "sharpe_post_valid": null,
+        "sharpe_raw": -1.9001928899693967
+      },
+      {
+        "max_drawdown_pct_post": -1.163813122346941,
+        "n_trades_post": 6831,
+        "params": {
+          "arm_expiry_bars": 3,
+          "bb_num_std": 1.8,
+          "bb_window": 20,
+          "entry_mode": "bb_only",
+          "require_reclaim": false,
+          "side": "both",
+          "sl_pct": 0.02,
+          "stoch_d": 3,
+          "stoch_k": 9,
+          "stoch_overbought": 75.0,
+          "stoch_oversold": 25.0,
+          "stoch_smooth": 3,
+          "tp_has_priority": false,
+          "trade_on_close": true
+        },
+        "post_equity_min": -172281.81330134126,
+        "post_equity_valid": false,
+        "profit_factor_post": 0.8049065323345279,
+        "rank_raw": 6,
+        "run_id": "20260712_212446_mean_reversion_bb_stoch_ETHUSDT_15m_3c2b9554",
+        "sharpe_post_reported": -0.416055784904401,
+        "sharpe_post_valid": null,
+        "sharpe_raw": -1.9352312257527045
+      },
+      {
+        "max_drawdown_pct_post": -1.1918444506004708,
+        "n_trades_post": 7741,
+        "params": {
+          "arm_expiry_bars": 3,
+          "bb_num_std": 2.0,
+          "bb_window": 20,
+          "entry_mode": "bb_only",
+          "require_reclaim": false,
+          "side": "both",
+          "sl_pct": 0.015,
+          "stoch_d": 3,
+          "stoch_k": 14,
+          "stoch_overbought": 75.0,
+          "stoch_oversold": 25.0,
+          "stoch_smooth": 3,
+          "tp_has_priority": false,
+          "trade_on_close": true
+        },
+        "post_equity_min": -195548.5020646636,
+        "post_equity_valid": false,
+        "profit_factor_post": 0.8231608158190876,
+        "rank_raw": 7,
+        "run_id": "20260712_203048_mean_reversion_bb_stoch_ETHUSDT_15m_bcc249c2",
+        "sharpe_post_reported": -1.754045064351528,
+        "sharpe_post_valid": null,
+        "sharpe_raw": -1.9732613957714464
+      },
+      {
+        "max_drawdown_pct_post": -1.326582881769628,
+        "n_trades_post": 8569,
+        "params": {
+          "arm_expiry_bars": 2,
+          "bb_num_std": 2.2,
+          "bb_window": 10,
+          "entry_mode": "bb_only",
+          "require_reclaim": false,
+          "side": "both",
+          "sl_pct": 0.025,
+          "stoch_d": 3,
+          "stoch_k": 9,
+          "stoch_overbought": 75.0,
+          "stoch_oversold": 20.0,
+          "stoch_smooth": 3,
+          "tp_has_priority": false,
+          "trade_on_close": true
+        },
+        "post_equity_min": -328704.2629782243,
+        "post_equity_valid": false,
+        "profit_factor_post": 0.8469801808475751,
+        "rank_raw": 8,
+        "run_id": "20260712_210918_mean_reversion_bb_stoch_ETHUSDT_15m_e4549504",
+        "sharpe_post_reported": -0.091585541073913,
+        "sharpe_post_valid": null,
+        "sharpe_raw": -1.980339695397154
+      },
+      {
+        "max_drawdown_pct_post": -1.1647997791444764,
+        "n_trades_post": 8384,
+        "params": {
+          "arm_expiry_bars": 2,
+          "bb_num_std": 1.7,
+          "bb_window": 14,
+          "entry_mode": "bb_only",
+          "require_reclaim": false,
+          "side": "both",
+          "sl_pct": 0.025,
+          "stoch_d": 3,
+          "stoch_k": 9,
+          "stoch_overbought": 80.0,
+          "stoch_oversold": 25.0,
+          "stoch_smooth": 3,
+          "tp_has_priority": false,
+          "trade_on_close": true
+        },
+        "post_equity_min": -170037.05588345826,
+        "post_equity_valid": false,
+        "profit_factor_post": 0.7452452486719502,
+        "rank_raw": 9,
+        "run_id": "20260712_204219_mean_reversion_bb_stoch_ETHUSDT_15m_71cdd426",
+        "sharpe_post_reported": -1.836428270862123,
+        "sharpe_post_valid": null,
+        "sharpe_raw": -2.027192737048732
+      },
+      {
+        "max_drawdown_pct_post": -1.1796591816372393,
+        "n_trades_post": 8565,
+        "params": {
+          "arm_expiry_bars": 2,
+          "bb_num_std": 1.9,
+          "bb_window": 14,
+          "entry_mode": "bb_only",
+          "require_reclaim": false,
+          "side": "both",
+          "sl_pct": 0.015,
+          "stoch_d": 3,
+          "stoch_k": 9,
+          "stoch_overbought": 80.0,
+          "stoch_oversold": 25.0,
+          "stoch_smooth": 3,
+          "tp_has_priority": false,
+          "trade_on_close": true
+        },
+        "post_equity_min": -188803.07404184664,
+        "post_equity_valid": false,
+        "profit_factor_post": 0.7663920143166496,
+        "rank_raw": 10,
+        "run_id": "20260712_205348_mean_reversion_bb_stoch_ETHUSDT_15m_ab9913b3",
+        "sharpe_post_reported": -1.574867406087826,
+        "sharpe_post_valid": null,
+        "sharpe_raw": -2.146179645866086
+      }
+    ]
+  },
+  "wf_eligibility_thresholds": {
+    "max_drawdown_pct": -0.2,
+    "n_trades": 100.0,
+    "profit_factor": 1.3,
+    "sharpe": 1.0
+  }
+}

@@ -1,6 +1,6 @@
 # Implied timeframe: 15m (mr_b3 = MR FAST/agile; patrz docs/reference/modules/strategy-mean-reversion-bb-stoch.md)
 # Oś timescale: b3 fast (15m) vs b1/b2 medium (1h). Krótsze okna BB, szybszy
-# Stoch, wąskie SL. entry_mode sweepowany. Więcej dotknięć na krótszym TF.
+# Stoch, wąskie SL. Bazowe wejście bb_only; więcej dotknięć na krótszym TF.
 __implied_tf: "15m"
 __mode: random
 __n: 30
@@ -15,7 +15,8 @@ stoch_smooth:     {type: choice, values: [3]}
 stoch_oversold:   {type: choice, values: [20.0, 25.0]}
 stoch_overbought: {type: choice, values: [75.0, 80.0]}
 
-entry_mode:      {type: choice, values: ["bb_only", "bb_stoch"]}
+# MMS-consistent bare core; b2 zachowuje entry_mode jako wymiar diagnostyczny.
+entry_mode:      {type: choice, values: ["bb_only"]}
 arm_expiry_bars: {type: choice, values: [1, 2, 3]}
 require_reclaim: {type: choice, values: [false]}
 

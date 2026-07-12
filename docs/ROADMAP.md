@@ -121,10 +121,25 @@ Faza 5: Production na VPS              → 1-2 tyg.
   `entry_mode` is a deliberate adaptation; and MMS itself expects the bare core to
   bleed in strong trends, so a weak sweep ≠ methodology falsified (the deferred
   sizing layer is the claimed edge).
-- **MR-Session 2 (Sweep)** — sweep on `mr_b1..b3` under `WF_ELIGIBILITY_THRESHOLDS` +
-  rolling per-year regime-robustness (analog to Session 4).
-- **MR-Session 3+ (WF → MC → Stress → ADR go/no-go)** — only if the sweep clears the
-  eligibility filter; otherwise an MR no-go ADR and the next pivot (breakout / funding arb / …).
+- **MR-Session 2 (Sweep) — DONE 2026-07-13** — matched-TF sweep on `mr_b1..b3`
+  under `WF_ELIGIBILITY_THRESHOLDS` + rolling per-year regime robustness.
+  - [x] Task 0: MMS-consistent `entry_mode="bb_only"` frozen in b1/b3; b2 retains
+    the empirical `bb_only` vs `bb_stoch` split.
+  - [x] Six sequential VPS/tmux sweeps: BTC/ETH × b1/1h, b2/1h, b3/15m,
+    30 samples each (180 total), full microstructure and real historical funding.
+  - [x] `notebooks/04_mr_sweep_review.ipynb`: prior recorded before results;
+    heuristics A–G, imported eligibility gate, b2 entry-mode split, top-3/year
+    regime check and bankruptcy-safe post-cost audit.
+  - [x] Evidence export: `results/experiments/mr_sweep_review.json`.
+  - [x] Verdict: **bare core FAILS** — 0/180 eligible; best raw Sharpe −0.291;
+    169/180 post-cost curves reach equity ≤ 0 and best valid Sharpe_post is −0.497.
+    This does not test/falsify the deferred MMS pyramiding + sequential-sizing edge.
+- **MR-Session 3 (Pyramiding ADR + engine decision)** — do **not** run WF on the
+  failed bare core. Specify the MMS add-on/sequential-leverage state machine and
+  compare engine-migration/prototype cost against an immediate candidate pivot.
+  If migration is declined, formalise the implemented MR-line no-go and pivot.
+- **MR-Session 4+ (conditional WF → MC → Stress → ADR go/no-go)** — only for a
+  future implementation that first demonstrates in-sample eligibility.
 
 ---
 
