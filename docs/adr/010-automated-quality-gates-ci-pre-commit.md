@@ -1,9 +1,14 @@
 # ADR-010: Automated quality gates — CI + pre-commit
 
-- **Status:** Accepted
+- **Status:** Accepted; environment mechanism superseded by ADR-014 / Beta 0
 - **Date:** 2026-05-25
 - **Project phase:** 1 (Foundation)
 - **Authors:** Janek Płoński, Codex
+
+> **Implementation note (2026-07-13):** the decision to run the same `make check` gate in
+> CI and locally remains active. The original micromamba/`environment.yml` implementation
+> is historical: MR-Session 3 Beta now pins managed CPython 3.12 and `uv`, installs from
+> `uv.lock`, and runs the unchanged quality-gate contract through `uv run --locked`.
 
 ## Context
 

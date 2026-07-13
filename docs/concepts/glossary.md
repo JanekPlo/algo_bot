@@ -29,7 +29,13 @@ Symulacja strategii na historycznych danych — odtwarzamy "co by było gdyby st
 Sytuacja gdy strategia w backteście pokazuje profit, ale w live traci. Typowe przyczyny: knoty na thin markets, slippage, funding, kolejność wykonania orderów, latencja, look-ahead bias w backteście.
 
 **`backtesting.py`**
-Biblioteka Python ([github.com/kernc/backtesting.py](https://github.com/kernc/backtesting.py)) używana jako silnik backtestowy w algo_bot. Patrz [ADR-005](../adr/005-backtesting-py-mvp-engine.md).
+Biblioteka Python ([github.com/kernc/backtesting.py](https://github.com/kernc/backtesting.py)) używana przez legacy silnik backtestowy algo_bot. W Beta 0 pozostaje przypięta do 0.6.5 jako ścieżka porównawcza podczas migracji do NautilusTrader. Patrz [ADR-005](../adr/005-backtesting-py-mvp-engine.md).
+
+**`BacktestResult`**
+Wersjonowany, engine-neutral artifact P8. Oprócz legacy tuple przechowuje engine i
+wersję, stan drzewa Git, hashe danych/konfiguracji, seed, statystyki oraz ledgery
+equity/trades/orders/fills/positions/funding. Cost eligibility jest fail-closed;
+„native” nie oznacza automatycznie „realistyczne”.
 
 **BBANDS (Bollinger Bands)**
 Wskaźnik = SMA(N) + K*std(N) i SMA(N) - K*std(N). Typowo N=20, K=2. Używany jako proxy zmienności i poziomów wsparcia/oporu.
@@ -48,7 +54,16 @@ Annualized return / max drawdown. Mierzy efektywność z perspektywy największe
 Crypto eXchange Trading Library — Python lib unified API dla 100+ giełd. W algo_bot używamy do Binance i Bybit.
 
 **Conda env**
-Izolowane środowisko Python z deps zarządzanymi przez `conda`. W algo_bot tworzony przez `make env` z `environment.yml`. Patrz [ADR-002](../adr/002-pyproject-hatchling-stack.md).
+Izolowane środowisko Python zarządzane przez Condę. W algo_bot był to
+historyczny setup oparty na `environment.yml` i TA-Lib z conda-forge; od Beta 0
+jest **superseded** przez uv, `.python-version` i `uv.lock`. Conda nie jest
+równorzędnym defaultem i może wrócić tylko jako odseparowany fallback po
+wykazaniu konkretnego blockera platformy.
+
+**CPython**
+Referencyjna implementacja Pythona. Runtime Beta 0 używa vanilla CPython
+3.12.13 przypiętego w `.python-version`; uv pobiera go automatycznie podczas
+`uv sync --locked`.
 
 **`config.yaml`**
 Główny plik konfiguracyjny w `config/`. Zawiera paths, backtest defaults, features, params per strategia.
@@ -75,6 +90,11 @@ Backtest jest *deterministyczny* jeśli odpalony dwa razy z tym samym kodem, dan
 **Drawdown (DD)**
 Spadek z poprzedniego peak'a equity. **Max Drawdown** = największy taki spadek w całej historii. Mierzy psychologiczny i finansowy ból. Threshold MVP: max DD < 25% OOS.
 
+**Durable outbox**
+Lista stabilnie identyfikowanych intencji zewnętrznych zapisana razem ze stanem
+domenowym przed side effectem. Po restarcie adapter odpytuje venue/cache, uznaje
+odebrane intencje i dopiero odtwarza te, których rzeczywiście brak.
+
 **Dynamic import**
 `importlib.import_module(name)` zamiast `import name` statycznie. W algo_bot: ładujemy strategię po nazwie z CLI (`--strategy bghtrend_pullback` → `importlib.import_module("algo_bot.strategies.bghtrend_pullback")`).
 
@@ -82,8 +102,11 @@ Spadek z poprzedniego peak'a equity. **Max Drawdown** = największy taki spadek 
 
 ## E
 
-**Editable install (`pip install -e .`)**
-Pip instaluje pakiet tak że zmiany w plikach `.py` w repo są widoczne natychmiast (nie trzeba reinstall). Wymagane dla developer workflow. Aktywowane w pyproject.toml + `make install`.
+**Editable install**
+Instalacja pakietu tak, że zmiany w plikach `.py` w repo są widoczne
+natychmiast. W aktualnym workflow wykonuje ją `uv sync --locked` (także przez
+`make env`/`make install`/`make sync`); ręczne `pip install -e .` jest
+historyczną, superseded instrukcją.
 
 **EMA (Exponential Moving Average)**
 Średnia ruchoma z eksponencjalnie malejącymi wagami starszych obserwacji. Bardziej responsywna niż SMA. W algo_bot: `algo_bot/indicators/core.py::ema()`.
@@ -177,7 +200,9 @@ Pozycja wymuszenie zamknięta przez giełdę gdy margin spada poniżej maintenan
 Bot działa na żywo na giełdzie z realnymi pieniędzmi (lub testnet). Vs backtest (historyczne).
 
 **Lockfile**
-Plik z dokładnymi wersjami wszystkich deps (też transitive). W algo_bot: `requirements.txt` generowany przez pip-tools. Gwarantuje deterministic install.
+Plik z dokładnymi wersjami bezpośrednich i przechodnich zależności. W algo_bot
+kanonicznym lockfilem jest `uv.lock`, odtwarzany przez `uv sync --locked`.
+`requirements.txt` jest tylko generowanym eksportem kompatybilności.
 
 ---
 
@@ -198,8 +223,17 @@ Annualized return / max drawdown. Synonim Calmar ratio.
 **MAR target (Sortino)**
 Minimum Acceptable Return w obliczaniu Sortino ratio. Często ustawione na 0 (downside = każda strata) lub risk-free rate.
 
+**`MastermindStateMachine`**
+Czysty reducer MMS-inspired v2 bez importów NautilusTrader. Konsumuje typowane
+eventy domenowe, emituje typowane intencje i utrzymuje niezależnie risk mode,
+position build oraz order lifecycle. Wersjonowany snapshot zachowuje SCOUT,
+virtual legs, PnL, dedupe i outbox przez restart.
+
 **MVP (Minimum Viable Product)**
-Pierwsza działająca wersja produktu z minimum funkcjonalności. W algo_bot: jedna strategia (`bghtrend_pullback`) przejdzie pełną ścieżkę → walk-forward → testnet → mainnet (mały kapitał) → VPS 24/7.
+Pierwsza działająca wersja produktu z minimum funkcjonalności. W algo_bot: jedna
+strategia musi przejść pełną ścieżkę → walk-forward → testnet → mainnet (mały
+kapitał) → VPS 24/7. `bghtrend_pullback` jest już historycznym NO-GO, nie bieżącym
+kandydatem.
 
 **mypy**
 Static type checker dla Pythona. W algo_bot polityka strict-on-new — pełny rygor tylko dla nowych modułów. Patrz [ADR-002](../adr/002-pyproject-hatchling-stack.md).
@@ -207,6 +241,17 @@ Static type checker dla Pythona. W algo_bot polityka strict-on-new — pełny ry
 ---
 
 ## N
+
+**NautilusTrader**
+Framework event-driven do backtestu i tradingu live, będący celem migracji
+silnika. Beta 0 przypina stabilne wydanie 1.230.0 w `pyproject.toml` i
+`uv.lock`; obecność zależności nie oznacza automatycznie, że każdy istniejący
+runbook przeszedł już z legacy backtesting.py na nowy engine.
+
+**NETTING / virtual legs**
+Venue utrzymuje jedną netto pozycję na instrument, natomiast strategia prowadzi
+logiczne nogi base/add-on we własnym ledgerze. W MMS v2 baza ma Close-All stop,
+a każda faktyczna część dokładki osobne incremental `reduce_only` protection.
 
 **Notebook**
 Jupyter notebook (`.ipynb`) — interaktywny dokument code + markdown + plots. W algo_bot: `notebooks/` dla research, nie production code.
@@ -234,13 +279,20 @@ Model/strategia perfekcyjnie pasuje do *training* data ale słabo generalizuje n
 Symulacja live tradingu (real-time data) ale BEZ wysyłania faktycznych orderów. Bot udaje że tradzi, journaluje "fake" trades. Faza między backtest a testnet.
 
 **`pip-tools`**
-Tooling do dependency management: `pip-compile` generuje lockfile z pyproject.toml, `pip-sync` synchronizuje env z lockfile. W algo_bot: `make lock` + `make sync`.
+Historyczne tooling dependency management (`pip-compile` + `pip-sync`). Od
+Beta 0 ten workflow jest **superseded**: `make lock` wywołuje `uv lock`, a
+`make sync` wywołuje `uv sync --locked`.
 
 **Perpetual futures (perp)**
 Kontrakt futures bez expiration date. Na crypto: dominująca forma tradingu z leverage. Wymaga funding rate dla utrzymania ceny blisko spot.
 
 **Position sizing**
 Decyzja ile capital'u allokować w pojedynczą pozycję. W algo_bot: `% equity per trade` (np. 2% = max loss per trade). Vs sztywne USDT (nie skaluje się z portfelem).
+
+**Preregistration**
+Zamrożenie przed eksperymentem: okna danych, wariantów, seedów, kosztów, metryk
+i reguł interpretacji. P9 rezerwuje temporal holdout, którego nie wolno ładować,
+hashować, uruchamiać ani raportować podczas Beta.
 
 **Profit factor**
 Total wins / total losses. > 1 = profitowa strategia. Threshold MVP: > 1.3 OOS.
@@ -252,7 +304,9 @@ Tymczasowy spadek ceny w ramach uptrend'u (lub wzrost w downtrend'zie). W `bghtr
 Standard Python pliku konfiguracyjnego (PEP 621). Single source of truth dla build, deps, tooling. Patrz [ADR-002](../adr/002-pyproject-hatchling-stack.md).
 
 **Pyramiding**
-Dokładanie do istniejącej pozycji (zwiększanie size). W algo_bot DCA strategia (`dca_btc.py`) używa `allow_pyramiding=True`.
+Dokładanie do istniejącej pozycji. MMS v2 dopuszcza maksymalnie jedną dokładkę
+o target notional równym bazie; baza x1 + dokładka x1 daje cap x2. Zmiana build
+state następuje dopiero po faktycznym fillu, nigdy na samym triggerze.
 
 ---
 
@@ -299,6 +353,11 @@ Unikatowy identyfikator pojedynczego backtest/sweep run. Format: `<TIMESTAMP_UTC
 **Sharpe Ratio**
 (Mean return - risk-free rate) / std(returns). Risk-adjusted return. > 1 = dobre, > 2 = świetne. Threshold MVP: > 1.0 OOS.
 
+**SCOUT / FULL**
+Binarny risk mode MMS v2. FULL rezerwuje bazę x1 (i opcjonalnie jedną dokładkę
+x1); pełny bazowy SL przełącza następny setup na base-only SCOUT x0.1. FULL wraca
+dopiero po całkowitym, naturalnym i dodatnim po kosztach zamknięciu setupu SCOUT.
+
 **Signal**
 Output strategii w algo_bot — dataclass `algo_bot.strategy_base.Signal`. Zawiera: action ('enter'/'exit'/None), side ('long'/'short'/None), size, tp_pct, sl_pct, meta. Patrz [ADR-003](../adr/003-strategybase-signal-api.md).
 
@@ -318,7 +377,8 @@ Abstract base class dla wszystkich strategii w algo_bot. Definiuje API `on_bar(d
 Van Tharp's metric: sqrt(N) * mean(R) / std(R) gdzie R = R-multiples. < 1 = zła strategia, > 2 = average, > 3 = good, > 5 = excellent.
 
 **Sweep**
-Eksploracja przestrzeni parametrów (grid lub random). W algo_bot: `algo-sweep`. Output do `results/experiments/index.csv`.
+Eksploracja przestrzeni parametrów (grid lub random). W algo_bot:
+`uv run algo-sweep`. Output do `results/experiments/index.csv`.
 
 ---
 
@@ -328,7 +388,10 @@ Eksploracja przestrzeni parametrów (grid lub random). W algo_bot: `algo-sweep`.
 Wygładzona średnia ruchoma — kombinacja sześciu kolejnych EWM z "volume factor" `b` (typowo 0.6–0.8), która pozwala filtrowi "wyprzedzać" zamiast opóźniać. W algo_bot: `algo_bot/indicators/core.py::t3()`, używana w xtrenderze do wygładzenia short-term legu (`short_t3`). Wyższy `b` = bardziej responsywny + overshoot, niższy = gładszy + lag.
 
 **TA-Lib**
-Technical Analysis Library — C lib z Python bindings z ~150 wskaźnikami. W algo_bot instalowany z conda-forge (nie pip). Patrz [getting-started.md](../guides/getting-started.md).
+Technical Analysis Library — C library z Python bindings i około 150
+wskaźnikami. Beta 0 przypina TA-Lib 0.7.0; wheel instalowany z `uv.lock`
+zawiera bibliotekę C, więc systemowy build i conda-forge nie są potrzebne.
+Patrz [getting-started.md](../guides/getting-started.md).
 
 **Take Profit (TP)**
 Order zamykający pozycję na profit gdy cena dotrze do progu. W algo_bot per strategia (z meta lub paramów).
@@ -349,7 +412,9 @@ Python package z time zone data. Wymagana na Windowsie dla `zoneinfo` (stdlib). 
 ## U
 
 **`uv`**
-Modern pip+venv replacement (Astral, Rust-based, 10-100x szybsze). W algo_bot rozważany jako kandydat na replacement pip-tools po MVP.
+Manager Pythona, środowiska i zależności rozwijany przez Astral. W Beta 0 uv
+0.11.28 jest przypiętym, domyślnym narzędziem: czyta `.python-version`,
+odtwarza `uv.lock` do `.venv` i uruchamia komendy przez `uv run`.
 
 ---
 

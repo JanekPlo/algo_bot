@@ -2,12 +2,12 @@
 
 How to run `algo-sweep` / `algo-backtest` / `algo-walkforward` on a VPS in
 `tmux`, so multi-hour queues no longer need your PC powered on. The VPS is a
-**pure compute clone**: repo + conda env + a byte-identical copy of the
+**pure compute clone**: repo + locked uv environment + a byte-identical copy of the
 dataset. Data goes up by rsync, results come back by rsync, and no secrets ever
 land on the box.
 
-> **TL;DR:** one-time — install miniforge, clone the repo with a read-only
-> deploy key, `conda env create -f environment.yml`, `make check`. Per run —
+> **TL;DR:** one-time — install uv 0.11.28, clone the repo with a read-only
+> deploy key, `uv sync --locked`, `make check`. Per run —
 > `make sync-up` (data PC→VPS), start the job in `tmux`, `make sync-down`
 > (results VPS→PC). Sweeps run **sequentially** — never two processes writing
 > the same `index.csv`.
@@ -16,7 +16,7 @@ The design decisions behind this setup (Phase 2 Session 4b, 2026-07-04):
 
 | # | Decision | Choice | Rationale |
 |---|----------|--------|-----------|
-| 1 | Environment | miniforge + `environment.yml` | Matches WSL; TA-Lib ships atomically from conda-forge (system lib + bindings). Docker deferred post-MVP. |
+| 1 | Environment | uv 0.11.28 + `.python-version` + `uv.lock` | Matches local Beta 0 exactly: vanilla CPython 3.12.13, NautilusTrader 1.230.0 and TA-Lib 0.7.0. The TA-Lib wheel bundles the C library. |
 | 2 | Data source | rsync `bot_data/processed/` from PC | Reproducibility: the VPS backtests on the exact dataset you validated in Session 2. `algo-fetch` on the VPS would drift (extra bars, silent Binance revisions) and make PC↔VPS results incomparable. |
 | 3 | Parallelism | Sequential in tmux | Zero code change. `results/experiments/index.csv` is append-only and **not** multi-process safe. A `--index_csv`-per-run flag is a deferred follow-up. |
 | 4 | Results transport | rsync `results/` VPS→PC | Analysis (notebook 03) and the brain-Claude audit live on the PC. |
@@ -48,18 +48,20 @@ sudo apt-get update
 sudo apt-get install -y git rsync tmux curl
 ```
 
-TA-Lib's C library is **not** installed here — conda-forge provides it inside
-the env (Decision 1), so no `libta-lib` from apt.
+TA-Lib's C library is **not** installed through apt. The pinned TA-Lib 0.7.0
+wheel contains it (Decision 1).
 
-### A2. Install miniforge
+### A2. Install the pinned uv
 
 ```bash
-curl -L -o /tmp/miniforge.sh \
-  https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh
-bash /tmp/miniforge.sh -b -p "$HOME/miniforge3"
-"$HOME/miniforge3/bin/conda" init bash
-exec bash   # reload shell so `conda` is on PATH
+curl -LsSf https://astral.sh/uv/0.11.28/install.sh | sh
+exec bash   # reload PATH if requested by the installer
+uv --version
+# uv 0.11.28
 ```
+
+Do not install an unpinned latest uv on the research runner. Conda/Miniforge is
+a superseded historical setup, not a second default.
 
 ### A3. Read-only deploy key + clone
 
@@ -101,14 +103,17 @@ cd algo_bot
 `git pull` works; `git push` is refused by the read-only key — intended.
 Results go back over rsync, not git.
 
-### A4. Create the conda env + install the package
+### A4. Create the locked environment
 
 ```bash
 cd ~/quant_projects/algo_bot
-make env            # conda env create -f environment.yml  (TA-Lib from conda-forge)
-conda activate algo_bot
-make install        # pip install -e ".[dev]"
+make env            # uv sync --locked; CPython 3.12.13 + project + dev deps
+uv run python --version
+uv run python -c 'from importlib.metadata import version; print(version("nautilus-trader"), version("TA-Lib"))'
 ```
+
+No activation step is needed. All Python tools and project CLIs run through
+`uv run`; Makefile quality targets use `uv run --locked` internally.
 
 ### A5. Smoke test — `make check`
 
@@ -154,7 +159,7 @@ to the same path on the VPS. Verify on the VPS:
 
 ```bash
 ls -lh ~/quant_projects/algo_bot/bot_data/processed/
-pytest tests/test_data_integrity.py -m integration -q   # now runs for real
+uv run pytest tests/test_data_integrity.py -m integration -q   # now runs for real
 ```
 
 ---
@@ -165,12 +170,12 @@ pytest tests/test_data_integrity.py -m integration -q   # now runs for real
 
 ```bash
 cd ~/quant_projects/algo_bot
-conda activate algo_bot
 git pull                       # get the latest strategy/config before a run
+make sync                      # exact uv.lock; no env activation
 
 tmux new -s sweep              # new session
 
-algo-sweep --strategy bghtrend_pullback \
+uv run algo-sweep --strategy bghtrend_pullback \
   --symbols BTC/USDT ETH/USDT \
   --timeframes 1h \
   --start 2019-09-08 --end 2026-07-04 \
@@ -189,7 +194,7 @@ anti-patterns):
 
 ```bash
 for space in b1 b2 b3 b4; do
-  algo-sweep --strategy bghtrend_pullback --symbols BTC/USDT ETH/USDT \
+  uv run algo-sweep --strategy bghtrend_pullback --symbols BTC/USDT ETH/USDT \
     --timeframes 1h --start 2019-09-08 --end 2026-07-04 \
     --space_file config/bghtrend_${space}.yaml --microstructure full
 done
@@ -218,8 +223,8 @@ To prove the pipeline before trusting a long queue, run one short sweep and
 confirm the row lands on the PC:
 
 ```bash
-# VPS, inside tmux + conda env:
-algo-sweep --strategy bghtrend_pullback --symbols BTC/USDT \
+# VPS, inside tmux:
+uv run algo-sweep --strategy bghtrend_pullback --symbols BTC/USDT \
   --timeframes 4h --start 2024-01-01 --end 2024-06-30 \
   --space_file config/bghtrend_b4.yaml --microstructure full
 #   (4h + 6 months + __n small = a few minutes)
@@ -241,7 +246,7 @@ strategy backtests stay on hold pending the pivot decision.
   `results/experiments/index.csv` with no lock. Parallel sweeps interleave and
   corrupt rows. Run sequentially in one tmux session (Decision 3). Real
   parallelism waits for a `--index_csv`-per-run flag.
-- **`algo-fetch` on the VPS.** It diverges the dataset from the PC and breaks
+- **`uv run algo-fetch` on the VPS.** It diverges the dataset from the PC and breaks
   result comparability (Decision 2). Data always flows PC→VPS via `sync-up`.
   To refresh: re-fetch on the PC, re-run the integrity test, `sync-up` again.
 - **Copying `.env` or API keys to the VPS.** Backtests need none (Decision 5).

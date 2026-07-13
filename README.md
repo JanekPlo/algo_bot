@@ -2,9 +2,9 @@
 
 > Quantitative trading framework dla kryptowalutowych perpetual futures, zbudowany wokół metodologii RBI (**R**esearch → **B**acktest → **I**mplement). Część projektu Digital Alchemy.
 
-[![Status](https://img.shields.io/badge/status-alpha-orange)]()
+[![Status](https://img.shields.io/badge/status-Beta%20iterate-blue)]()
 [![CI](https://github.com/JanekPlo/algo_bot/actions/workflows/check.yml/badge.svg?branch=master)](https://github.com/JanekPlo/algo_bot/actions/workflows/check.yml)
-[![Python](https://img.shields.io/badge/python-3.11%2B-blue)]()
+[![Python](https://img.shields.io/badge/python-3.12.13-blue)]()
 [![License](https://img.shields.io/badge/license-MIT-green)]()
 
 ## Co tu jest
@@ -12,7 +12,8 @@
 Lekki framework do:
 - **Pobierania** historycznych danych OHLCV z giełd (Binance, Bybit) przez CCXT
 - **Przetwarzania** surowych danych, liczenia wskaźników technicznych
-- **Backtestowania** strategii (backtesting.py) z grid/random search po parametrach
+- **Backtestowania** strategii: przypięty `backtesting.py` dla ścieżki legacy oraz
+  event-driven NautilusTrader dla nowych automatów stanów
 - **Walk-forward analysis** dla rygorystycznego out-of-sample testowania *(faza 2)*
 - **Live trading** na Binance Futures z hybrid TP/SL i journalingiem
 - **Deployment na VPS** z monitoringiem 24/7 *(faza 5)*
@@ -24,19 +25,19 @@ Lekki framework do:
 git clone git@github.com:JanekPlo/algo_bot.git
 cd algo_bot
 
-# 2. Stwórz conda env (instaluje Python 3.11 + TA-Lib z conda-forge)
-make env
-conda activate algo_bot
+# 2. Zainstaluj przypięte uv (jednorazowo)
+curl -LsSf https://astral.sh/uv/0.11.28/install.sh | sh
+uv --version       # uv 0.11.28
 
-# 3. Zainstaluj pakiet + dev deps
-make install
+# 3. Odtwórz środowisko z .python-version i uv.lock
+make env            # uv sync --locked; tworzy .venv z CPython 3.12.13
 
 # 4. Sprawdź setup
-algo-backtest --help
+uv run algo-backtest --help
 make check     # ruff + mypy + pytest
 
 # 5. Optional: enable local pre-commit hooks
-pre-commit install
+make precommit-install
 ```
 
 Pełny walkthrough setupu: [docs/guides/getting-started.md](docs/guides/getting-started.md).
@@ -45,15 +46,15 @@ Pełny walkthrough setupu: [docs/guides/getting-started.md](docs/guides/getting-
 
 ```bash
 # Backtest pojedynczej strategii
-algo-backtest --symbol BTC/USDT --timeframe 4h --strategy bghtrend_pullback \
+uv run algo-backtest --symbol BTC/USDT --timeframe 4h --strategy bghtrend_pullback \
     --params '{"ema_fast":21,"ema_mid":89}'
 
 # Pobranie i przetworzenie danych
-algo-fetch BTC/USDT 4h --start 2020-01-01
-algo-process
+uv run algo-fetch BTC/USDT 4h --start 2020-01-01
+uv run algo-process
 
 # Sweep parametrów (grid lub random search)
-algo-sweep --strategy bghtrend_pullback --symbols BTC/USDT --timeframes 4h \
+uv run algo-sweep --strategy bghtrend_pullback --symbols BTC/USDT --timeframes 4h \
     --start 2020-01-01 --end 2025-01-01 --space_file config/bghtrend_b1.yaml
 
 # Testy / lint / typecheck
@@ -64,7 +65,7 @@ make check       # wszystko razem (CI-style)
 ```
 
 GitHub Actions runs `make check` on pull requests and pushes to `master`.
-Pre-commit runs fast local file checks (`pre-commit install` to enable it).
+Pre-commit runs fast local file checks (`make precommit-install` to enable it).
 
 Więcej: [docs/guides/daily-workflow.md](docs/guides/daily-workflow.md), [docs/guides/makefile-cheatsheet.md](docs/guides/makefile-cheatsheet.md).
 
@@ -92,12 +93,18 @@ algo_bot/                              # repo root (= ten plik)
 │   ├── process_data.py                # raw → processed z featurami
 │   ├── funding.py                     # funding rate (perp futures)
 │   ├── engine/
-│   │   ├── backtester.py              # silnik backtestowy (wrapper na backtesting.py)
+│   │   ├── backtester.py              # legacy backtesting.py + rich result factory
+│   │   ├── backtest_result.py         # wersjonowany wynik i audyt kosztów
+│   │   ├── nautilus_adapter.py        # Tier-1 compatibility/equivalence
+│   │   ├── nautilus_mastermind.py     # cienki wrapper PyO3 dla MMS v2
+│   │   ├── mms_beta_data.py           # development-only data boundary
+│   │   ├── mms_beta_benchmark.py      # zamrożony runner ablation P9
 │   │   ├── sweep.py                   # grid + random search
 │   │   └── exchanges/binance_adapter  # CCXT wrapper
 │   ├── strategies/                    # implementacje strategii
-│   │   ├── bghtrend_pullback.py       # MVP candidate (trend + pullback + xtrender)
-│   │   └── ... (6 więcej)
+│   │   ├── mastermind/                # pure, engine-independent MMS v2 domain
+│   │   ├── mean_reversion_bb_stoch.py # legacy bare-core baseline (NO-GO)
+│   │   └── bghtrend_pullback.py       # historyczny baseline (NO-GO)
 │   ├── indicators/                    # custom wskaźniki (xtrender, t3, ema, rsi, atr)
 │   └── telemetry/journal.py           # CSV journal trades + equity
 │
@@ -113,8 +120,9 @@ algo_bot/                              # repo root (= ten plik)
 ├── results/                           # wyniki backtestów/sweepów/live (gitignored)
 │
 ├── pyproject.toml                     # build + deps + tooling config (hatchling)
-├── environment.yml                    # conda env (Python + TA-Lib)
-├── requirements.txt                   # lockfile generowany przez pip-tools
+├── .python-version                    # przypięty vanilla CPython 3.12.13
+├── uv.lock                            # kanoniczny lockfile całego grafu deps
+├── requirements.txt                   # eksport kompatybilności z uv.lock
 ├── Makefile                           # make help dla listy targetów
 ├── .gitignore
 └── README.md                          # ten plik
@@ -124,18 +132,34 @@ Pełny opis: [docs/reference/package-overview.md](docs/reference/package-overvie
 
 ## Wymagania
 
-- **Python 3.11+** (3.10 EOL paź 2026)
-- **conda** lub **miniconda** (do envu z TA-Lib)
+- **uv 0.11.28** (domyślny i wspierany manager środowiska)
+- **vanilla CPython 3.12.13** (przypięty w `.python-version`, pobierany przez uv)
 - **git**
 - (opcjonalnie) konto Binance z API key dla live tradingu
+
+`uv sync --locked` instaluje z `uv.lock` m.in. dokładnie
+**NautilusTrader 1.230.0** i **TA-Lib 0.7.0**. Wheel TA-Lib zawiera bibliotekę
+C, więc systemowe TA-Lib i Conda nie są potrzebne. Dawny workflow
+`environment.yml` + Conda jest materiałem historycznym i został zastąpiony;
+Conda może służyć tylko jako awaryjna ścieżka po wykazaniu konkretnego blockera.
 
 System: testowane na WSL2 Ubuntu 22+. Powinno działać na Linux/macOS natywnie. Windows native nieoficjalnie wspierany (WSL preferowany).
 
 ## Status projektu
 
-**Faza 1: Foundation** — w trakcie. Patrz [ROADMAP](docs/ROADMAP.md) i [CHANGELOG](docs/CHANGELOG.md).
+**MR-Session 3 Beta — zakończona, decyzja `ITERATE BETA`** — Python 3.12.13 + uv + przypięte zależności; równoległe
+ścieżki `backtesting.py` i NautilusTrader 1.230.0; wykonywalna specyfikacja oraz
+implementacja MMS-inspired v2 H1/BB. Zamrożony P9 ukończył 12/12 runów i 264/264
+kontrole invariantów, ale wszystkie wyniki pozostają `SMOKE_ONLY / NOT_ELIGIBLE`.
+Nie stanowią dowodu edge ani gotowości live; Session 4 czeka na usunięcie blokad
+parytetu wykonania i jakości danych/kosztów. Aktualny zakres: [raport P9](docs/experiments/mms-v2-beta-results.md), [ROADMAP](docs/ROADMAP.md),
+[ADR-014](docs/adr/014-engine-migration-nautilus.md) i
+[specyfikacja v2](docs/specs/mms-v2-executable-spec.md).
 
-Definicja sukcesu MVP: jedna strategia (kandydat: `bghtrend_pullback`) przejdzie ścieżkę research → in-sample backtest → walk-forward → testnet → mainnet (mały kapitał) → VPS 24/7 z alertami.
+Definicja sukcesu MVP: jedna strategia przejdzie ścieżkę research → in-sample
+backtest → walk-forward → testnet → mainnet (mały kapitał) → VPS 24/7 z alertami.
+`bghtrend_pullback` i bare-core mean reversion pozostają udokumentowanymi
+negatywnymi baseline'ami, nie aktualnymi kandydatami do wdrożenia.
 
 ## Contributing
 

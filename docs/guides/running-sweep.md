@@ -4,7 +4,7 @@ How to run an in-sample parameter sweep with `algo-sweep`, read the results in
 `results/experiments/index.csv`, and decide which parameter sets are worth
 promoting to walk-forward.
 
-> **TL;DR:** `algo-sweep --strategy <name> --symbols ... --timeframes ...
+> **TL;DR:** `uv run algo-sweep --strategy <name> --symbols ... --timeframes ...
 > --start ... --end ... --space_file config/<space>.yaml --microstructure full`
 > runs N backtests sampled from the YAML space and appends one row per run to
 > `results/experiments/index.csv`. Rank by `sharpe_post`, then apply the
@@ -14,12 +14,13 @@ promoting to walk-forward.
 
 ## Invocation
 
-Run from the WSL terminal inside the `algo_bot` conda env:
+Run from the WSL terminal through the locked uv environment:
 
 ```bash
-cd ~/quant_projects/algo_bot && conda activate algo_bot
+cd ~/quant_projects/algo_bot
+make sync       # first run or after uv.lock changes; no env activation
 
-algo-sweep --strategy bghtrend_pullback \
+uv run algo-sweep --strategy bghtrend_pullback \
   --symbols BTC/USDT ETH/USDT \
   --timeframes 1h \
   --start 2019-09-08 --end 2026-07-04 \
@@ -39,7 +40,7 @@ Notes:
 - **Microstructure** defaults to `full` (ADR-011): slippage (`--slip_bps`,
   default 1.0/side) plus historical funding. Funding needs
   `bot_data/processed/binance_<SYMBOL>_funding.csv` — fetch with
-  `algo-fetch-funding --symbol ETH/USDT --start 2019-11-01` if missing
+  `uv run algo-fetch-funding --symbol ETH/USDT --start 2019-11-01` if missing
   (synthetic fallback logs a WARNING).
 - The engine runs **once** per sample; microstructure is a post-hoc overlay on
   the equity curve. A separate `--microstructure none` sweep is therefore

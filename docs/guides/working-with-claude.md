@@ -215,8 +215,10 @@ Sekcja dla każdej nowej sesji Claude'a: gdzie żyje repo, jak je czytasz, jak p
 Dla Cowork (Windows desktop) ta sama lokalizacja jest dostępna jako UNC: `\\wsl.localhost\ubuntu\home\janek\quant_projects\algo_bot`. WSL2 wystawia ten share automatycznie — nic nie trzeba konfigurować poza zainstalowanym WSL2.
 
 **Dlaczego WSL native, nie NTFS:**
-- Conda env `algo_bot` jest w WSL i operuje na repo bez tłumaczeń line endings / permissions
-- TA-Lib z conda-forge linkuje się natywnie z `libta-lib.so` po stronie Linuxa
+- zarządzane przez `uv` CPython 3.12 i projektowe `.venv` operują na repo bez
+  tłumaczeń line endings / permissions
+- binarny wheel TA-Lib 0.7.0 zawiera bibliotekę C; nie wymaga systemowego
+  `libta-lib.so` ani Condy
 - Git ma normalne POSIX permissions, brak fałszywych diffów z `core.fileMode`
 - Brak ryzyka spacji w ścieżce (Windows ma `Documents\Claude\Projects\...`, WSL ma czysty home)
 
@@ -241,7 +243,7 @@ Od tego momentu **każda nowa sesja w projekcie algo_bot dostaje UNC mount autom
 Po dodaniu UNC folder do projektu, w trakcie sesji:
 
 - **Read/Write/Edit** widzą repo jako ścieżkę UNC `\\wsl.localhost\ubuntu\home\janek\quant_projects\algo_bot\<path>` — działa normalnie, file IO przez WSL2 share.
-- **Sandbox bash** widzi to samo repo jako linuxowy mount `/sessions/<id>/mnt/algo_bot/<path>`. Można tam odpalać `git status`, `git log`, `cat`, `grep`, ale nie `make check` z conda env (sandbox nie ma własnego conda — patrz sekcja "Conda + TA-Lib").
+- **Sandbox bash** widzi to samo repo jako linuxowy mount `/sessions/<id>/mnt/algo_bot/<path>`. Można tam odpalać `git status`, `git log`, `cat`, `rg`; `make check` działa po udostępnieniu binarnego `uv` i dostępu do jego cache.
 - Mount jest read+write — sandbox może modyfikować pliki i commitować.
 
 ### Git workflow
@@ -255,19 +257,22 @@ Po dodaniu UNC folder do projektu, w trakcie sesji:
 
 **SSH key i git remote** — konfigurujesz raz po stronie WSL (`~/.ssh/config` z aliasem dla GitHub deploy key, albo `GIT_SSH_COMMAND` w `.bashrc`). Klucz prywatny NIE leży w repo (`.ssh/` w `.gitignore`).
 
-**Pull** — robisz w WSL ręcznie gdy chcesz mieć aktualne repo lokalnie (np. przed pracą w PyCharm Remote-WSL albo VS Code z extension WSL). Conda env operuje na tym samym katalogu — zero kopiowania.
+**Pull** — robisz w WSL ręcznie gdy chcesz mieć aktualne repo lokalnie (np. przed pracą w PyCharm Remote-WSL albo VS Code z extension WSL). Projektowe `.venv` operuje na tym samym katalogu — zero kopiowania.
 
-**Rozważana w przyszłości alternatywa:** jeśli sandbox bash stałby się kluczowy (np. automated CI in-session, container Docker dla make check), wtedy repo można przenieść na NTFS-side (`~/Documents/Claude/Projects/algo_bot`) i sandbox uzyska pełną funkcjonalność. Cena: NTFS line endings + permissions diffy w git, conda env operuje przez `/mnt/c/...` (wolniej niż native ext4), spacje w ścieżce nadrzędnej (`Documents\Claude\Projects\`). Decyzja odłożona do faktycznej potrzeby — obecny workflow "Claude edytuje, user commituje" jest akceptowalny.
+**Rozważana w przyszłości alternatywa:** jeśli sandbox bash stałby się kluczowy (np. automated CI in-session, container Docker dla make check), wtedy repo można przenieść na NTFS-side (`~/Documents/Claude/Projects/algo_bot`) i sandbox uzyska pełną funkcjonalność. Cena: NTFS line endings + permissions diffy w git, `uv`/`.venv` operuje przez `/mnt/c/...` (wolniej niż native ext4), spacje w ścieżce nadrzędnej (`Documents\Claude\Projects\`). Decyzja odłożona do faktycznej potrzeby — obecny workflow "Claude edytuje, user commituje" jest akceptowalny.
 
-### Conda + TA-Lib
+### uv + TA-Lib
 
-Conda env `algo_bot` siedzi w WSL (`~/miniconda3/envs/algo_bot/`). TA-Lib zainstalowany z conda-forge (wymaga systemowego `libta-lib.so` którego conda-forge dostarcza razem z pythonowym bindingiem).
+Źródłem prawdy jest `uv.lock`; `.python-version` przypina zarządzany CPython
+3.12.13, a `uv sync --locked` tworzy repozytoryjne `.venv`. TA-Lib 0.7.0 jest
+instalowany z binary wheela zawierającego bibliotekę C. NautilusTrader 1.230.0,
+TA-Lib oraz legacy `backtesting.py` współdzielą jedno środowisko — Conda jest
+wyłącznie nieaktywnym fallbackiem.
 
-Sandbox Cowork **nie ma własnego conda** — `make check`, `pytest`, `ruff`, `mypy` musisz odpalać:
-- albo w WSL terminalu ręcznie (`cd ~/quant_projects/algo_bot && make check`)
-- albo z sandboxa przez `wsl.exe -d Ubuntu bash -lc "..."` jeśli sandbox umie wywołać `wsl.exe` (do zweryfikowania per sesja)
-
-Alternatywa rozważana post-MVP: container Docker z conda env + TA-Lib, żeby sandbox `docker run` był self-contained bez zależności od WSL. Decyzja odłożona — obecny setup wystarcza dla fazy 1-2.
+Pełną bramkę uruchamiaj w WSL przez `make check`; Makefile używa
+`uv run --locked`. Sandbox może wykonać tę samą komendę, jeżeli widzi `uv`,
+repozytoryjne `.venv` i cache pakietów. Brak dostępu sandboxa do cache nie jest
+powodem do tworzenia drugiego lockfile'a.
 
 ### Decyzja workflow gdy nowa sesja nie ma dostępu
 
@@ -288,11 +293,11 @@ Symptomy:
 ### Czego unikamy
 
 - **Mieszanie writerów na repo** — w jednym momencie pisze albo sandbox Cowork, albo user w WSL terminalu, nigdy oba naraz. Inaczej dostajesz fałszywe zmiany w `git status` i merge conflicts na niezacommitowanej pracy.
-- **Klonowanie repo w lokalizacji ze spacjami** (np. `~/Documents/Some Folder With Spaces/algo_bot/`) — niektóre toole pythonowe (TA-Lib build, conda activate scripts) miewają problemy ze spacjami. Czysta ścieżka `~/quant_projects/algo_bot` jest bezpieczna.
+- **Klonowanie repo w lokalizacji ze spacjami** (np. `~/Documents/Some Folder With Spaces/algo_bot/`) — część narzędzi shellowych i ścieżek workspace wymaga wtedy dodatkowego quoting. Czysta ścieżka `~/quant_projects/algo_bot` jest bezpieczna.
 - **Commitowanie SSH key** — `.ssh/` powinno być w `.gitignore` (sprawdź). Klucz prywatny żyje w `~/.ssh/`, nie w repo.
 - **Hardkodowane UNC paths w kodzie** — gdy edytujemy skrypt który ma ścieżkę typu `\\wsl.localhost\...` albo `C:\...`, audytujemy go i wymieniamy na portable ścieżki względne albo zmienne środowiskowe.
 - **Pracowanie w projekcie "Strona internetowa digitalalchemy" nad algo_bot** — to są dwa różne repa z różnym kontekstem, project instructions i memory. Mieszanie ich daje rozjazd memory i wolniejszy kickoff każdej sesji.
 
 ---
 
-*Wersja: 0.3 — 2026-05-21. Dokument żywy — aktualizujemy gdy rytm pracy się zmieni (np. wejście w Fazę 2 wymaga dorzucenia sekcji o sesjach research) albo gdy zmienimy setup techniczny (np. przejście na Docker container dla sandboxa).*
+*Wersja: 0.4 — 2026-07-13. Dokument żywy — setup runtime zaktualizowany z Condy do zablokowanego `uv`/CPython 3.12.*

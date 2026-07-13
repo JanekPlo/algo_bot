@@ -22,6 +22,11 @@ Faza 5: Production na VPS              → 1-2 tyg.
 
 ## Faza 1 — Foundation (framework gotowy do pracy)
 
+> **Historical implementation note (2026-07-13):** checked Python 3.11/Conda/pip-tools
+> bullets below record how Phase 1 was completed; they are not current setup instructions.
+> MR-Session 3 Beta replaced that environment with managed CPython 3.12, `uv`, `uv.lock`,
+> and a binary TA-Lib wheel. See ADR-002's supersession note and ADR-014.
+
 **Cel:** repo jest porządne, dependencies dzialaja, mamy CI, mamy spójny system konfiguracji i wynik backtestu jest powtarzalny co do bitu.
 
 **Deliverables (kod):**
@@ -137,23 +142,26 @@ Faza 5: Production na VPS              → 1-2 tyg.
 - **MR-Session 3 Alpha (Engine migration ADR) — DONE 2026-07-13** — do **not** run
   WF on the failed bare core. [ADR-014](adr/014-engine-migration-nautilus.md):
   adopt `nautilus_trader` as the primary engine for event-driven / state-machine
-  strategies, **coexisting in parallel** with `backtesting.py` (legacy, sacred infra
-  for single-position baselines). Eight decisions formalised: two-tier adapter
+  strategies, **coexisting in parallel** with `backtesting.py` (a pinned legacy baseline
+  for single-position strategies). Nine decisions formalised: two-tier adapter
   (compat shim + native), coexistence dispatch, **M5 deferred** (deferred edge is
   H1-native — fidelity not capability), `StrategyBase` frozen, adapter returns the
-  `(stats, equity, trades)` contract (WF/sweep/microstructure unchanged; multi-leg
-  microstructure extension flagged), staged completion criteria, time+capability
-  bailout tripwires (vectorbt is *not* a pyramiding fallback), legacy frozen forever.
+  `(stats, equity, trades)` contract (WF/sweep facade unchanged; Nautilus uses native fills,
+  commissions and funding rather than extending ADR-011 to multiple legs), staged completion
+  criteria, time+capability bailout tripwires (`vectorbt` can express the state machine via
+  callbacks but has no live path), and a pinned legacy baseline whose retirement requires a
+  separate decision.
   Migration justified independently of the MMS rescue (capability upgrade for future
   event-driven candidates). Plus `docs/concepts/engine-migration-strategy.md` (DRAFT).
   Zero code. (This session.)
-- **MR-Session 3 Beta (nautilus PoC + `mean_reversion_bb_stoch` v2) — NEXT** —
-  **Beta 0 (runtime, hard gate first):** bump to **Python 3.12**, pin a stable
-  `nautilus_trader` version, decide **conda-3.12 vs `uv`** (Nautilus: Python ≥3.12,
-  CPython+uv recommended, conda not officially supported), `make check` zielony na
-  nowym runtime, zapis `engine`+`engine_version` per wynik. Env conflict = zadanie
-  migracji runtime (albo osobny env/container), **nie** trigger custom-engine
-  (ADR-014 Decision 7). Potem: Tier-1 compat adapter + cross-engine equivalence test;
+- **MR-Session 3 Beta (nautilus PoC + `mean_reversion_bb_stoch` v2) — DONE 2026-07-13; `ITERATE BETA`** —
+  - [x] **Beta 0 runtime hard gate:** vanilla CPython **3.12.13** + `uv==0.11.28`,
+    `nautilus_trader==1.230.0`, `TA-Lib==0.7.0`, `backtesting==0.6.5`, committed
+    `uv.lock`; full `make check` green (**282 passed, 1 live-network test skipped**).
+    Conda fallback was not needed. Result `engine`/version/hash metadata remains in P8.
+  - [x] Executable v2 spec → timestamp/execution PoC → OMS/position PoC (hard gates),
+    Tier-1 compat adapter + cross-engine equivalence test, pure P6 state machine,
+    thin P7 PyO3 wrapper and rich P8 `BacktestResult`.
   **v2 = pure `MastermindStateMachine` (bez importów nautilusa) + cienki
   `NautilusMastermindStrategy`** (ADR-014 Decision 1); logika: base entry
   (H1 armed→reaction jak v1) + **pyramiding** (base x1 + **jedna** dokładka x1 =
@@ -162,12 +170,18 @@ Faza 5: Production na VPS              → 1-2 tyg.
   + **binary sequential leverage** (pierwszy pełny 2% SL → x0.1 scout → pierwszy TP → x1 —
   [mms/03](references/mms/03-stop-loss-sequential.md)); position model = **virtual legs
   over NETTING + reduce-only conditional stops** (ADR-014 Decision 9, do walidacji w PoC).
-  Mini-benchmark sweep (1 symbol × 1-2y × 10-20 sampli, approx costing OK tylko tu).
-  **Na H1** (M5 deferred). State-machine table + open interpretation points → przed kodem.
-  Decision post-PoC: commit / iterate adapter / bailout.
-- **MR-Session 4 (full v2 sweep on nautilus)** — full 6-symbol × full-history sweep of
-  v2, run **unconditionally** (first real test of the *claimed* sizing-layer edge, not
-  the failed bare core; Janek's call, ADR-014 Decision 6).
+  Zamrożony development-only P9 na H1 wykonał **12/12** runów i **264/264**
+  kontroli invariantów; holdout nie został odczytany. Wszystkie wyniki są
+  `SMOKE_ONLY / NOT_ELIGIBLE`, więc nie służą do rankingu ani wyboru parametrów.
+  Raport: [mms-v2-beta-results.md](experiments/mms-v2-beta-results.md).
+  Decyzja post-PoC: **iterate Beta** — mechanika działa, lecz nie spełnia jeszcze
+  warunków pełnego sweepu.
+- **MR-Session 4 (full v2 sweep on nautilus) — BLOCKED / CONDITIONAL** — pełny zakres
+  zostanie prerejestrowany dopiero po: rozwiązaniu parytetu Binance Close-All w
+  backteście, dostarczeniu mark-price i kwalifikowalnego cost/fill profile,
+  rozstrzygnięciu fidelity M5/M10 oraz jednoznacznym zamrożeniu zakresu
+  (sześć instrumentów vs historyczne BTC/ETH × trzy grupy). Nie wolno uruchamiać
+  go bezwarunkowo na podstawie niekwalifikowalnego smoke testu.
 - **MR-Session 5 (conditional WF → MC → Stress → ADR go/no-go)** — full-MMS-system
   verdict (analogue of the bghtrend Session-8 go/no-go), **gated** on the Session-4
   sweep clearing in-sample eligibility (don't run the expensive robustness layer on a

@@ -2,6 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-07-13
+- **Implementation:** Beta gates P0–P9 completed 2026-07-13; decision `ITERATE BETA`
 - **Project phase:** 2 (Research & Backtest MVP)
 - **Authors:** Janek Płoński, Claude
 
@@ -51,14 +52,15 @@ Mastermind rescue: `nautilus_trader` is an event-driven, backtest-and-live-unifi
 multi-venue engine — a capability upgrade for any future event-driven candidate
 (breakout+volume, funding arbitrage), not a one-off for MMS. **(2)** Migration is
 **gradual and parallel**, not big-bang: `backtesting.py` stays; `nautilus_trader` is added
-alongside. **(3)** Mastermind is treated as *inspiration, not scripture* — a real prop
-track record with economically sensible theses we can keep drawing on for future
+alongside. **(3)** Mastermind is treated as *inspiration, not scripture* — an
+author-claimed prop track record with economically sensible theses we can keep drawing on for
+future
 strategies, not a system we must resurrect at any cost. **(4)** The first user of
 `nautilus_trader` is **`mean_reversion_bb_stoch` v2** with pyramiding + sequential leverage
 (closes the mean-reversion loop, tests the full MMS system, and becomes the baseline
 state-machine strategy for everything after it).
 
-One runtime fact reshapes the risk profile and is a hard prerequisite. The repo runs on
+One runtime fact reshaped the risk profile and was a hard prerequisite. The repo ran on
 **Python 3.11**; `nautilus_trader` requires **Python ≥ 3.12** (per its installation docs),
 officially recommends **vanilla CPython + `uv`**, treats **conda as not officially
 supported**, and warns of possible breaking changes between versions. So "check whether
@@ -68,13 +70,15 @@ migration**, not merely a dependency-resolution check, and it is *not* on its ow
 to build a custom engine — the first response to an env conflict is to migrate the runtime
 (or use a separate env / container), never to jump to a bespoke event loop. It is scoped as
 an explicit **Beta 0** step ahead of the adapter (Decision 6/7). The exact `nautilus_trader`
-version, and the conda-3.12-vs-`uv` runtime choice, are pinned empirically in Beta 0, not
-guessed here.
+version and runtime choice were deliberately left for empirical pinning in Beta 0. Beta 0
+resolved them to vanilla CPython **3.12.13**, `uv==0.11.28`,
+`nautilus_trader==1.230.0`, `TA-Lib==0.7.0`, and a committed `uv.lock`; Conda is no longer
+the project default.
 
 Per the project rule (*"decyzje architektoniczne PRZED implementacją"*), the nine
-decisions below were aligned with options and trade-offs before any code. **This ADR is
-architectural only — zero code changes in `algo_bot/`.** Implementation begins in
-MR-Session 3 Beta.
+decisions below were aligned with options and trade-offs before any code. The original
+Alpha acceptance was architectural only; the Beta evidence referenced below was added
+after implementation without rewriting those prior decisions.
 
 ## Decision
 
@@ -94,8 +98,8 @@ The `StrategyBase` contract `on_bar(df) -> Signal` is single-position, one-decis
 by construction; it structurally cannot express pyramiding or per-leg stops. The adapter
 is therefore split:
 
-- **Tier 1 — compatibility adapter** (`algo_bot/engine/nautilus_adapter.py`, to be built
-  in Beta): subscribes to `nautilus_trader` bar-close events, feeds the growing bar frame
+- **Tier 1 — compatibility adapter** (`algo_bot/engine/nautilus_adapter.py`, built and
+  gated in Beta): subscribes to `nautilus_trader` bar-close events, feeds the growing bar frame
   to `StrategyBase.on_bar(df)`, and translates the returned `Signal` into
   `nautilus_trader` orders. Purpose: run existing `StrategyBase` strategies on the new
   engine, and — the highest-value use — **cross-engine equivalence testing** (prove
@@ -132,8 +136,8 @@ already carries the information).
 ### 3. Multi-TF data — defer M5, run the v2 PoC on H1
 
 M5/M10 data is **not** fetched before Beta. The deferred edge's triggers are all
-H1-native: add-on #1 fires on the close of the first confirming H1 candle, add-on #2 on the
-H1 Stochastic 14/3/3 %K&%D cross, and sequential leverage is across-trade state
+H1-native: trigger A fires on the close of the first confirming H1 candle, while trigger B
+is the H1 Stochastic 14/3/3 %K&%D cross; sequential leverage is across-trade state
 ([mms/02](../references/mms/02-position-management-filters.md),
 [mms/03](../references/mms/03-stop-loss-sequential.md)). M5/M10 marking
 ([mms/04](../references/mms/04-interval-marking.md)) governs only entry-timing precision
@@ -167,17 +171,20 @@ is fine — only the output format is shared, not the method:
 
 - **Legacy `backtesting.py` path:** keeps the [ADR-011](011-microstructure-adjustments.md)
   post-hoc overlay (slippage + funding on the equity curve). Unchanged.
-- **`nautilus_trader` path:** costs come from the engine's **native fills, commissions,
-  funding settlements, and execution/latency models** — historical funding can be settled
-  directly inside the backtest. This is *more* accurate than a post-hoc overlay, and it
-  handles multi-leg (pyramided) turnover natively — which matters because add-ons increase
-  turnover and therefore cost. So we do **not** extend the single-position ADR-011
-  `TradeCost` overlay onto the nautilus path; we let the engine cost the fills.
+- **`nautilus_trader` path:** costs come from **native fills, commissions, funding
+  settlements, and execution/fill models**. In pinned 1.230.0 this statement is backend
+  specific: the Rust/PyO3 `BacktestEngine` settles perpetual funding natively, whereas the
+  legacy Cython `BacktestEngine` used by Tier-1 equivalence only caches
+  `FundingRateUpdate` and does not settle it. The native-v2 cost lane therefore requires
+  PyO3 and drains unique `PositionAdjusted(FUNDING)` events. This handles multi-leg
+  turnover without extending the single-position ADR-011 `TradeCost` overlay.
 
-**Consequence:** approximate net-position costing is acceptable **only** for the Beta smoke
-test; it must **not** be used for eligibility or the full sweep (Decision 6), precisely
-because pyramiding inflates turnover and cost. MR-Session 4's sweep runs on native nautilus
-costing.
+**Consequence:** approximate costing is acceptable **only** for a result explicitly marked
+`SMOKE_ONLY / NOT_ELIGIBLE`. Eligibility requires the PyO3 backend, complete funding
+boundaries and mark-price history, a declared commission model, and a declared native fill
+model. Pyramiding inflates turnover, so missing any of these inputs fails closed. Session 4
+cannot start an eligibility sweep until those data/capability gates and the backtest
+Close-All parity gate below are satisfied.
 
 **Richer source result behind the facade.** The tuple is a compatibility facade, not the
 whole result — we do not discard the very data we migrated for. The native nautilus result
@@ -185,18 +192,25 @@ is a structured object carrying `orders`, `fills`, `positions`, `engine`, `engin
 `data_hash`, and `config_hash` in addition to `stats / equity / trades`:
 
 ```python
-@dataclass(frozen=True)
+@dataclass
 class BacktestResult:
+    schema_version: str
     engine: str           # "nautilus" | "backtesting_py"
     engine_version: str   # pinned nautilus version (recorded per run — Decision 6)
+    strategy_version: str
+    source_tree: SourceTreeState  # commit + dirty changes hash
     stats: dict[str, Any]
     equity: pd.DataFrame
     trades: pd.DataFrame
     orders: pd.DataFrame          # nautilus path; empty on legacy
     fills: pd.DataFrame           # nautilus path; empty on legacy
     positions: pd.DataFrame       # nautilus path; empty on legacy
+    funding: pd.DataFrame
     data_hash: str
     config_hash: str
+    random_seed: int
+    cost_model: CostModel
+    eligibility: EligibilityAssessment
 ```
 
 Sweep / walk-forward keep consuming `stats / equity / trades`; debugging the pyramiding
@@ -209,20 +223,26 @@ state machine needs `orders` and `fills`, which the facade would otherwise throw
 Phase-2 gating discipline (never run the expensive robustness layer on a strategy that
 has not shown in-sample edge — the bghtrend Session-4 / MR-Session-2 lesson):
 
-0. **Beta 0 — runtime migration (prerequisite, before any adapter):** bump the project to
+0. **Beta 0 — runtime migration (completed 2026-07-13, before any adapter):** bump the project to
    **Python 3.12**; select and **pin a specific stable `nautilus_trader` version**; decide
    **conda-3.12 vs the officially supported `uv`** runtime; run the full `make check` green
    on the new runtime (legacy `backtesting.py` + TA-Lib must still pass); start recording
-   **`engine` + `engine_version`** in every backtest result (Decision 5). This step is a
-   hard gate — no adapter work until it is green (Decision 7).
-1. **Beta:** Tier-1 compat adapter, the pure `MastermindStateMachine` + thin
+   **`engine` + `engine_version`** in every backtest result (Decision 5). The environment
+   portion of this hard gate passed with 282 tests passed and one live-network test skipped;
+   result metadata remains a later Beta deliverable.
+1. **Beta (completed 2026-07-13):** Tier-1 compat adapter, the pure `MastermindStateMachine` + thin
    `NautilusMastermindStrategy` (Decision 1), and a **mini-benchmark sweep** (1 symbol ×
    1-2 years × 10-20 samples) as a direction check. Approximate costing tolerated here only
-   (Decision 5).
-2. **MR-Session 4:** a **full v2 sweep** on `nautilus_trader` (6-symbol × full history) with
-   **native nautilus costing** (Decision 5) — run **unconditionally**, because it is the
-   first real test of the *claimed* edge (the deferred sizing layer), not of the
-   already-failed bare core.
+   (Decision 5). The frozen P9 suite completed 12/12 runs and 264/264 invariant checks
+   without reading holdout. Every result is `SMOKE_ONLY / NOT_ELIGIBLE`; the decision is
+   **iterate Beta**, documented in
+   [the P9 report](../experiments/mms-v2-beta-results.md).
+2. **MR-Session 4:** a future full v2 sweep on `nautilus_trader` with native Nautilus
+   costing (Decision 5). Beta found that PyO3 does not simulate Binance Close-All parity,
+   and the intended scope is still ambiguous between six instruments and the historical
+   two-symbol × three-config grouping. No full-history run starts until both are resolved
+   and the required mark-price/cost inputs pass eligibility; the earlier "6-symbol,
+   unconditional" schedule is therefore blocked by measured hard gates, not silently run.
 3. **MR-Session 5:** WF → Monte Carlo → stress → ADR go/no-go, **gated** on the Session-4
    sweep showing in-sample eligibility (the expensive robustness layer only for a strategy
    that cleared the sweep).
@@ -269,27 +289,81 @@ retirement of the `backtesting.py` runtime is out of scope here and requires a s
 ADR** — this ADR neither promises to keep two live engines forever (that would be an odd
 commitment if nautilus is the 5-year target) nor retires the old one now.
 
-### 9. Position model — NETTING venue position + virtual base/add-on legs + reduce-only stops
+### 9. Position model — selected OMS-A NETTING + virtual legs + explicit stops
 
 MMS needs *logical* base and add-on legs with independent stops, but the venue position
 model constrains how they can be realized. `nautilus_trader` can run NETTING (one position
 per instrument), HEDGING (separate position IDs), or virtual strategy-level positions above
 a venue netting position. The Binance adapter, at time of writing, **supports conditional
 stop orders**, **does not support bracket orders**, and offers **`reduce_only`** on futures
-which is **disabled in Hedge Mode**. Those constraints point to one realistic design:
+which is **disabled in Binance account Hedge Mode**.
 
-> **Virtual base/add-on legs tracked inside the `MastermindStateMachine`, over a single
-> real NETTING position on Binance, with the per-leg stops realized as independent
-> `reduce_only` conditional stop orders of a specific quantity.**
+The pinned P4 PoC selects `OMS-A_NETTING_VIRTUAL_LEGS_V1`:
 
-The implication for Decision 5's "per-leg stops": they are **not** solved by the engine for
-free — they are a strategy-level construct (virtual legs) mapped to venue orders, and that
-mapping is a **first-class thing to validate in the Beta PoC** before it is treated as
-working. The netting add-on averages the entry into a larger single position, and its "stop"
-is a reduce-by-one-leg order — exactly the netting mechanics MMS itself describes
-([mms/02](../references/mms/02-position-management-filters.md)). HEDGING is not chosen
-because `reduce_only` is disabled there and it complicates the Binance execution path for no
-benefit at MVP scale.
+> **Run strategy OMS `NETTING` over the Binance venue/account `NETTING` position. Track
+> base and add-on as logical legs in the pure `MastermindStateMachine`. Map the base SL to
+> one Binance STOP_MARKET Close-All (`closePosition=true`, without `reduceOnly`) and map
+> add-on protection to an append-only group of exact-quantity `reduceOnly` STOP_MARKET
+> children, one per unique actual partial fill.**
+
+This mapping is not solved by the engine for free. The state machine owns leg allocation,
+stable identities, and cleanup; Binance owns one real net position. Nautilus strategy OMS
+HEDGING is distinct from Binance account Hedge Mode, and the rejected hypothesis kept the
+account in one-way/NETTING mode. It was rejected because its virtual position accounting
+diverged from a whole-net Close-All fill, not because `reduce_only` was unavailable.
+
+#### P4 evidence record (2026-07-13)
+
+The real pinned `BacktestEngine` ran base BUY `1.000`, add-on BUY `1.000`, and a whole-net
+SELL `2.000` against venue OMS `NETTING` with `use_position_ids=False`:
+
+- strategy OMS `NETTING` produced one closed position, portfolio net zero, and no open
+  position;
+- strategy OMS `HEDGING` closed the base virtual position, left the add-on virtually LONG
+  `1.000`, and created a new virtual SHORT `1.000`. Portfolio net was zero while two
+  offsetting virtual positions remained open. This rejects OMS-B for Binance Close-All.
+
+The adapter-level harness invokes the pinned Binance execution client's real methods and
+confirms all of the following: Close-All is limited to STOP_MARKET/MARKET_IF_TOUCHED;
+`close_position` plus `reduce_only` is rejected; Close-All omits quantity and `reduceOnly`
+from the wire request; the exact-quantity add-on child sends `reduceOnly`; linked bracket
+lists are denied; and STOP_MARKET quantity modification is rejected. Both roles use GTC,
+Nautilus `LAST_PRICE` (Binance `CONTRACT_PRICE`), and no local emulation. LONG protection
+sells and SHORT protection buys.
+
+Because STOP_MARKET cannot be amended, the add-on policy is
+`INCREMENTAL_REDUCE_ONLY_PER_FILL_V1`: append a child for each fill delta at the shared
+structural level. Its aggregate active quantity equals actual add-on quantity, while
+avoiding both a cancel-old-first protection gap and a submit-cumulative-first overlap. The
+deterministic quantity probe covers all six orderings of base Close-All plus two partial
+children, duplicate executions, TP/base cleanup, and a checkpoint round-trip that restores
+known executions and stable client IDs without duplication.
+
+The evidence lives in `algo_bot/engine/nautilus_oms_poc.py` and
+`tests/test_nautilus_oms_poc.py`; the scoped gate is 16 passing tests on Python 3.12. This
+closes the OMS choice, not production lifecycle recovery: asynchronous submit/reject/cancel
+races, durable outbox policy, bounded retries, and the fill-to-protection-acceptance window
+remain mandatory P6 work. No live-capital or credentialed exchange call was made.
+
+#### PyO3 backtest limitation and Beta smoke profile
+
+The P7 characterization found that PyO3 `BacktestEngine` 1.230.0 accepts
+`params={"close_position": true}` but ignores the Binance server-side Close-All semantic:
+a stop with quantity 1 over a net position of 2 reduces only 1. `Strategy.close_position`
+is an immediate market command, not a conditional stop, and cannot replace it. Therefore
+the live P4 mapping remains selected, but the Beta backtest may use only the explicitly
+non-parity profile `PYO3_NETTING_DECOMPOSED_CLOSEALL_SMOKE_V1`: one native
+`reduce_only=True` stop child per unique base/add-on fill delta. Native reduce-only clipping
+was measured to end flat without reversal both on continuous traversal and a gap through
+both stop levels. Its order trace is not Binance Close-All parity, so every such run is
+`SMOKE_ONLY / NOT_ELIGIBLE`.
+
+A second PyO3-specific observation is that engine latency also delays protective commands
+created in a fill callback. The Beta wrapper therefore uses engine latency zero, queues only
+strategic market entry/exit until the next H1 close, and submits protection synchronously
+after a fill. This separate execution profile is
+`PYO3_WRAPPER_NEXT_CLOSE_ZERO_LATENCY_SMOKE_V1`; it must not be confused with the P3
+Cython `RESEARCH_CAUSAL_NEXT_CLOSE_V1` profile.
 
 **Positive:**
 
@@ -301,10 +375,10 @@ benefit at MVP scale.
 - **Backtest–live parity.** `nautilus_trader` runs the same strategy in backtest and live,
   which directly de-risks Phase 3 (the current `live/live_binance.py` is a second, separate
   engine — a known source of backtest/live drift).
-- **Native, accurate cost accounting.** Fills, commissions, funding settlements, and
-  execution/latency come from the engine, not a post-hoc overlay — and multi-leg
-  (pyramided) turnover is costed natively, which the single-position ADR-011 overlay could
-  not do faithfully (Decision 5).
+- **Native, auditable cost accounting.** In the PyO3 lane fills, commissions, funding
+  adjustments and fill-model effects come from the engine rather than ADR-011. Native does
+  not mean realistic: absent mark prices/order-book data and a fixed fee schedule still
+  force `NOT_ELIGIBLE` (Decision 5).
 - **Richer, reproducible results.** The `BacktestResult` carries `orders / fills /
   positions` (needed to debug the pyramiding state machine) plus `engine_version` and
   `data_hash / config_hash` — a stronger reproducibility record than the tuple alone.
@@ -318,9 +392,9 @@ benefit at MVP scale.
 
 **Negative / costs:**
 
-- **Runtime migration.** Python 3.11 → 3.12, a pinned `nautilus_trader` version, and a
-  conda-3.12-vs-`uv` decision are prerequisite work (Beta 0) before any adapter — the
-  single biggest cost and the first hard gate.
+- **Runtime migration.** Python 3.11 → 3.12, pinned engine dependencies and the `uv`
+  decision were prerequisite work (Beta 0) before any adapter. This cost has now been paid;
+  future changes go through `uv.lock`.
 - **Learning curve.** ~2-3 days for the first native strategy (actor/message-bus model,
   event handlers, order/position lifecycle).
 - **Adapter maintenance.** The Tier-1 compat layer plus dual-engine CLI is ongoing surface
@@ -331,15 +405,24 @@ benefit at MVP scale.
 
 **Risks:**
 
-- **Runtime migration is the first hard gate.** Python 3.12 + a pinned `nautilus_trader`
-  + TA-Lib (conda-forge) + `backtesting.py`, on conda or `uv`, on both the WSL box and the
-  VPS, is the single biggest unknown. It is resolved in Beta 0 (runtime migration or a
-  separate env/container — Decision 7), not by abandoning the engine; only a total failure
-  across conda, `uv`, and a container escalates to the bailout ladder.
-- **Position-model / per-leg stops need PoC validation.** The virtual-legs-over-netting +
-  `reduce_only` conditional-stop design (Decision 9) is the realistic path given the Binance
-  adapter's constraints (no bracket orders; `reduce_only` disabled in Hedge Mode), but it is
-  an assumption until the Beta PoC demonstrates it — not a solved-by-engine given.
+- **Runtime migration was the first hard gate.** Python 3.12 + pinned
+  `nautilus_trader` + the TA-Lib binary wheel + pinned `backtesting.py` passed the full
+  local gate under `uv`. Reproducing the lock on CI and the VPS remains an operational
+  verification, not a reason to reopen the Conda choice.
+- **Position-model and pure lifecycle gates are closed.** P4 selected OMS-A and measured
+  the Close-All plus incremental `reduce_only` mapping (Decision 9). P6 now covers durable
+  snapshots, submit/reject/cancel/timeout/partial-fill races, stale/duplicate delivery,
+  bounded transport dedupe with durable source high-water marks, and orphan cleanup. These
+  remain application guarantees, not solved-by-engine givens.
+- **Backtest/live Close-All parity is open.** The pinned PyO3 simulator ignores Binance
+  `close_position`; the decomposed reduce-only mapping is safe for smoke but deliberately
+  non-eligible. Session 4 needs native simulator support or a separately reviewed parity
+  solution that does not build a custom matching engine.
+- **Beta evidence does not clear the research gate.** P9 completed all twelve frozen runs
+  and all 264 invariant checks, but every result carries the preregistered unconditional
+  ineligibility reasons. Its 22 ablation rows describe mechanics only; they cannot select a
+  variant or authorize Session 4. See
+  [the development-only report](../experiments/mms-v2-beta-results.md).
 - **`nautilus_trader` API pitfalls not surfaced by the docs.** Where an adapter-layer
   decision needs deeper investigation than the docs allow, it is parked as a Beta TODO
   rather than blocking this ADR (the pragmatism rule).
@@ -390,8 +473,9 @@ benefit at MVP scale.
   activated). `backtesting.py` itself is retained per Decision 8.
 - [ADR-009](009-walk-forward.md) — WalkForward calls `run_backtest` per fold; the adapter
   preserves that contract (Decision 5).
-- [ADR-011](011-microstructure-adjustments.md) — post-hoc equity-curve overlay; engine-
-  agnostic for single-position, needs a multi-leg extension for pyramiding (Decision 5).
+- [ADR-011](011-microstructure-adjustments.md) — the legacy `backtesting.py` post-hoc
+  equity-curve overlay; the Nautilus path uses native costs and does not extend this overlay
+  to multi-leg pyramiding (Decision 5).
 - [ADR-012](012-mvp-no-go-bghtrend.md), [ADR-013](013-wf-eligibility-thresholds.md) — the
   Phase-2 pivot precedent and the eligibility gate reused in Decision 6.
 - [strategy-mean-reversion-bb-stoch.md](../reference/modules/strategy-mean-reversion-bb-stoch.md)
@@ -405,18 +489,18 @@ benefit at MVP scale.
 - Concept doc (user-facing overview): `docs/concepts/engine-migration-strategy.md`.
 - External `nautilus_trader` docs (facts feeding Decisions 1/5/6/7/9; version specifics to
   be re-confirmed and pinned at Beta 0):
-  - Installation (Python ≥ 3.12, CPython + `uv` recommended, conda not officially
+  - Installation (Python 3.12–3.14, CPython + `uv` recommended, conda not officially
     supported, breaking-change warning) — <https://nautilustrader.io/docs/latest/getting_started/installation/>
   - Backtesting (native fills / commissions / funding settlements / execution + latency
     models) — <https://nautilustrader.io/docs/latest/concepts/backtesting/>
-  - Position model (NETTING / HEDGING / virtual positions) — <https://nautilustrader.io/docs/latest/concepts/orders/>
+  - Position model (NETTING / HEDGING / virtual positions) — <https://nautilustrader.io/docs/latest/concepts/positions/>
   - Binance integration (conditional stops yes, bracket orders no, `reduce_only` on futures
     disabled in Hedge Mode) — <https://nautilustrader.io/docs/latest/integrations/binance/>
 
 ## Notes
 
-- **Zero code in this session.** Files named for Beta (`algo_bot/engine/nautilus_adapter.py`,
-  the native v2 strategy, dual-engine CLI wiring) are named for orientation, not created here.
+- **Alpha scope was zero code.** Files named for Beta were orientation at acceptance time;
+  the adapter, state machine, wrapper and result schema now exist as later Beta evidence.
 - **MMS numbers corrected vs the kickoff (and vs the first draft of this ADR).** Two fixes:
   - *Sequential leverage* is a **binary** switch, not a ladder: the kickoff's `x1 → x0.5 →
     x0.25 → x0.1` is wrong; MMS ([mms/03](../references/mms/03-stop-loss-sequential.md)) does
@@ -442,16 +526,19 @@ benefit at MVP scale.
     | `BASE` / `BASE_LOCKED` / `PYRAMIDED` | band TP | close all | `FLAT` (regime per `L`) |
     | `BASE` / `BASE_LOCKED` | base 2% SL | close all | `FLAT` (+ `L → SCOUT`) |
 
-  - **Open interpretation points to resolve in Beta (do not hard-code silently):**
-    (i) is pyramiding available in `SCOUT`, or are scouts base-only? (working assumption:
-    base-only); (ii) confirm the two add-on triggers are mutually exclusive (one add-on),
-    per the x2 cap; (iii) "first profitable trade" that re-arms `FULL` — net-profitable full
-    close, or any partial TP? (working assumption: net-profitable full close). These are
-    strategy-spec decisions for the Beta kickoff, flagged here so the implementation carries
-    no hidden reading of MMS.
+  - **Beta interpretation decisions:** SCOUT is base-only; the four explicit add-on
+    policies still allow at most one add-on; and FULL re-arms only after a completely closed,
+    naturally profitable SCOUT setup after commissions, signed funding, slippage, and any
+    prior add-on-stop loss. Partial or forced closes never re-arm. The executable source of
+    truth is `docs/specs/mms-v2-executable-spec.md`.
 - **`engine_version` recorded per run.** Every backtest result carries `engine` +
   `engine_version` (Decisions 5/6) so a result is always attributable to a pinned runtime —
   important precisely because `nautilus_trader` warns of breaking changes between versions.
+- **Beta 0 evidence (2026-07-13).** The official wheels were smoke-tested on Ubuntu 22.04
+  x86_64 / glibc 2.35 with CPython 3.12.13. `TA-Lib` executed a C-backed SMA fixture,
+  Nautilus imported as 1.230.0, `uv lock --check` passed, and full `make check` reported
+  282 passed / 1 skipped. The prior Python 3.11 baseline was also green (280 passed / 1
+  skipped after the P0 regressions), preserving the before/after comparison.
 - **mypy strict-on-new.** The Beta adapter (`algo_bot/engine/nautilus_adapter.py`), the pure
   `MastermindStateMachine`, and the native `NautilusMastermindStrategy` go on the
   `pyproject.toml` strict override list, per project convention.
@@ -459,5 +546,6 @@ benefit at MVP scale.
   revised in a second review round that added the Beta-0 runtime migration (Python
   3.12/`uv`/pin), the pure-`MastermindStateMachine` layering (Decision 1), the position
   model (Decision 9), native nautilus costing + the richer `BacktestResult` (Decision 5),
-  softer backward-compat (Decision 8), and the pyramiding-math fix. Implementation lands in
-  MR-Session 3 Beta (starting with Beta 0); `make check` remains the operator's WSL gate.
+  softer backward-compat (Decision 8), and the pyramiding-math fix. P0–P9 landed in
+  MR-Session 3 Beta; the completed smoke suite led to `ITERATE BETA`, while `make check`
+  remains the operator's WSL gate.

@@ -13,7 +13,7 @@ Format: lekki, oparty na propozycji [Michael Nygard'a](https://cognitect.com/blo
 | # | Tytuł | Status | Data | Faza |
 |---|---|---|---|---|
 | [001](001-flatten-package-layout.md) | Flatten repo + `algo_bot/` package layout | Accepted | 2026-05-14 | 1 |
-| [002](002-pyproject-hatchling-stack.md) | pyproject.toml + hatchling + conda + pip-tools + ruff + mypy | Accepted | 2026-05-14 | 1 |
+| [002](002-pyproject-hatchling-stack.md) | pyproject.toml + hatchling + historical Conda/pip-tools runtime | Superseded in part by ADR-014 / Beta 0 | 2026-05-14 | 1 |
 | [003](003-strategybase-signal-api.md) | StrategyBase + Signal — unified API dla backtest+live | Accepted (retroactive) | pre-2026-05 | 0 |
 | [004](004-hybrid-tp-sl-mode.md) | Hybrid TP/SL — server/local/hybrid mode w live | Accepted (retroactive) | pre-2026-05 | 0 |
 | [005](005-backtesting-py-mvp-engine.md) | backtesting.py jako silnik backtestowy MVP | Accepted (retroactive) | pre-2026-05 | 0 |
@@ -21,7 +21,7 @@ Format: lekki, oparty na propozycji [Michael Nygard'a](https://cognitect.com/blo
 | [007](007-risk-adjusted-metrics.md) | Risk-adjusted metrics — hand-rolled `algo_bot/metrics.py` | Accepted | 2026-05-22 | 1 |
 | [008](008-risk-limits-module.md) | Risk limits module — pure gates + backtester hook | Accepted | 2026-05-24 | 1 |
 | [009](009-walk-forward.md) | Walk-forward analyzer — `algo_bot/engine/walkforward.py` | Accepted | 2026-05-25 | 1 |
-| [010](010-automated-quality-gates-ci-pre-commit.md) | Automated quality gates — CI + pre-commit | Accepted | 2026-05-25 | 1 |
+| [010](010-automated-quality-gates-ci-pre-commit.md) | Automated quality gates — CI + pre-commit | Accepted; environment mechanism superseded | 2026-05-25 | 1 |
 | [011](011-microstructure-adjustments.md) | Microstructure adjustments — slippage + funding overlay (`algo_bot/microstructure.py`) | Accepted | 2026-06-19 | 2 |
 | [012](012-mvp-no-go-bghtrend.md) | MVP no-go for `bghtrend_pullback` — kept as historical baseline | Accepted | 2026-07-05 | 2 |
 | [013](013-wf-eligibility-thresholds.md) | WF-eligibility thresholds — pre-WF filter (`WF_ELIGIBILITY_THRESHOLDS`) | Accepted | 2026-07-05 | 2 |

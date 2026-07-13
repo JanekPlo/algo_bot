@@ -11,14 +11,14 @@ actual role of the Stochastic oscillator in the methodology. Directly informs th
 - **Base position = the statistically best reaction point**; the methodology's key
   trait is *maximising exposure around it* with additional, cascading techniques —
   their hierarchy rises with the quality of the incoming signal.
-- **Add-on #1 — after the first confirming candle:** with the base position open, wait
+- **Trigger A — after the first confirming candle:** with the base position open, wait
   for one full candle to close (confirming the reaction and direction). At the **start
   of the new interval add another x1** in the base direction.
 - **Add-on SL placement:** for the enlarged position, SL goes at the **pair of wicks at
   the local extremes** (minima for long / maxima for short). The add-on's SL may not
   exceed **1% price move** (total risk incl. base ≤ **3% equity**); market conditions
   usually keep it **below 0.5%**.
-- **Add-on #2 — Stochastic filter:** analogous add-on trigger using the **classic
+- **Trigger B — Stochastic filter:** an alternative add-on trigger using the **classic
   Stochastic 14,3,3 on H1**. Condition = the classic oscillator signal: **%K and %D
   cross below 20 or above 80**. Add x1 in the base direction; the add-on gets a fixed
   SL of **1% price move**.
@@ -39,8 +39,8 @@ actual role of the Stochastic oscillator in the methodology. Directly informs th
 
 | Parameter | MMS value | Note |
 |---|---|---|
-| Add-on trigger #1 | Close of the first full confirming candle → add at new interval open | Time/price-action based, no indicator |
-| Add-on trigger #2 | Stochastic **14/3/3 on H1**, **%K & %D** cross < 20 or > 80 | The oscillator's ONLY explicit role in MMS |
+| Add-on trigger A | Close of the first full confirming candle → add at new interval open | Time/price-action based, no indicator |
+| Add-on trigger B | Stochastic **14/3/3 on H1**, **%K & %D** cross < 20 or > 80 | The oscillator's ONLY explicit role in MMS |
 | Add-on size | x1 (same as base) | Total ≤ x2 by construction |
 | Add-on SL | wick-pair local extreme, ≤ 1% move (typically < 0.5%) | Base keeps its 2% SL as buffer |
 | Total risk cap | 3% equity at worst point | Base 2% + add-on ≤ 1% |
@@ -49,7 +49,7 @@ actual role of the Stochastic oscillator in the methodology. Directly informs th
 ## Screenshots
 
 ![Dokładka po świecy potwierdzającej + intro](raw/mastermind/01_prowadzenie_pozycji_filtry.png)
-Caption: cascading add-on techniques over the base position; add-on #1 rules and the
+Caption: cascading add-on techniques over the base position; confirming-candle trigger rules and the
 1%-move SL cap (3% total risk).
 
 ![Użycie dodatkowego filtra (Stochastic) + realizacja SL z dokładek](raw/mastermind/02_prowadzenie_pozycji_filtry.png)
@@ -68,7 +68,7 @@ Caption: netting-vs-hedging execution mechanics for add-ons; chart-hygiene philo
   Match: **N — deliberate adaptation**: Beta has no pyramiding (deferred ADR), so the
   oscillator was repurposed as an optional base-entry quality filter and made a sweep
   dimension (`bb_only` vs `bb_stoch`) to be resolved empirically in MR-Session 2.
-- **Add-on mechanics (dokładka #1/#2, wick-pair SL, 3% cap, netting/hedging):** not
+- **Add-on mechanics (one add-on, trigger A/B, wick-pair SL, 3% cap, netting/hedging):** not
   implemented in Beta — this whole tab is the deferred pyramiding edge. Match: **N
   (deferred by design; single-position backtesting.py cannot express it).**
 - **Stochastic default 14/3/3 and thresholds 20/80:** adopted verbatim as Beta

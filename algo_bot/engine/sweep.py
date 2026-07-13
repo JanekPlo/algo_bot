@@ -129,6 +129,44 @@ def _sample_from_spec(spec: dict[str, Any], rng: random.Random) -> Any:
     raise ValueError(f"Unsupported random spec: {spec}")
 
 
+def validate_param_space(mode: str, space: Any) -> dict[str, Any]:
+    """Validate a decoded sweep space before expansion.
+
+    Random-search parameters must be mapping specs. This catches malformed
+    YAML such as a missing comment marker (decoded as a stray scalar parameter)
+    while loading the config, instead of failing later in the sampling loop.
+    Grid mode keeps its documented list-of-values grammar.
+    """
+    if not isinstance(space, dict):
+        raise ValueError(f"Sweep parameter space must be a mapping, got {type(space).__name__}.")
+    if not space:
+        raise ValueError("Sweep parameter space must not be empty.")
+
+    if mode == "random":
+        for name, spec in space.items():
+            if not isinstance(name, str):
+                raise ValueError(f"Sweep parameter names must be strings, got {name!r}.")
+            if not isinstance(spec, dict):
+                raise ValueError(
+                    f"Random sweep parameter {name!r} must be a mapping/spec, "
+                    f"got {type(spec).__name__}."
+                )
+        return space
+
+    if mode == "grid":
+        for name, values in space.items():
+            if not isinstance(name, str):
+                raise ValueError(f"Sweep parameter names must be strings, got {name!r}.")
+            if not isinstance(values, list):
+                raise ValueError(
+                    f"Grid sweep parameter {name!r} must be a list of values, "
+                    f"got {type(values).__name__}."
+                )
+        return space
+
+    raise ValueError("mode must be 'grid' or 'random'")
+
+
 def expand_param_space(
     mode: str, space: dict[str, Any], n_samples: int = 50, seed: int = 42
 ) -> Iterable[dict[str, Any]]:
@@ -345,7 +383,7 @@ def load_space_from_any(args) -> tuple[str, dict[str, Any], int, int, str | None
     else:
         raise SystemExit("Podaj --space_json lub --space_file")
 
-    return mode, space, n_samples, seed, implied_tf
+    return mode, validate_param_space(mode, space), n_samples, seed, implied_tf
 
 
 def main():

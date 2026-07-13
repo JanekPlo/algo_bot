@@ -6,11 +6,17 @@
 
 Nowy w projekcie? Idź w tej kolejności:
 
-1. **[Getting Started](guides/getting-started.md)** — setup od zera (conda env, install, weryfikacja)
+1. **[Getting Started](guides/getting-started.md)** — setup od zera (uv 0.11.28, Python 3.12.13, `uv.lock`)
 2. **[Daily Workflow](guides/daily-workflow.md)** — co robisz codziennie (komendy, cykl edit → test → commit)
 3. **[Makefile Cheatsheet](guides/makefile-cheatsheet.md)** — każdy `make <target>` wytłumaczony
 4. **[Working with Claude](guides/working-with-claude.md)** — jak współpracować z Claudem (Cowork) na tym projekcie: sesje robocze, mózg-Claude, kickoff/closeout
 5. **[Package Overview](reference/package-overview.md)** — co siedzi w którym katalogu
+
+Runtime Beta 0 używa wyłącznie domyślnej ścieżki
+`uv sync --locked` + `uv run`. `uv.lock` jest kanonicznym lockfilem,
+NautilusTrader jest przypięty do 1.230.0, a TA-Lib do 0.7.0 (wheel zawiera
+bibliotekę C). Materiały opisujące Condę/`environment.yml` lub pip-tools jako
+aktywny default są historyczne i **superseded**.
 
 ## Struktura docs
 
@@ -29,6 +35,12 @@ Plus dwa rodzaje docs strategicznych:
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** — warstwy systemu, mapa modułów, decyzje wysokopoziomowe
 - **[adr/](adr/README.md)** — Architecture Decision Records — *dlaczego* coś jest tak a nie inaczej
 - **[CHANGELOG.md](CHANGELOG.md)** — wersjonowane zmiany (keep-a-changelog)
+- **[MMS v2 executable spec](specs/mms-v2-executable-spec.md)** — źródło prawdy dla
+  domeny, tranzycji, sizingu, idempotencji i recovery
+- **[Beta preregistration](experiments/mms-v2-beta-preregistration.md)** — zamrożone
+  okno development/holdout, macierz ablation i profil kosztów P9
+- **[Beta results](experiments/mms-v2-beta-results.md)** — wyniki 12 runów P9,
+  ograniczenia kwalifikowalności i decyzja `ITERATE BETA`
 
 ## Mapa docs
 
@@ -48,7 +60,14 @@ docs/
 │   ├── 004-hybrid-tp-sl-mode.md
 │   ├── 005-backtesting-py-mvp-engine.md
 │   ├── 006-logging-strategy.md
-│   └── 007-risk-adjusted-metrics.md
+│   ├── 007-risk-adjusted-metrics.md
+│   ├── 008-risk-limits-module.md
+│   ├── 009-walk-forward.md
+│   ├── 010-automated-quality-gates-ci-pre-commit.md
+│   ├── 011-microstructure-adjustments.md
+│   ├── 012-mvp-no-go-bghtrend.md
+│   ├── 013-wf-eligibility-thresholds.md
+│   └── 014-engine-migration-nautilus.md
 │
 ├── guides/                            # how-to (zorientowane na zadanie)
 │   ├── getting-started.md             # setup od zera
@@ -56,8 +75,10 @@ docs/
 │   ├── makefile-cheatsheet.md         # każdy make target
 │   ├── working-with-claude.md         # workflow Cowork: sesje + mózg-Claude
 │   ├── adding-a-strategy.md           # (TBD — faza 2)
-│   ├── running-backtest.md            # (TBD — faza 2)
-│   ├── running-sweep.md               # (TBD — faza 2)
+│   ├── data-fetching.md               # pobieranie i walidacja danych
+│   ├── running-backtest.md            # pojedynczy backtest
+│   ├── running-sweep.md               # sweep parametrów
+│   ├── vps-research-runner.md         # locked research runtime na VPS
 │   ├── walk-forward-howto.md          # (TBD — po decyzji F)
 │   ├── live-trading-checklist.md      # (TBD — faza 3-4)
 │   ├── deploying-to-vps.md            # (TBD — faza 5)
@@ -69,6 +90,12 @@ docs/
 │   │   └── metrics.md                 # ADR-007 — algo_bot.metrics
 │   ├── config-reference.md            # (TBD — YAML schemas)
 │   └── metrics-reference.md           # (TBD — interpretacja metryk w summary.json)
+│
+├── specs/
+│   └── mms-v2-executable-spec.md       # wykonywalny kontrakt MMS-inspired v2
+├── experiments/
+│   ├── mms-v2-beta-preregistration.md  # prerejestracja development-only P9
+│   └── mms-v2-beta-results.md          # wyniki P9 + decyzja iterate Beta
 │
 └── concepts/                          # narrative explanations
     ├── glossary.md                    # terminologia
@@ -82,7 +109,8 @@ Pliki oznaczone `(TBD ...)` będą dodane w odpowiednich fazach/po odpowiednich 
 
 ## Konwencje pisania docs
 
-**Markdown plain** (GitHub Flavored). Po MVP rozważamy upgrade do MkDocs + Material — patrz [ADR-006 (planowany)](adr/006-mkdocs-after-mvp.md).
+**Markdown plain** (GitHub Flavored). Ewentualny upgrade do MkDocs + Material wymaga
+osobnej przyszłej decyzji; ADR-006 dotyczy obecnie strategii logowania.
 
 **Docstring style w kodzie**: Google (`Args:`, `Returns:`, `Raises:`). Patrz przykłady w [guides/adding-a-strategy.md](guides/adding-a-strategy.md) (gdy powstanie).
 
@@ -92,7 +120,7 @@ Pliki oznaczone `(TBD ...)` będą dodane w odpowiednich fazach/po odpowiednich 
 
 **Pisanie sync z kodem**: każda zmiana publicznego API ALBO dodanie nowego modułu = update docs w tym samym PR/commicie. Wymusza to dyscyplinę i nie pozwala docs zostać daleko w tyle.
 
-## Status docs (faza 1)
+## Status docs (Beta)
 
 ✓ = napisane | ⧗ = w trakcie | ☐ = planowane
 
@@ -101,15 +129,22 @@ Pliki oznaczone `(TBD ...)` będą dodane w odpowiednich fazach/po odpowiednich 
 | docs/README.md | ✓ |
 | docs/ROADMAP.md | ✓ |
 | docs/ARCHITECTURE.md | ✓ |
-| docs/CHANGELOG.md | ⧗ |
-| docs/adr/README.md | ⧗ |
-| docs/adr/template.md | ⧗ |
-| docs/adr/001..005 | ⧗ |
-| docs/guides/getting-started.md | ⧗ |
-| docs/guides/daily-workflow.md | ⧗ |
-| docs/guides/makefile-cheatsheet.md | ⧗ |
+| docs/CHANGELOG.md | ✓ |
+| docs/adr/README.md | ✓ |
+| docs/adr/template.md | ✓ |
+| docs/adr/001..014 | ✓ |
+| docs/specs/mms-v2-executable-spec.md | ✓ |
+| docs/experiments/mms-v2-beta-preregistration.md | ✓ |
+| docs/experiments/mms-v2-beta-results.md | ✓ |
+| docs/guides/getting-started.md | ✓ |
+| docs/guides/daily-workflow.md | ✓ |
+| docs/guides/makefile-cheatsheet.md | ✓ |
+| docs/guides/data-fetching.md | ✓ |
+| docs/guides/running-backtest.md | ✓ |
+| docs/guides/running-sweep.md | ✓ |
+| docs/guides/vps-research-runner.md | ✓ |
 | docs/guides/working-with-claude.md | ✓ |
-| docs/reference/package-overview.md | ⧗ |
-| docs/concepts/glossary.md | ⧗ |
+| docs/reference/package-overview.md | ✓ |
+| docs/concepts/glossary.md | ✓ |
 
 Reszta dochodzi w fazach 2-5 zgodnie z deliverables ROADMAP.

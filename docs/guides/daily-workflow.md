@@ -5,25 +5,29 @@ Co robisz codziennie pracując nad algo_bot. Cykl edit → test → commit → p
 ## Poranny start
 
 ```bash
-# 1. Aktywuj env (KAŻDORAZOWO po otwarciu nowego terminala)
-conda activate algo_bot
-
-# 2. Idź do repo
+# 1. Idź do repo — aktywacja env nie jest potrzebna
 cd ~/quant_projects/algo_bot
+
+# 2. Sprawdź przypięte narzędzie
+uv --version       # uv 0.11.28
 
 # 3. Pobierz najnowszy stan z GitHuba
 git pull origin master
 
-# 4. Sprawdź czy nic się nie popsuło po pull (deps mogły się zmienić)
+# 4. Odtwórz deps i sprawdź checkout
+make sync          # uv sync --locked; Python 3.12.13 z .python-version
 make check         # ruff + mypy + pytest
 # Albo szybciej (bez mypy):
 make test-fast
 ```
 
-Jeśli `make check` faili po pull — najpewniej zmieniły się deps. Zsynchronizuj:
+Jeśli `make check` zgłasza import error, ponownie zsynchronizuj środowisko:
 ```bash
-make sync          # = pip-sync requirements.txt + pip install -e . --no-deps
+make sync          # = uv sync --locked
 ```
+
+Nie aktywuj Condy ani `.venv`; komendy Python/CLI uruchamiaj przez `uv run`,
+a targety Makefile używają wewnętrznie `uv run --locked`.
 
 ## Pre-commit setup
 
@@ -46,8 +50,8 @@ make precommit-run
 ## CI behaviour
 
 GitHub Actions runs `make check` on every pull request and every push to
-`master`. The workflow creates the conda environment from `environment.yml`, so
-CI uses the same Python 3.11 + TA-Lib setup as local development. CI has no
+`master`. Workflow przypina uv 0.11.28 i vanilla CPython 3.12.13, synchronizuje
+`uv.lock` oraz instaluje TA-Lib 0.7.0 i NautilusTrader 1.230.0. CI has no
 secrets and live exchange/API tests are skipped unless explicitly enabled
 outside the default workflow.
 
@@ -90,7 +94,7 @@ Gdy iterujesz na strategii — kompresujesz cykl:
 # Loop:
 # 1. Zmień parametr w strategii / configu
 # 2. Odpal backtest:
-algo-backtest --symbol BTC/USDT --timeframe 4h --strategy bghtrend_pullback \
+uv run algo-backtest --symbol BTC/USDT --timeframe 4h --strategy bghtrend_pullback \
     --params '{"ema_fast":34,"ema_mid":89,"ema_slow":200}'
 # 3. Sprawdź wyniki w results/backtests/<run_id>/summary.json
 cat results/backtests/<run_id>/summary.json | jq '."Sharpe Ratio"'
@@ -99,7 +103,7 @@ cat results/backtests/<run_id>/summary.json | jq '."Sharpe Ratio"'
 
 Dla większej skali — sweep:
 ```bash
-algo-sweep --strategy bghtrend_pullback --symbols BTC/USDT --timeframes 4h \
+uv run algo-sweep --strategy bghtrend_pullback --symbols BTC/USDT --timeframes 4h \
     --start 2022-01-01 --end 2025-01-01 \
     --space_file config/bghtrend_b1.yaml \
     --mode grid
@@ -112,8 +116,9 @@ sort -t',' -k<column> results/experiments/index.csv | head
 ### Notebooks (research)
 
 ```bash
-# Notebooks dziedziczą Python z conda env "algo_bot" (przez ipykernel)
-jupyter lab notebooks/
+# Jednorazowo dołącz grupę notebookową, potem uruchamiaj przez uv
+uv sync --locked --group notebooks
+uv run --group notebooks jupyter lab notebooks/
 
 # Importy działają natywnie:
 # from algo_bot.engine.backtester import run_backtest
@@ -129,8 +134,8 @@ Format: `<typ>: <imperative description>`
 - `fix:` — naprawa buga
 - `docs:` — zmiany w `docs/` lub docstringach
 - `refactor:` — restrukturyzacja kodu bez zmiany zachowania
-- `chore:` — drobne rzeczy (gitignore, requirements, configi)
-- `build:` — zmiany w build system (pyproject.toml, Makefile, environment.yml)
+- `chore:` — drobne rzeczy (gitignore, eksport requirements, configi)
+- `build:` — zmiany w build system (`pyproject.toml`, `uv.lock`, Makefile)
 - `test:` — dodanie/zmiana testów
 - `perf:` — optymalizacja performance
 - `style:` — formatowanie (ruff format)
@@ -185,21 +190,26 @@ git push origin master
 
 ## Po zmianie dependencies
 
-Gdy zmienisz `pyproject.toml` `[project.dependencies]` lub `[project.optional-dependencies]`:
+Gdy zmienisz zależności w `pyproject.toml`:
 
 ```bash
-# 1. Regeneruj lockfile
-make lock          # = pip-compile pyproject.toml -o requirements.txt
+# 1. Regeneruj kanoniczny lockfile
+make lock          # = uv lock
 
 # 2. Zsynchronizuj env
-make sync          # = pip-sync requirements.txt + pip install -e . --no-deps
+make sync          # = uv sync --locked
 
-# 3. Commit razem pyproject + requirements.txt
-git add pyproject.toml requirements.txt
+# 3. Odśwież eksport kompatybilności
+make export-requirements
+
+# 4. Commit deklarację, lockfile i eksport razem
+git add pyproject.toml uv.lock requirements.txt
 git commit -m "chore: bump <package> do <version> (powod: <powod>)"
 ```
 
-**Reguła**: NIGDY nie commituj pyproject bez requirements.txt (lockfile niespójny z deklaracją).
+**Reguła**: `uv.lock` jest jedynym kanonicznym lockfilem. Nie commituj zmiany
+zależności bez odpowiadającego `uv.lock` i nie edytuj go ręcznie.
+`requirements.txt` jest wyłącznie generowanym eksportem kompatybilności.
 
 ## Praca z notebookami
 
@@ -207,18 +217,18 @@ Notebooks są w `notebooks/` ale ich `.ipynb` zawiera outputy które puchną git
 
 ```bash
 # Przed commit notebooka — wyczyść outputy:
-jupyter nbconvert --clear-output --inplace notebooks/03_my_research.ipynb
+uv run --group notebooks jupyter nbconvert --clear-output --inplace notebooks/03_my_research.ipynb
 
-# Albo zainstaluj pre-commit hook nbstripout (TODO faza 1):
-pip install nbstripout
-nbstripout --install
+# Jeżeli dodasz nbstripout do grupy notebookowej:
+uv run --group notebooks nbstripout --install
 ```
 
 ## Częste komendy — cheatsheet
 
 ```bash
 # Setup
-conda activate algo_bot      # KAŻDY terminal
+uv --version                 # oczekiwane: uv 0.11.28
+make sync                    # .venv z CPython 3.12.13 i uv.lock
 
 # Code quality
 make check                   # wszystko CI-style
@@ -228,14 +238,14 @@ make typecheck               # tylko mypy
 make test-fast               # szybkie testy
 
 # Backtest
-algo-backtest --symbol ... --timeframe ... --strategy ... --params '{...}'
-algo-fetch BTC/USDT 4h --start 2020-01-01
-algo-process
-algo-sweep --strategy ... --symbols ... --timeframes ... --space_file ...
+uv run algo-backtest --symbol ... --timeframe ... --strategy ... --params '{...}'
+uv run algo-fetch BTC/USDT 4h --start 2020-01-01
+uv run algo-process
+uv run algo-sweep --strategy ... --symbols ... --timeframes ... --space_file ...
 
 # Maintenance
 make clean                   # usuń cache (__pycache__, .pytest_cache, etc.)
-make lock                    # regeneruj requirements.txt
+make lock                    # regeneruj uv.lock po świadomej zmianie deps
 make sync                    # zsynchronizuj env z lockfile
 
 # Help
@@ -245,8 +255,9 @@ make help                    # lista wszystkich make targets
 ## Anti-patterns (czego NIE robić)
 
 - ❌ **`git push --force` na master** — przepisze historię, inni stracą zmiany (przyszli inni)
-- ❌ **Commit bez aktywnego conda env** — wymyka się testowanie, mypy nie znajdzie deps
-- ❌ **Edycja requirements.txt ręcznie** — to lockfile generowany przez pip-tools, ręczna edycja = niespójność
+- ❌ **Uruchamianie globalnego `python`, `pip` lub `algo-*`** — omija `.python-version` i `uv.lock`; użyj `uv run`
+- ❌ **Aktywowanie dawnego env Conda** — ten workflow jest superseded; domyślny runtime tworzy uv
+- ❌ **Edycja `uv.lock` lub `requirements.txt` ręcznie** — generuj je odpowiednio przez `make lock` i `make export-requirements`
 - ❌ **Pomijanie `make check` przed push** — break master = wstyd
 - ❌ **Bumpowanie wersji w `[project]` przy każdym commicie** — wersja to release marker, nie commit marker. Bump przy taggowaniu (git tag v0.2.0)
 - ❌ **Commitowanie `.deploy_key`** — to private SSH key, gitignored, ale jak się przeoczy = compromise

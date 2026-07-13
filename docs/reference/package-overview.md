@@ -17,13 +17,25 @@ algo_bot/                              # repo root
 ├── results/                           # outputy backtestów/sweepów/live (gitignored)
 │
 ├── pyproject.toml                     # build + deps + tooling
-├── environment.yml                    # conda env definition
-├── requirements.txt                   # generowany lockfile (pip-tools)
+├── .python-version                    # vanilla CPython 3.12.13
+├── uv.lock                            # kanoniczny lockfile zależności
+├── requirements.txt                   # generowany eksport kompatybilności
 ├── Makefile                           # codzienne komendy
 ├── README.md                          # entry point
 ├── .gitignore                         # comprehensive
 └── .deploy_key                        # SSH key (gitignored)
 ```
+
+### Runtime Beta 0
+
+Domyślna ścieżka instalacyjna to uv 0.11.28: `uv sync --locked` odczytuje
+`.python-version`, tworzy `.venv` i instaluje projekt editable. Komendy pakietu
+uruchamiamy przez `uv run`; nie trzeba aktywować środowiska.
+
+`pyproject.toml` przypina NautilusTrader 1.230.0, TA-Lib 0.7.0 i legacy
+backtesting.py 0.6.5, a `uv.lock` zamraża resztę grafu. Wheel TA-Lib zawiera
+bibliotekę C. Dawne `environment.yml` + Conda oraz lockowanie pip-tools są
+**superseded** i nie stanowią równorzędnego workflow.
 
 ---
 
@@ -41,8 +53,16 @@ algo_bot/
 │
 ├── engine/                            # silniki backtestowe
 │   ├── __init__.py
-│   ├── backtester.py                  # główny silnik backtest (wrapper na backtesting.py)
+│   ├── backtester.py                  # legacy runner + compatibility facade
+│   ├── backtest_result.py             # wersjonowany wynik, hashe i cost eligibility
 │   ├── sweep.py                       # grid + random search po przestrzeni parametrów
+│   ├── walkforward.py                 # rolling/anchored walk-forward
+│   ├── nautilus_poc.py                # P3 timestamp/execution semantics
+│   ├── nautilus_oms_poc.py            # P4 NETTING/stop-safety proof
+│   ├── nautilus_adapter.py            # P5 Tier-1 compatibility/equivalence
+│   ├── nautilus_mastermind.py         # P7 thin PyO3 transport wrapper
+│   ├── mms_beta_data.py               # P9 development-only input boundary
+│   ├── mms_beta_benchmark.py          # P9 frozen 2×6 ablation runner
 │   └── exchanges/                     # adaptery giełd
 │       ├── __init__.py
 │       └── binance_adapter.py         # CCXT wrapper dla Binance Futures
@@ -57,7 +77,12 @@ algo_bot/
 │   ├── bghtrend_pullback.py           # baseline (NO-GO ADR-012; kept as reference)
 │   ├── dca_btc.py
 │   ├── ema_cross_sig.py
-│   ├── mean_reversion_bb_stoch.py     # MVP candidate — contrarian BB + Stochastic (pivot 2026-07-05)
+│   ├── mean_reversion_bb_stoch.py     # bare-core legacy baseline (NO-GO MR-Session 2)
+│   ├── mastermind/                    # pure MMS-inspired v2 domain
+│   │   ├── model.py                   # typed events/intents/config/state
+│   │   ├── signals.py                 # engine-independent H1 facts
+│   │   ├── state_machine.py           # reducer, invariants, outbox, recovery view
+│   │   └── snapshot.py                # canonical checksummed persistence
 │   ├── short_trend_following.py
 │   ├── simple_momentum.py
 │   ├── template.py                    # skeleton dla nowej strategii
@@ -70,22 +95,29 @@ algo_bot/
 
 ### Pliki kluczowe (core)
 
-| Plik | Linie | Rola |
-|---|---:|---|
-| `strategy_base.py` | 88 | **Bazowa klasa wszystkich strategii + Signal dataclass.** Definuje `on_bar(df) -> Signal` jako jedyne wymagane API. Silniki (backtest, live) wywołują tę metodę. Patrz [ADR-003](../adr/003-strategybase-signal-api.md). |
-| `strategy_loader.py` | 24 | `load_strategy(name, params)` — dynamic import z `algo_bot.strategies.<name>`, walidacja że dziedziczy po StrategyBase. |
-| `data_loader.py` | 336 | Loader dla bot_data: `load_processed`, `count_missing_bars`, `get_processed_path`. Plus legacy: `fetch_ohlcv`, `load_csv_ohlcv`, `resample_ohlcv`. |
-| `fetch_data.py` | 241 | CLI: pobiera OHLCV z giełdy przez CCXT, zapisuje do `bot_data/raw/`. Argparse-based. |
-| `process_data.py` | 213 | CLI: raw → processed z indykatorami (BBANDS, RSI, etc.). Konfig features w `config/config.yaml`. |
-| `funding.py` | 56 | Helper do pobierania funding rates z Binance (mały scraper; CLI: `python -m algo_bot.funding`). |
+| Plik | Rola |
+|---|---|
+| `strategy_base.py` | **Bazowa klasa strategii legacy + `Signal`.** Definiuje `on_bar(df) -> Signal`; nie jest rozszerzana o wielonogowy automat v2. Patrz [ADR-003](../adr/003-strategybase-signal-api.md) i [ADR-014](../adr/014-engine-migration-nautilus.md). |
+| `strategy_loader.py` | `load_strategy(name, params)` — dynamiczny import oraz walidacja `StrategyBase`. |
+| `data_loader.py` | Loader i walidacja plików `bot_data`. |
+| `fetch_data.py` / `process_data.py` | CLI CCXT → raw → processed. |
+| `funding.py` | Pobieranie historycznych funding rates (`uv run algo-fetch-funding`). |
 
 ### `algo_bot/engine/`
 
-| Plik | Linie | Rola |
-|---|---:|---|
-| `backtester.py` | 532 | **Główny silnik backtestowy.** Wrapper na backtesting.py. Funkcje: `run_backtest()`, `save_outputs()`, `run_id()`. Adapter `make_bt_wrapper()` parsuje Signal na BTStrategy API. Wsparcie dla TP/SL/trail (cooldown w strategii), microstructure adjustment (`adjust_trades_df` z spread/slippage). Patrz [ADR-005](../adr/005-backtesting-py-mvp-engine.md). |
-| `sweep.py` | 352 | **Grid + random search po parametrach.** Wczytuje przestrzeń z YAML (`config/bghtrend_b1.yaml`), generuje kombinacje, odpala backtest per kombinacja, agreguje wyniki w `results/experiments/index.csv`. Wsparcie dla walk-forward (rolling windows). |
-| `exchanges/binance_adapter.py` | 117 | Klasa `BinanceFuturesAdapter` — CCXT wrapper dla Binance Futures (USDT-M perpetuals). Używana przez live runner i fetch_data. |
+| Plik | Rola |
+|---|---|
+| `backtester.py` | Przypięty runner `backtesting.py`; `run_backtest()` zachowuje tuple, a `run_backtest_result()` buduje rich source result. |
+| `backtest_result.py` | `BacktestResult` ze schema/version, engine/git/data/config hash, sześcioma ledgerami oraz fail-closed cost eligibility. |
+| `sweep.py` | Grid/random search; konfiguracje są walidowane przed samplingiem. |
+| `walkforward.py` | Rolling/anchored walk-forward i bramki MVP/WF. |
+| `nautilus_poc.py` | P3: close timestamps, causal fill scheduling, gap i OHLC ordering. |
+| `nautilus_oms_poc.py` | P4: wybór OMS-A NETTING + virtual legs, Close-All i incremental add-on stops. |
+| `nautilus_adapter.py` | P5 Tier-1: wąski `StrategyBase` → Nautilus Cython profil z zamrożoną equivalence. Nie hostuje MMS v2. |
+| `nautilus_mastermind.py` | P7: cienkie mapowanie PyO3 event↔domain intent, native costs, stable IDs, reconciliation i transport checkpoint. Profil pozostaje `SMOKE_ONLY / NOT_ELIGIBLE`. |
+| `mms_beta_data.py` | P9: streaming warm-up+development, ścisła granica nietkniętego holdoutu, TA-Lib features i native funding updates. |
+| `mms_beta_benchmark.py` | P9: prerejestrowana macierz 2 zestawy × 6 wariantów, manifest, invariant ledger i opisowe kontrasty ablation. |
+| `exchanges/binance_adapter.py` | CCXT wrapper dla Binance Futures, używany przez fetch/live legacy. |
 
 ### `algo_bot/indicators/`
 
@@ -98,16 +130,17 @@ algo_bot/
 
 Każda strategia = osobny plik. Konwencja: klasa `Strategy` dziedziczy po `StrategyBase`, ma `ParamSchema = SomeDataclass`, implementuje `on_bar(df) -> Signal`.
 
-| Strategia | Linie | Co robi |
-|---|---:|---|
-| `mean_reversion_bb_stoch.py` | ~360 | **MVP candidate (pivot 2026-07-05, ADR-012).** Kontrariańska mean-reversion: touch wstęgi BB → armed → świeca reakcyjna → entry; TP = przeciwna żywa wstęga; stały 2% SL; opcjonalny gate Stochastic. Deep reference: [strategy-mean-reversion-bb-stoch.md](modules/strategy-mean-reversion-bb-stoch.md). |
-| `bghtrend_pullback.py` | 333 | **Baseline (NO-GO, ADR-012).** Trend (EMA21/89/200) + pullback + xtrender momentum confirm + ATR-trail SL + cooldown po SL. Zachowana jako historyczny punkt odniesienia frameworka. |
-| `simple_momentum.py` | 56 | EMA crossover (short vs long). Klasyczna MA cross. Używa StrategyBase. |
-| `short_trend_following.py` | 69 | Death Cross + MACD + ATR trailing stop. Tylko short. Używa `backtesting.Strategy` (natywnie). |
-| `dca_btc.py` | 148 | Dollar Cost Averaging dla BTC. Co N świec dokłada zakupu. Optionally skalowane przez Fear & Greed index. Używa StrategyBase z `allow_pyramiding=True`. |
-| `ema_cross_sig.py` | 38 | Skeleton EMA cross signal generator (NIE używa StrategyBase ani backtesting.Strategy — to standalone helper class). |
-| `template.py` | 53 | **Skeleton dla nowej strategii.** Kopiuj jako starter. Używa StrategyBase + Signal pattern. |
-| `bitcoin_breakout.py` | 0 | ⚠️ **EMPTY**. Placeholder. |
+| Strategia/domena | Co robi |
+|---|---|
+| `mastermind/` | **MMS-inspired v2 H1/BB mechanization.** Czysty, engine-independent model eventów/intencji, sygnały, reducer z trzema wymiarami stanu i checksummed snapshot. Stochastic jest triggerem dokładki; SCOUT jest base-only. Źródło prawdy: [executable spec](../specs/mms-v2-executable-spec.md). |
+| `mean_reversion_bb_stoch.py` | Legacy bare core: touch BB → armed→reaction; przeciwległe żywe pasmo TP; 2% SL; opcjonalny gate Stochastic. MR-Session 2 dał NO-GO dla bare core, więc plik jest baseline'em, nie gotowym kandydatem live. |
+| `bghtrend_pullback.py` | **Historyczny baseline (NO-GO, ADR-012).** Trend + pullback + Xtrender + ATR trail. |
+| `simple_momentum.py` | Klasyczny EMA crossover przez `StrategyBase`. |
+| `short_trend_following.py` | Death Cross + MACD + ATR trailing stop, tylko short. |
+| `dca_btc.py` | DCA z opcjonalnym skalowaniem Fear & Greed. |
+| `ema_cross_sig.py` | Standalone helper sygnału EMA cross. |
+| `template.py` | Skeleton nowej prostej strategii `StrategyBase`. |
+| `bitcoin_breakout.py` | Pusty placeholder. |
 
 ### `algo_bot/telemetry/`
 
@@ -125,7 +158,7 @@ live/
 └── live_binance.py                    # 401 linii — pełen live runner dla Binance Futures
 ```
 
-`live/` jest **na top-level (nie w algo_bot/)** świadomie — to entry-point CLI, nie biblioteka. Importuje z `algo_bot.*` (po `pip install -e .` działa z dowolnego cwd).
+`live/` jest **na top-level (nie w algo_bot/)** świadomie — to entry-point CLI, nie biblioteka. Importuje z `algo_bot.*`; `uv sync --locked` instaluje projekt editable, a `run_live.sh` uruchamia moduł przez `uv run --locked`.
 
 **`live_binance.py`** — argparse CLI z opcjami:
 - `--symbol`, `--timeframe`, `--strategy`, `--params` — co tradujemy
@@ -156,21 +189,20 @@ W przyszłości (faza 1-2): przeniesienie do `algo_bot/live/` jako submoduł + C
 
 ## `tests/` — pytest
 
-```
-tests/
-├── conftest.py                        # shared fixtures (placeholder)
-├── test_backtest.py                   # ⚠️ broken signature (TODO faza D)
-└── fetching_data_test.py              # smoke test CCXT
-```
+Suite obejmuje legacy framework, risk/microstructure/walk-forward oraz bramki migracji:
 
-Aktualnie tylko 1 funkcjonalny test. Plan rozbudowy w fazach 2-5:
-- `test_strategy_base.py` — testy `StrategyBase` + `Signal` parsing
-- `test_risk.py` — risk module (po decyzji E)
-- `test_walkforward.py` — walk-forward (po decyzji F)
-- `test_metrics.py` — metryki (po decyzji D)
-- `test_idempotency.py` — live order idempotency (faza 3)
+- `test_nautilus_poc.py`, `test_nautilus_oms_poc.py`, `test_nautilus_adapter.py` —
+  P3–P5 hard gates;
+- `test_mastermind_signals.py`, `test_mastermind_state_machine.py`,
+  `test_mastermind_snapshot.py`, `test_mastermind_dedupe.py` — czysta domena P6;
+- `test_nautilus_mastermind.py` — PyO3 wrapper, native funding i lifecycle smoke;
+- `test_backtest_result.py` — schema/ledger/hash/eligibility P8;
+- `test_mms_beta_data.py`, `test_mms_beta_benchmark.py` — granice danych,
+  prerejestracja, manifest i ablation P9;
+- pozostałe `test_*.py` utrzymują wcześniejsze kontrakty projektu.
 
-`conftest.py` jest aktualnie pustym placeholder po usunięciu `sys.path.insert` hacka (niepotrzebny po `pip install -e .`).
+Pełna deterministyczna bramka to `make check`; testy live/network pozostają
+oznaczone markerami i nie są wymagane w domyślnym CI.
 
 ---
 
@@ -179,18 +211,21 @@ Aktualnie tylko 1 funkcjonalny test. Plan rozbudowy w fazach 2-5:
 ```
 notebooks/
 ├── 01_data_exploration.ipynb          # eksploracja danych
-└── 02_bollinger_analysis.ipynb        # analiza strategii bollinger
+├── 02_bollinger_analysis.ipynb        # analiza strategii Bollinger
+├── 03_bghtrend_sweep_and_walkforward.ipynb
+└── 04_mr_sweep_review.ipynb           # MR-Session 2 review/no-go evidence
 ```
 
-Notebooks importują z `algo_bot.*` (po aktywacji conda env + `pip install -e .`). Konwencja:
+Notebooks importują z `algo_bot.*` po `uv sync --locked --group notebooks`;
+uruchamiaj je przez `uv run --group notebooks jupyter lab notebooks/`.
+Konwencja:
 - Eksperymentalne research → notebook
 - Gdy logika stabilna i potrzebna w production → przenosimy do `algo_bot/<modul>.py` + test
 - Outputy notebooków zalecane do clean przed commitem (zob. `daily-workflow.md`)
 
-Plan (faza 2):
-- `03_bghtrend_walkforward_analysis.ipynb` — walk-forward MVP strategii
-- `04_microstructure_impact.ipynb` — wpływ spread/slippage na PnL
-- `05_parameter_stability.ipynb` — heatmapy stabilności parametrów
+Notebook 03 zachowuje historyczny bghtrend research; notebook 04 dokumentuje
+MR-Session 2. P9 Beta jest celowo kodowym, prerejestrowanym runnerem, a nie
+interaktywnym notebookiem wybierającym wariant po obejrzeniu wyników.
 
 ---
 
@@ -216,7 +251,10 @@ config/
 ├── bghtrend_b1.yaml                   # przestrzeń parametrów bghtrend_pullback — wariant 1
 ├── bghtrend_b2.yaml                   # wariant 2
 ├── bghtrend_b3.yaml                   # wariant 3
-└── bghtrend_b4.yaml                   # wariant 4
+├── bghtrend_b4.yaml                   # wariant 4
+├── mr_b1.yaml                         # mean-reversion medium/strict
+├── mr_b2.yaml                         # mean-reversion medium/ablation gate
+└── mr_b3.yaml                         # mean-reversion fast/15m
 ```
 
 `config.yaml`:
@@ -225,7 +263,9 @@ config/
 - `defaults.features` — lista featurów do compute (BBANDS, RSI, ...)
 - `strategies.<name>.run` / `.optimize` — params per strategia
 
-`bghtrend_b{1,2,3,4}.yaml` — przestrzenie parametrów dla `algo-sweep`. Każda zawiera różne zakresy/granularności do testowania. Patrz [config-reference.md] (TBD).
+`bghtrend_b{1,2,3,4}.yaml` i `mr_b{1,2,3}.yaml` są historycznymi przestrzeniami
+legacy `algo-sweep`. Loader od P0 odrzuca każdy non-meta parametr random sweepu,
+który nie jest mapping/spec. Szczegóły: [config-reference.md](config-reference.md).
 
 ---
 
@@ -240,7 +280,9 @@ docs/
 ├── adr/                               # Architecture Decision Records
 ├── guides/                            # how-to
 ├── reference/                         # encyklopedia (ten katalog)
-└── concepts/                          # narrative explanations
+├── concepts/                          # narrative explanations
+├── specs/                             # wykonywalne kontrakty domenowe
+└── experiments/                       # prerejestracje i kompaktowe raporty
 ```
 
 Pełen index w [`docs/README.md`](../README.md).
@@ -260,7 +302,8 @@ bot_data/                              # gitignored
     └── ...
 ```
 
-**Gitignored** — dane są duże (MB-GB) i regenerowalne (`make fetch && make process`).
+**Gitignored** — dane są duże (MB-GB) i regenerowalne (`uv run algo-fetch ...`
+oraz `uv run algo-process`).
 
 Konwencja nazewnictwa:
 - Raw: `<SYMBOL>-<TIMEFRAME>.csv` (np. `BTC_USDT-4h.csv`)
@@ -300,9 +343,11 @@ results/                               # gitignored
 | Plik | Rola |
 |---|---|
 | `pyproject.toml` | Single source of truth dla pakietu. Patrz [ADR-002](../adr/002-pyproject-hatchling-stack.md). |
-| `environment.yml` | Conda env definition (`algo_bot` env z Python 3.11 + TA-Lib). |
-| `requirements.txt` | Lockfile generowany przez `pip-tools` z pyproject.toml. NIE edytuj ręcznie — `make lock`. |
+| `.python-version` | Przypięty vanilla CPython 3.12.13, automatycznie wybierany/pobierany przez uv. |
+| `uv.lock` | Kanoniczny lockfile całego grafu deps. Generuj przez `make lock`, instaluj przez `make sync`; nie edytuj ręcznie. |
+| `requirements.txt` | Eksport kompatybilności z `uv.lock`. Generuj przez `make export-requirements`; lokalny setup i CI go nie używają. |
 | `Makefile` | Codzienne komendy. Patrz [makefile-cheatsheet.md](../guides/makefile-cheatsheet.md). |
+| `run_live.sh` | Legacy live runner uruchamiany z repo przez `uv run --locked`; nie aktywuje Condy. |
 | `README.md` | Entry point repo. Quick start + linki do docs. |
 | `.gitignore` | Comprehensive (secrets, Python cache, venvs, IDE, OS, bot_data, results). |
 | `.deploy_key` (gitignored) | SSH private key dla GitHub deploy access. |
@@ -311,15 +356,7 @@ results/                               # gitignored
 
 ## Co jeszcze przyjdzie
 
-Pliki/katalogi które dorobimy w fazach 1-5 zgodnie z [ROADMAP](../ROADMAP.md):
-
-### Faza 1 (dokończenie)
-- `algo_bot/risk/limits.py` — risk management (po decyzji E)
-- `algo_bot/engine/walkforward.py` — walk-forward analyzer (po decyzji F)
-- `algo_bot/metrics.py` — Sharpe, Sortino, Calmar, MAR, ... (po decyzji D)
-- `algo_bot/log.py` — logging setup (po decyzji C)
-- `.pre-commit-config.yaml` — pre-commit hooks
-- `.github/workflows/check.yml` — GitHub Actions (`make check`)
+Planowane katalogi po obecnej fazie, zgodnie z [ROADMAP](../ROADMAP.md):
 
 ### Faza 3
 - `algo_bot/alerts/telegram.py` — alerty na Telegram

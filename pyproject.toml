@@ -2,15 +2,13 @@
 # pyproject.toml — algo_bot
 #
 # Build backend:  hatchling
-# Python:         3.11+
-# Env:            conda env "algo_bot" (patrz environment.yml) — daje Python + TA-Lib
-# Lockfile:       requirements.txt generowany przez pip-tools (make lock)
+# Python:         3.12 (pinned in .python-version)
+# Env:            vanilla CPython managed by uv
+# Lockfile:       uv.lock (requirements.txt is a compatibility export)
 # Package layout: src-less, pakiet bezposrednio w algo_bot/ (po flatten)
 #
 # Setup od zera (jednorazowo):
-#   make env           # conda env create -f environment.yml
-#   conda activate algo_bot
-#   make install       # pip install -e ".[dev]"
+#   make env           # uv sync --locked (creates .venv)
 #
 # Codzienna praca:
 #   make test          # pytest
@@ -19,8 +17,8 @@
 #   make check         # wszystko naraz (CI-style)
 #
 # Po dodaniu/zmianie dependency w [project.dependencies]:
-#   make lock          # regeneruje requirements.txt (lockfile)
-#   make sync          # pip-sync requirements.txt + reinstall pakietu
+#   make lock          # regeneruje uv.lock
+#   make sync          # exact sync from uv.lock
 # =============================================================================
 
 [build-system]
@@ -33,7 +31,7 @@ name = "algo_bot"
 version = "0.1.0"
 description = "Quantitative trading framework for crypto futures (RBI methodology)"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12,<3.13"
 license = {text = "MIT"}
 authors = [
     {name = "Janek Plonski", email = "jan.plonski@redge.com"},
@@ -43,38 +41,40 @@ classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Financial and Insurance Industry",
     "License :: OSI Approved :: MIT License",
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Topic :: Office/Business :: Financial :: Investment",
 ]
 
 # --- Runtime deps ------------------------------------------------------------
-# TA-Lib NIE jest tutaj — instalowane przez conda-forge (patrz environment.yml).
-# Powod: TA-Lib wymaga systemowego libta-lib (C lib), conda-forge dostarcza oba
-# (lib C + Python bindings) w jednym kroku. Pip-install TA-Lib bez C-libka pada.
+# TA-Lib >=0.6.5 publishes binary wheels containing the C library. Pin both
+# engine-critical packages exactly; uv.lock pins the remaining dependency graph.
 dependencies = [
+    "nautilus-trader==1.230.0",
+    "TA-Lib==0.7.0",
     "ccxt>=2.8.58",
     "pandas>=1.5.0",
     "numpy>=1.23.0",
-    "backtesting>=0.3.2",
+    "backtesting==0.6.5",
     "PyYAML>=6.0",
     "python-dotenv>=1.0.0",
     "tzdata>=2024.1",
     "matplotlib>=3.6.0",
 ]
 
-# --- Optional / dev deps -----------------------------------------------------
-# Instalowane przez: pip install -e ".[dev]"  (lub make install)
-[project.optional-dependencies]
+# --- Development dependency groups ------------------------------------------
+[dependency-groups]
 dev = [
     "pytest>=7.4.0",
     "pytest-cov>=4.1.0",
     "ruff>=0.1.0",
     "mypy>=1.7.0",
-    "pip-tools>=7.3.0",
     "pre-commit>=3.5.0",
     "pandas-stubs>=2.0.0",       # mypy potrzebuje stubow dla pandas
     "types-PyYAML>=6.0.0",       # mypy potrzebuje stubow dla yaml
+]
+notebooks = [
+    "ipykernel>=6.29.0",
+    "jupyterlab>=4.2.0",
 ]
 
 [project.urls]
@@ -82,7 +82,7 @@ Repository = "https://github.com/JanekPlo/algo_bot"
 Issues     = "https://github.com/JanekPlo/algo_bot/issues"
 
 # --- CLI entries =============================================================
-# Po `pip install -e .` masz globalne komendy w aktywnym conda env.
+# Po `uv sync` komendy uruchamiaj przez `uv run`, np. `uv run algo-backtest`.
 # Mapping: nazwa-komendy = "modul.path:funkcja"
 #
 # TODO (future): dodac kolejne wpisy gdy refaktorujemy/tworzymy modul:
@@ -102,7 +102,7 @@ packages = ["algo_bot"]
 # === Ruff (lint + format) ====================================================
 # Zastepuje: black + isort + flake8 + pyupgrade (jeden tool, jedna konfig)
 [tool.ruff]
-target-version = "py311"
+target-version = "py312"
 line-length = 100
 extend-exclude = ["notebooks/*"]   # notebooki maja wlasne zasady (jupytext)
 
@@ -149,7 +149,7 @@ docstring-code-format = true
 # Polityka: legacy luzny, nowy kod (risk, walkforward, metrics) — pelny strict.
 # Jane Street vibe bez tygodnia refaktoru legacy.
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.12"
 warn_unused_configs = true
 warn_redundant_casts = true
 warn_unreachable = true
@@ -175,12 +175,30 @@ module = [
     "algo_bot.data_integrity",        # Faza 2 Sesja 2 (Decyzja 7)
     "algo_bot.microstructure",        # Faza 2 Sesja 3 (ADR-011)
     "algo_bot.strategies.mean_reversion_bb_stoch",  # Faza 2 MR-Session Beta
+    "algo_bot.engine.nautilus_oms_poc",  # MR-Session Beta P4 OMS safety proof
+    "algo_bot.engine.nautilus_adapter",  # MR-Session Beta P5 Tier-1 equivalence
+    "algo_bot.strategies.mastermind.*",  # MR-Session Beta P6 pure state machine
+    "algo_bot.engine.backtest_result",  # MR-Session Beta P8 versioned result artifact
+    "algo_bot.engine.mms_beta_data",  # MR-Session Beta P9 development-only data boundary
+    "algo_bot.engine.mms_beta_benchmark",  # MR-Session Beta P9 frozen ablation runner
 ]
 disallow_untyped_defs = true
 disallow_incomplete_defs = true
 no_implicit_optional = true
 warn_unused_ignores = true
 warn_return_any = true
+
+# PyO3 exports several runtime classes which its 1.230.0 type surface does not expose
+# to mypy (StrategyConfig, BacktestEngine, fill/latency models). Keep every other strict
+# check for the P7 wrapper and suppress only that third-party stub boundary.
+[[tool.mypy.overrides]]
+module = ["algo_bot.engine.nautilus_mastermind"]
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+no_implicit_optional = true
+warn_unused_ignores = true
+warn_return_any = true
+disable_error_code = ["attr-defined"]
 
 # Legacy strategies — silence attr-defined cascade z DataclassInstance.
 # Powod: StrategyBase.p ma typ DataclassInstance protocol, mypy nie zna
@@ -206,6 +224,12 @@ module = [
 ]
 ignore_errors = true
 ignore_missing_imports = true
+
+# === uv =====================================================================
+[tool.uv]
+required-version = "==0.11.28"
+prerelease = "disallow"
+python-preference = "managed"
 
 # === Pytest =================================================================
 [tool.pytest.ini_options]

@@ -10,9 +10,9 @@ Funding rate jest publiczny (brak API key). Settlement co 8h (00/08/16 UTC) —
 endpoint zwraca rzeczywisty ``fundingTime`` per settlement, więc obsługuje też
 ewentualne off-cycle settlementy Binance.
 
-Uruchomienie (w WSL, conda env algo_bot):
-    algo-fetch-funding --symbol BTC/USDT --start 2019-09-08
-    python -m algo_bot.funding --symbol ETH/USDT --start 2019-11-01
+Uruchomienie (w WSL, z zablokowanego środowiska ``uv``):
+    uv run --locked algo-fetch-funding --symbol BTC/USDT --start 2019-09-08
+    uv run --locked python -m algo_bot.funding --symbol ETH/USDT --start 2019-11-01
 
 See also:
     docs/adr/011-microstructure-adjustments.md (Decyzja 6/7 — źródło i storage)

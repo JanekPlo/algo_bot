@@ -1,301 +1,195 @@
 # Architektura — algo_bot
 
-> Stan: 2026-05-11 (v0.1). Dokument opisuje aktualną architekturę + cel docelowy. Sekcja **TODO** wskazuje co trzeba dobudować w fazie 1 roadmapy.
-
----
+> Stan: 2026-07-13, MR-Session 3 Beta. Ten dokument opisuje bieżący kod.
+> Beta służy do weryfikacji semantyki i powtarzalnego benchmarku; nie jest
+> zgodą na handel testnet ani mainnet.
 
 ## Pryncypia
 
-1. **Jedna strategia, dwa silniki**. Klasa strategii działa identycznie w backteście i live — implementuje `on_bar(df) -> Signal`. Silniki (backtest / live) wywołują tę metodę i interpretują sygnał.
-2. **Determinizm**. Backtest ma być powtarzalny co do bitu (z tym samym seedem, danymi i wersją kodu). Brak `random` bez seed, brak `datetime.now()` w hot path.
-3. **Konfiguracja > kod**. Parametry strategii, sweep grid, ryzyko, sizing — wszystko w YAML. Zmiana parametru = edit configu, nie kodu.
-4. **Idempotentność live**. Każdy order ma `client_order_id` deterministycznie wyliczony z (run_id, bar_ts, strategy, side). Restart bota nie tworzy duplikatów.
-5. **Risk first**. Risk module siedzi pomiędzy strategią a executorem. Strategia mówi "chcę kupić", risk decyduje "wolno mi" + "ile".
-6. **Observability by default**. Każdy moduł loguje structured events. Każdy live run ma run_id i journal.
+1. **Najpierw zdarzenia, potem skutki uboczne.** Logika Mastermind jest czystą,
+   deterministyczną maszyną stanów. Adapter wykonawczy tłumaczy jej intencje na
+   komendy silnika.
+2. **Jedna semantyka czasu.** Dane CCXT opisują czas otwarcia świecy, a domena
+   dostaje inkluzywny czas zamknięcia. Decyzja na zamknięciu nie może wypełnić
+   zlecenia przed tym zamknięciem.
+3. **NETTING na venue, wirtualne nogi w domenie.** Binance utrzymuje jedną
+   pozycję netto. Domena rozlicza oddzielnie bazę i pojedynczy addon oraz nie
+   polega na natywnym hedgingu venue.
+4. **Idempotencja jest częścią modelu.** Identyfikatory zdarzeń, zleceń i
+   egzekucji są deterministyczne. Outbox, high-watermarki i snapshoty muszą
+   przeżyć restart bez ponownego zwiększenia ekspozycji.
+5. **Fail closed.** Nieznany fill, niezgodność pozycji, brak ochrony albo
+   niepełne koszty kończą się uzgodnieniem lub bezpiecznym zamknięciem, a nie
+   domysłem.
+6. **Pełny koszt i pochodzenie wyniku.** Wynik benchmarku musi obejmować fee,
+   funding i poślizg oraz wskazywać dokładny kod, konfigurację, dane i runtime.
+7. **Preregistracja przed wynikiem.** Okna, warianty, seed i kryteria są
+   zamrożone przed uruchomieniem macierzy. Holdout nie jest ładowany w sesji
+   Beta.
 
----
+## Warstwy i granice odpowiedzialności
 
-## Warstwy
-
-```
-┌──────────────────────────────────────────────────────────────────────────┐
-│                              CONFIG LAYER                                │
-│  config/*.yaml — parametry strategii, sweep grids, risk limits, exchange │
-└──────────────────────────────────────────────────────────────────────────┘
-              │
-              ▼
-┌─────────────────────────┐      ┌────────────────────────────────────────┐
-│      DATA LAYER         │      │           STRATEGY LAYER               │
-│  ┌─────────────────┐    │      │  ┌──────────────────────────────────┐  │
-│  │ fetch_data.py   │    │      │  │ strategy_base.py (StrategyBase,  │  │
-│  │ (CCXT → OHLCV)  │    │      │  │  Signal)                         │  │
-│  └────────┬────────┘    │      │  └────────┬─────────────────────────┘  │
-│           ▼             │      │           ▼                            │
-│  ┌─────────────────┐    │      │  ┌──────────────────────────────────┐  │
-│  │ process_data.py │    │      │  │ strategies/*.py                  │  │
-│  │ (indykatory,    │    │      │  │  - mean_reversion_bb_stoch (MVP) │  │
-│  │  feature eng.)  │    │      │  │  - bghtrend_pullback (baseline)  │  │
-│  └────────┬────────┘    │      │  │  - simple_momentum, ...          │  │
-│           ▼             │      │  └────────┬─────────────────────────┘  │
-│  bot_data/processed/    │      │           ▼                            │
-│  (CSV: OHLCV + feats)   │      │  ┌──────────────────────────────────┐  │
-│                         │      │  │ indicators/ (xtrender, core:     │  │
-│                         │      │  │  t3, ema, atr, rsi, bb, stoch)   │  │
-│                         │      │  └──────────────────────────────────┘  │
-└─────────────────────────┘      └────────────────────────────────────────┘
-              │                                  │
-              ▼                                  ▼
-┌──────────────────────────────────────────────────────────────────────────┐
-│                          RISK LAYER (TODO faza 1)                        │
-│   src/risk/limits.py — drawdown stop, daily loss, max positions,         │
-│   position sizing (% equity per trade)                                   │
-└──────────────────────────────────────────────────────────────────────────┘
-              │
-              ▼
-┌──────────────────────────────────┐  ┌──────────────────────────────────┐
-│        BACKTEST ENGINE           │  │          LIVE ENGINE             │
-│  src/engine/backtester.py        │  │  live/live_binance.py            │
-│   - adapter BTStrategy           │  │   - WebSocket / poll loop        │
-│   - run_backtest, save_outputs   │  │   - wait_for_next_close          │
-│  src/engine/sweep.py             │  │   - state recovery z journala    │
-│   - grid + random search         │  │  src/engine/exchanges/           │
-│  src/engine/walkforward.py       │  │   - binance_adapter.py           │
-│   (TODO faza 1)                  │  │   - (TODO: bybit_adapter)        │
-└────────────┬─────────────────────┘  └────────────┬─────────────────────┘
-             │                                     │
-             ▼                                     ▼
-┌──────────────────────────────────────────────────────────────────────────┐
-│                          TELEMETRY / JOURNAL                             │
-│  src/telemetry/journal.py — CSV trades + equity per run_id               │
-│  results/backtests/<run_id>/                                             │
-│  results/experiments/<sweep_id>/  + index.csv                            │
-│  results/live/<run_id>/                                                  │
-└──────────────────────────────────────────────────────────────────────────┘
-             │
-             ▼
-┌──────────────────────────────────────────────────────────────────────────┐
-│                       MONITORING / ALERTS (TODO faza 3-5)                │
-│   Telegram bot (events) | Prometheus + Grafana | Loki (logs)             │
-└──────────────────────────────────────────────────────────────────────────┘
+```text
+CCXT OHLCV/funding
+        |
+        v
+  mms_beta_data.py  ---------------------->  manifest wejścia
+        |
+        v
+  nautilus_poc.py / Nautilus BacktestEngine
+        |
+        v
+  nautilus_mastermind.py   <---- checkpoint transportu/restart
+        |
+        v
+  mastermind/state_machine.py  <---- checksummed snapshot domeny
+        |
+        +---- intents ----> OMS/adapter ----> orders/fills/cancel
+        ^                                      |
+        |--------------------------------------+
+        |
+        v
+  backtest_result.py  ---->  mms_beta_benchmark.py  ----> wynik Beta
 ```
 
----
+Granica domeny Mastermind nie importuje NautilusTrader, pandas ani NumPy.
+Obiekty specyficzne dla silnika kończą się w adapterach. Dzięki temu reducer
+można testować sekwencjami zdarzeń bez zegara, sieci i giełdy.
 
-## Komponenty — gdzie co jest
+### Dane i czas
 
-### Już istnieje
+- `algo_bot/fetch_data.py`, `data_loader.py`, `process_data.py` obsługują
+  istniejący pipeline CCXT/CSV.
+- `algo_bot/engine/mms_beta_data.py` buduje ściśle walidowany bundle Beta z
+  OHLCV, natywnego funding i cech. Odrzuca duplikaty, luki kontraktu,
+  nie-UTC, wyjście poza okno i dane holdout.
+- `algo_bot/engine/nautilus_poc.py` jest wykonawczym oracle czasu i filli dla
+  migracji. Konwersja CCXT jest jawna:
+  `close_ns = (open_ms + interval_ms - 1) * 1_000_000`.
+- Gap-stop jest wykonywany po cenie otwarcia luki. Kolejność intrabar przy
+  jednoczesnym TP/SL jest parametrem modelu, nie przypadkiem implementacji.
 
-| Plik | Linie | Rola |
-|---|---:|---|
-| `src/strategy_base.py` | 88 | Bazowa klasa strategii + dataclass Signal |
-| `src/data_loader.py` | 336 | Wczytywanie CSV OHLCV, walidacja kolumn |
-| `src/fetch_data.py` | 241 | CLI: ściąga OHLCV z giełd przez CCXT |
-| `src/process_data.py` | 213 | Feature engineering, indykatory |
-| `src/strategy_loader.py` | 24 | Dynamiczny import strategii po nazwie |
-| `src/funding.py` | 23 | Funding rate (perp futures) |
-| `src/engine/backtester.py` | 532 | Główny silnik backtestu (adapter `backtesting.py`) |
-| `src/engine/sweep.py` | 352 | Grid + random search po parametrach |
-| `src/engine/exchanges/binance_adapter.py` | 117 | CCXT wrapper na Binance Futures |
-| `src/telemetry/journal.py` | ~80 | CSV journal trades + equity snapshots |
-| `live/live_binance.py` | 401 | Live trading loop z TP/SL hybrid |
-| `strategies/bghtrend_pullback.py` | 333 | Najmocniejsza strategia: trend + pullback + xtrender + ATR-trail |
-| `indicators/xtrender.py` | - | Xtrender + komponenty momentum |
-| `indicators/core.py` | - | EMA, RSI, ATR, T3 |
-| `scripts/binance_ws.py`, `bybit_testnet.py`, `fear_greed.py` | - | Eksperymentalne |
-| `notebooks/01_data_exploration.ipynb`, `02_bollinger_analysis.ipynb` | - | Research |
-| `tests/test_backtest.py` | ~15 | Jeden test smoke |
-| `config/config.yaml`, `bghtrend_b1..b4.yaml` | - | Configi |
+### Domena Mastermind
 
-### Do dobudowy (faza 1)
+Kod znajduje się w `algo_bot/strategies/mastermind/`:
 
-| Plik | Rola | Priorytet |
-|---|---|---|
-| `src/risk/limits.py` | Risk manager: drawdown stop, daily loss, position sizing | **wysoki** |
-| `src/engine/walkforward.py` | Walk-forward analyzer (rolling train/test) | **wysoki** |
-| `src/metrics.py` | Sharpe, Sortino, Calmar, MAR, profit factor | wysoki |
-| `src/alerts/telegram.py` | Bot Telegram do alertów | średni (faza 3) |
-| `src/monitoring/exporter.py` | Prometheus metrics exporter | niski (faza 5) |
-| `pyproject.toml` | Editable install, dependencies, ruff/mypy config | wysoki |
-| `Makefile` | `make backtest/sweep/live/test/lint` | średni |
-| `Dockerfile` + `docker-compose.yml` | Containerization | niski (faza 5) |
-| `.github/workflows/check.yml` | CI: `make check` (ruff + format-check + mypy + pytest) | wysoki |
-| `deploy/systemd/algo_bot.service` | Systemd unit dla VPS | niski (faza 5) |
-| `deploy/setup_vps.sh` | Bootstrap nowego VPSa | niski (faza 5) |
+| Moduł | Odpowiedzialność |
+|---|---|
+| `model.py` | typowane zdarzenia, intencje, stan, enumy i inwarianty |
+| `signals.py` | czyste sygnały MMS i warunki addonu |
+| `state_machine.py` | reducer zdarzenie -> nowy stan + outbox intencji |
+| `snapshot.py` | kanoniczna serializacja, checksum i migracja snapshotu |
 
----
+Maszyna rozróżnia nogę bazową i najwyżej jeden addon. Ekspozycja liczona jest
+z filli, a nie z samych submitów. Zamknięcie `CloseAll` używa znaku rzeczywistej
+pozycji po uzgodnieniu. Przejście limitów ryzyka następuje dopiero po płaskiej
+pozycji i kompletnym przypisaniu kosztów zamknięcia.
 
-## Flow danych — backtest
+Outbox reprezentuje intencje, które nie zostały jeszcze trwale potwierdzone.
+Samo wyemitowanie komendy nie oznacza ACK. Snapshot obejmuje aktywny setup,
+egzekucje i pozostałe ilości, ochronę, zamykanie, koszty, deduplikację oraz
+outbox potrzebny do bezpiecznego replayu.
 
-```
-CCXT API           bot_data/raw/         bot_data/processed/        Strategy
-   │                    │                       │                       │
-   │ fetch_data.py      │ process_data.py       │ data_loader.py        │
-   ├───────────────────►├──────────────────────►├──────────────────────►│
-   │ (CLI)              │ (CLI)                 │ (load_csv_ohlcv)      │
-   │                    │ OHLCV.csv             │ OHLCV+features.csv    │ on_bar(df)
-                                                                        │
-                                                                        ▼
-                                                                    Signal
-                                                                        │
-                                                          ┌─────────────┴───────────┐
-                                                          ▼                         ▼
-                                                  Risk module check        backtester adapter
-                                                  (TODO faza 1)            (BTStrategy wrapper)
-                                                          │                         │
-                                                          ▼                         ▼
-                                                  approved/rejected          backtesting.py
-                                                                                    │
-                                                                                    ▼
-                                                                            results/backtests/
-                                                                            (JSON + equity + trades)
-```
+### Adapter i OMS
 
-## Flow danych — live
+| Moduł | Rola |
+|---|---|
+| `nautilus_oms_poc.py` | sprawdzenie realnych ograniczeń OMS i Binance |
+| `nautilus_adapter.py` | zamrożony adapter Tier 1 dla porównania silników |
+| `nautilus_mastermind.py` | backend Mastermind dla profilu Cython/PyO3 |
 
-```
-Binance WS / REST         live_binance.py        Strategy
-        │                       │                    │
-        │ poll candles          │ wait_for_next_close│ on_bar(df)
-        ├──────────────────────►├───────────────────►│
-        │                       │                    │
-                                                     ▼
-                                                 Signal
-                                                     │
-                                            ┌────────┴────────┐
-                                            ▼                 ▼
-                                     Risk check        client_order_id
-                                     (TODO)            (idempotent)
-                                            │                 │
-                                            └────────┬────────┘
-                                                     ▼
-                                            binance_adapter
-                                            (CCXT submit)
-                                                     │
-                                                     ▼
-                                            Order ACK
-                                                     │
-                                                     ▼
-                                            journal.log_entry()
-                                                     │
-                                            ┌────────┴────────┐
-                                            ▼                 ▼
-                                     TP/SL filled        alerts/telegram
-                                            │            (TODO faza 3)
-                                            ▼
-                                     journal.log_exit()
-```
+Kontrakt OMS Beta to `NETTING` z wirtualnymi nogami. Ochrona bazy może zamknąć
+całość, natomiast ochrona addonu redukuje dokładną ilość addonu. Natywne
+brackety, contingent listy i amend nie są zakładane, jeśli adapter Binance nie
+potwierdza ich obsługi.
 
----
+Backend Cython służy jako semantyczny oracle małych scenariuszy. Backend PyO3
+jest decomposed: mapuje osobne intencje na zlecenia venue i utrzymuje własny,
+checksummowany checkpoint transportowy. Restart ma kolejność:
 
-## Decyzje architektoniczne (ADRs lite)
+1. odtworzenie i walidacja snapshotu domeny oraz checkpointu adaptera,
+2. odczyt cache pozycji i otwartych zleceń,
+3. uzgodnienie różnic oraz anulowanie sierot,
+4. replay wyłącznie intencji, których brak na venue,
+5. wznowienie nowych barów i zdarzeń wykonawczych.
 
-### ADR-001: Jeden interfejs strategii dla backtest + live
-- **Decyzja**: `StrategyBase.on_bar(df) -> Signal`
-- **Alternatywa odrzucona**: osobne klasy dla backtest i live z osobnymi sygnałami
-- **Powód**: Duplikacja logiki = bugi. Jeden interface = "wystarczy raz zaimplementować, działa wszędzie". Już zaimplementowane.
+Brak checkpointu transportowego przy aktywnej ekspozycji jest błędem
+fail-closed; nie wolno rekonstruować kierunku lub zakresu ochrony z domysłów.
 
-### ADR-002: backtesting.py jako silnik MVP (nie vectorbt, nie nautilus)
-- **Decyzja**: zostajemy z `backtesting.py` do końca fazy 4
-- **Alternatywa**: `vectorbt` (10-100x szybciej), `nautilus_trader` (event-driven, production)
-- **Powód**: koszt migracji > zysk dopóki nie mamy działającego MVP. Po fazie 4 — rewizja, prawdopodobnie migracja na vectorbt dla sweepów i nautilus dla live.
+### Wynik i benchmark
 
-### ADR-003: TP/SL w trybie hybrid na live
-- **Decyzja**: TP serwerowo (Binance OCO), SL lokalnie (bot sam zamyka pozycję gdy cena spadnie poniżej threshold)
-- **Alternatywa**: full server-side
-- **Powód**: testnet (i czasem mainnet) ma "knoty" — pojedyncze świece z ekstremami które trigerują SL serwerowy fałszywie. Local SL z `price_feed=mainnet_mark` jest bardziej stabilny. Już zaimplementowane.
+- `algo_bot/engine/backtest_result.py` definiuje wspólny artefakt wyniku z
+  ledgerami filli, fee, funding i poślizgu oraz metadanymi pochodzenia.
+- `algo_bot/engine/mms_beta_benchmark.py` uruchamia prerejestrowaną macierz
+  `2 zbiory expiry x 6 wariantów`, weryfikuje manifest przed startem i zapisuje
+  wyłącznie wyniki z kompletnym ledgerem i spełnionymi inwariantami.
+- `docs/experiments/mms-v2-beta-preregistration.md` jest zamrożonym kontraktem
+  eksperymentu. Zmiana kodu, configu, danych albo lockfile po zamrożeniu
+  unieważnia manifest.
 
-### ADR-004: Risk module pomiędzy strategią a executorem (TODO)
-- **Decyzja**: dedykowany moduł `src/risk/limits.py` który filtruje sygnały ze strategii
-- **Alternatywa**: risk wbudowany w każdą strategię
-- **Powód**: rozdzielenie odpowiedzialności. Strategia mówi "chcę open long X", risk mówi "OK ale tylko 50% sizing bo daily loss limit blisko". Strategia nie musi znać stanu portfela.
+Wariant `smoke` zawsze pozostaje niekwalifikowany. Ablacje są opisowe i nie
+służą do wyboru zwycięzcy po obejrzeniu wyników. Dwie historyczne strategie —
+`bghtrend_pullback` i `mean_reversion_bb_stoch` — pozostają baseline'ami NO-GO,
+a nie aktualnym kandydatem live.
 
-### ADR-005: Walk-forward obowiązkowy przed live (TODO)
-- **Decyzja**: żadna strategia nie idzie na testnet/mainnet bez przejścia walk-forward
-- **Alternatywa**: ufamy in-sample sweepowi
-- **Powód**: in-sample sweep = overfitting. WF jest jedynym pragmatycznym proxy na out-of-sample performance.
+## Pozostały stos badawczy
 
-### ADR-006: Wszystko przez git, brak Dropbox/Drive na configi
-- **Decyzja**: configi, kod, deploy scripts — wszystko w repo. Secrety w `.env` (gitignored) + przykład w `.env.example`
-- **Powód**: powtarzalność, audit trail, rollback (cofnij commit = wracasz do starych parametrów).
+Repo zachowuje wcześniejszą, działającą ścieżkę `backtesting.py`:
 
----
+| Obszar | Pliki |
+|---|---|
+| strategie | `algo_bot/strategies/*.py`, `strategy_base.py` |
+| wskaźniki | `algo_bot/indicators/` |
+| backtest i sweep | `engine/backtester.py`, `engine/sweep.py` |
+| walk-forward | `engine/walkforward.py` |
+| risk i metryki | `risk/limits.py`, `metrics.py`, `microstructure.py` |
+| journal | `telemetry/journal.py` |
 
-## Struktura katalogów docelowa (po fazie 1)
+Ta ścieżka jest utrzymywana dla regresji i porównań. Nie wyznacza semantyki
+egzekucji Mastermind; w razie rozbieżności rozstrzygają specyfikacja wykonywalna
+i scenariusze Nautilus.
 
-```
-algo_bot/                          # docelowo: root repo (obecnie zagnieżdżone)
-├── pyproject.toml                 # NEW
-├── Makefile                       # NEW
-├── README.md
-├── .env.example                   # NEW
-├── .github/workflows/ci.yml       # NEW
-├── docs/
-│   ├── ROADMAP.md                 # ✓ stworzone
-│   ├── ARCHITECTURE.md            # ✓ stworzone (ten plik)
-│   └── ADR/                       # NEW (przyszłość)
-├── config/
-│   ├── config.yaml
-│   ├── bghtrend_b1..b4.yaml
-│   └── risk.yaml                  # NEW: limity ryzyka
-├── src/
-│   ├── strategy_base.py
-│   ├── strategy_loader.py
-│   ├── data_loader.py
-│   ├── fetch_data.py
-│   ├── process_data.py
-│   ├── funding.py
-│   ├── metrics.py                 # NEW
-│   ├── engine/
-│   │   ├── backtester.py
-│   │   ├── sweep.py
-│   │   ├── walkforward.py         # NEW
-│   │   └── exchanges/
-│   │       ├── binance_adapter.py
-│   │       └── bybit_adapter.py   # NEW
-│   ├── risk/
-│   │   └── limits.py              # NEW
-│   ├── alerts/
-│   │   └── telegram.py            # NEW (faza 3)
-│   ├── monitoring/
-│   │   └── exporter.py            # NEW (faza 5)
-│   └── telemetry/
-│       └── journal.py
-├── strategies/
-│   ├── mean_reversion_bb_stoch.py # MVP candidate (pivot 2026-07-05, ADR-012)
-│   ├── bghtrend_pullback.py       # baseline (NO-GO ADR-012)
-│   ├── simple_momentum.py
-│   ├── short_trend_following.py
-│   ├── ema_cross_sig.py
-│   ├── dca_btc.py
-│   └── template.py
-├── indicators/
-│   ├── core.py
-│   └── xtrender.py
-├── live/
-│   └── live_binance.py
-├── scripts/
-│   └── (eksperymenty)
-├── notebooks/
-│   ├── 01_data_exploration.ipynb
-│   ├── 02_bollinger_analysis.ipynb
-│   └── 03_bghtrend_walkforward.ipynb   # NEW (faza 2)
-├── tests/
-│   ├── conftest.py
-│   ├── test_backtest.py
-│   ├── test_strategy_base.py      # NEW
-│   ├── test_risk.py               # NEW
-│   ├── test_walkforward.py        # NEW
-│   └── test_idempotency.py        # NEW (faza 3)
-├── bot_data/                      # gitignored
-│   ├── raw/
-│   └── processed/
-├── results/                       # gitignored
-│   ├── backtests/
-│   ├── experiments/
-│   └── live/
-└── deploy/                        # NEW (faza 5)
-    ├── Dockerfile
-    ├── docker-compose.yml
-    ├── systemd/algo_bot.service
-    └── setup_vps.sh
-```
+## Konfiguracja, runtime i jakość
+
+- Python jest przypięty w `.python-version`; zależności i narzędzia w
+  `pyproject.toml` oraz `uv.lock`.
+- `requirements.txt` jest eksportem lockfile, nie niezależnym źródłem wersji.
+- `config/mr_b1.yaml`–`mr_b3.yaml` podlegają walidacji przestrzeni parametrów.
+- `make check` oraz CI uruchamiają Ruff, mypy i pytest w środowisku z
+  `uv sync --locked`.
+- Testy obejmują czystą domenę, snapshot/restart, OMS, oba adaptery,
+  przetwarzanie danych, schemat wyniku i runner prerejestracji.
+
+## Inwarianty przekrojowe
+
+1. Pozycja netto venue musi odpowiadać sumie pozostałych ilości filli domeny.
+2. Łączna zaangażowana ekspozycja obejmuje fill oraz żywy remainder zlecenia;
+   nie może przekroczyć limitu wariantu.
+3. Zlecenie terminalne nie wraca do stanu submitted/accepted.
+4. Callback starego setupu nie może zmienić bieżącego setupu.
+5. To samo zdarzenie wykonawcze lub funding nie może zostać zaksięgowane drugi
+   raz po restarcie.
+6. Po finalnym uzgodnieniu nie może zostać niepotwierdzona intencja w outboxie,
+   otwarta pozycja ani osierocone zlecenie.
+7. Każdy wynik finansowy musi spełniać równanie PnL na podstawie ledgerów; brak
+   kosztu oznacza wynik nieważny.
+8. Benchmark nie odczytuje ani nie raportuje holdout 2025-07-01–2026-01-01.
+
+## Status i granice Beta
+
+MR-Session 3 dowodzi mechaniki tylko wtedy, gdy przejdą kolejno bramki:
+runtime, semantyka czasu, OMS, parytet Tier 1, reducer/restart, backend PyO3,
+artefakt wyniku i zamrożony benchmark. Awaria wcześniejszej bramki blokuje
+metryki zależne; nie wolno zastąpić brakującego dowodu syntetycznym sukcesem.
+
+Poza zakresem Beta pozostają m.in. parytet produkcyjnego `CloseAll`, pełne
+mark-price/fee semantics dla live, H4/D1 oraz sześciosymbolowy rollout. Z tego
+powodu pozytywny wynik benchmarku nie jest sam w sobie decyzją o rozpoczęciu
+Session 4 ani wdrożeniu kapitału.
+
+Dokumentami normatywnymi są:
+
+- `docs/specs/mms-v2-executable-spec.md`,
+- `docs/experiments/mms-v2-beta-preregistration.md`,
+- `docs/adr/014-engine-migration-nautilus.md`,
+- `docs/ROADMAP.md`.

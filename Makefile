@@ -7,11 +7,9 @@
 # Domyslny target — pokaz help (gdy `make` bez argumentu)
 .DEFAULT_GOAL := help
 
-# Zmienne narzedzi (mozesz override z linii komend: make test PYTHON=python3.12)
-PYTHON      := python
-PIP         := pip
-PIP_COMPILE := pip-compile
-PIP_SYNC    := pip-sync
+# Narzedzia. UV mozna nadpisac, np. `make check UV=$$HOME/.local/bin/uv`.
+UV     ?= uv
+UV_RUN := $(UV) run --locked
 
 # Katalog z kodem zrodlowym dla narzedzi (ruff, mypy, coverage)
 SRC_DIRS := algo_bot tests scripts live
@@ -28,63 +26,57 @@ help:  ## Pokaz wszystkie dostepne komendy
 
 # === Setup ===================================================================
 .PHONY: env
-env:  ## Stworz conda env "algo_bot" z environment.yml (lub update)
-	@if conda env list | grep -q "^algo_bot "; then \
-		echo "==> Env 'algo_bot' juz istnieje, robie update --prune"; \
-		conda env update -f environment.yml --prune; \
-	else \
-		echo "==> Tworze env 'algo_bot' z environment.yml"; \
-		conda env create -f environment.yml; \
-	fi
-	@echo ""
-	@echo "==> NASTEPNY KROK: conda activate algo_bot && make install"
+env:  ## Utworz/zsynchronizuj uv .venv z przypietym CPython 3.12
+	$(UV) sync --locked
 
 .PHONY: install
-install:  ## pip install -e ".[dev]"  (po aktywacji conda env)
-	$(PIP) install -e ".[dev]"
+install:  ## Zsynchronizuj .venv z uv.lock (projekt + dev group)
+	$(UV) sync --locked
 
 .PHONY: lock
-lock:  ## Generuj requirements.txt z pyproject.toml (deterministic lockfile)
-	$(PIP_COMPILE) --extra dev --output-file=requirements.txt pyproject.toml
-	@echo "==> Lockfile zaktualizowany. Aby zsynchronizowac env: make sync"
+lock:  ## Generuj/aktualizuj uv.lock
+	$(UV) lock
+
+.PHONY: export-requirements
+export-requirements:  ## Eksport kompatybilnosci requirements.txt z uv.lock
+	$(UV) export --locked --group dev --no-emit-project --no-hashes --output-file requirements.txt
 
 .PHONY: sync
-sync:  ## Zainstaluj DOKLADNIE wg requirements.txt (lockfile) + reinstall pakietu
-	$(PIP_SYNC) requirements.txt
-	$(PIP) install -e . --no-deps
+sync:  ## Zainstaluj DOKLADNIE wg uv.lock
+	$(UV) sync --locked
 
 # === Testowanie / linting / typecheck =======================================
 .PHONY: test
 test:  ## pytest (pelny)
-	pytest
+	$(UV_RUN) pytest
 
 .PHONY: test-fast
 test-fast:  ## pytest bez slow / integration markers
-	pytest -m "not slow and not integration"
+	$(UV_RUN) pytest -m "not slow and not integration"
 
 .PHONY: test-cov
 test-cov:  ## pytest + coverage report (HTML w htmlcov/)
-	pytest --cov=algo_bot --cov-report=term-missing --cov-report=html
+	$(UV_RUN) pytest --cov=algo_bot --cov-report=term-missing --cov-report=html
 
 .PHONY: lint
 lint:  ## ruff check (lint errors)
-	ruff check $(SRC_DIRS)
+	$(UV_RUN) ruff check $(SRC_DIRS)
 
 .PHONY: lint-fix
 lint-fix:  ## ruff check --fix (auto-naprawa)
-	ruff check --fix $(SRC_DIRS)
+	$(UV_RUN) ruff check --fix $(SRC_DIRS)
 
 .PHONY: format
 format:  ## ruff format (apply)
-	ruff format $(SRC_DIRS)
+	$(UV_RUN) ruff format $(SRC_DIRS)
 
 .PHONY: format-check
 format-check:  ## ruff format --check (fail gdy nie sformatowane)
-	ruff format --check $(SRC_DIRS)
+	$(UV_RUN) ruff format --check $(SRC_DIRS)
 
 .PHONY: typecheck
 typecheck:  ## mypy (legacy lenient, nowe moduly strict)
-	mypy algo_bot
+	$(UV_RUN) mypy algo_bot
 
 .PHONY: check
 check: lint format-check typecheck test  ## Wszystkie sprawdzenia (CI-style)
@@ -95,11 +87,11 @@ check: lint format-check typecheck test  ## Wszystkie sprawdzenia (CI-style)
 # Uzycie z argumentami:  make backtest ARGS="--symbol BTC/USDT --timeframe 4h ..."
 .PHONY: backtest
 backtest:  ## algo-backtest [ARGS=...]  (skrot)
-	algo-backtest $(ARGS)
+	$(UV_RUN) algo-backtest $(ARGS)
 
 .PHONY: sweep
 sweep:  ## algo-sweep [ARGS=...]  (skrot)
-	algo-sweep $(ARGS)
+	$(UV_RUN) algo-sweep $(ARGS)
 
 # === VPS research runner (Sesja 4b) =========================================
 # Sync danych/wynikow z VPS. Wymaga VPS_HOST (SSH alias lub user@host).
@@ -115,11 +107,11 @@ sync-down:  ## rsync results/ VPS->PC (wymaga VPS_HOST=...)
 # === Pre-commit ==============================================================
 .PHONY: precommit-install
 precommit-install:  ## Zainstaluj pre-commit hooks (jednorazowo)
-	pre-commit install
+	$(UV_RUN) pre-commit install
 
 .PHONY: precommit-run
 precommit-run:  ## Uruchom pre-commit na wszystkich plikach
-	pre-commit run --all-files
+	$(UV_RUN) pre-commit run --all-files
 
 # === Maintenance =============================================================
 .PHONY: clean

@@ -4,10 +4,10 @@ How to fetch and process the historical OHLCV dataset that every later Phase 2
 session (sweep, walk-forward, Monte Carlo, stress tests) depends on, and how to
 verify its integrity.
 
-> **TL;DR:** `algo-fetch` pulls raw klines from Binance into `bot_data/raw/`,
-> `algo-process` standardises them into `bot_data/processed/`, and
-> `pytest tests/test_data_integrity.py -m integration` proves the result is
-> clean. Run everything from the WSL terminal inside the `algo_bot` conda env.
+> **TL;DR:** `uv run algo-fetch` pulls raw klines from Binance into
+> `bot_data/raw/`, `uv run algo-process` standardises them into
+> `bot_data/processed/`, and `uv run pytest tests/test_data_integrity.py
+> -m integration` proves the result is clean.
 
 ---
 
@@ -47,18 +47,19 @@ bot_data/processed/binance_ETHUSDT_4h.csv
 ## Prerequisites
 
 Run from the **WSL terminal** (not from Cowork — the sandbox cannot reach the
-UNC mount or the network):
+UNC mount or the network). Standard Beta 0 setup uses uv 0.11.28 and the
+locked Python 3.12.13 environment; no activation is needed:
 
 ```bash
 cd ~/quant_projects/algo_bot
-conda activate algo_bot
-pip install -e ".[dev]"   # once, or after dependency changes — gives algo-fetch / algo-process
+uv --version       # uv 0.11.28
+make sync          # uv sync --locked; gives algo-fetch / algo-process
 ```
 
 The CLI entry points (`pyproject.toml [project.scripts]`, ADR-010):
 
-- `algo-fetch <SYMBOL> <TF> --start <DATE>` → writes `bot_data/raw/<BASE>_<QUOTE>-<TF>.csv`
-- `algo-process [RAW_PATH]` → writes `bot_data/processed/binance_<SYMBOL>_<TF>.csv`
+- `uv run algo-fetch <SYMBOL> <TF> --start <DATE>` → writes `bot_data/raw/<BASE>_<QUOTE>-<TF>.csv`
+- `uv run algo-process [RAW_PATH]` → writes `bot_data/processed/binance_<SYMBOL>_<TF>.csv`
 
 Both accept `--log-level {DEBUG,INFO,WARNING,ERROR}` (default `INFO`).
 
@@ -69,12 +70,12 @@ Both accept `--log-level {DEBUG,INFO,WARNING,ERROR}` (default `INFO`).
 `--market` defaults to `future`, so each call below targets USDT-M perpetuals.
 
 ```bash
-algo-fetch BTCUSDT 15m --start 2019-09-08
-algo-fetch BTCUSDT 1h  --start 2019-09-08
-algo-fetch BTCUSDT 4h  --start 2019-09-08
-algo-fetch ETHUSDT 15m --start 2019-09-08
-algo-fetch ETHUSDT 1h  --start 2019-09-08
-algo-fetch ETHUSDT 4h  --start 2019-09-08
+uv run algo-fetch BTCUSDT 15m --start 2019-09-08
+uv run algo-fetch BTCUSDT 1h  --start 2019-09-08
+uv run algo-fetch BTCUSDT 4h  --start 2019-09-08
+uv run algo-fetch ETHUSDT 15m --start 2019-09-08
+uv run algo-fetch ETHUSDT 1h  --start 2019-09-08
+uv run algo-fetch ETHUSDT 4h  --start 2019-09-08
 ```
 
 The fetcher batches 1000 candles per request with CCXT's built-in rate limiter
@@ -102,18 +103,18 @@ Columns: `ts, datetime, Open, High, Low, Close, Volume` (base volume).
 Batch mode processes every CSV in `bot_data/raw/`:
 
 ```bash
-algo-process
+uv run algo-process
 ```
 
 Or one file at a time (useful when iterating on a single TF):
 
 ```bash
-algo-process bot_data/raw/BTC_USDT-15m.csv
-algo-process bot_data/raw/BTC_USDT-1h.csv
-algo-process bot_data/raw/BTC_USDT-4h.csv
-algo-process bot_data/raw/ETH_USDT-15m.csv
-algo-process bot_data/raw/ETH_USDT-1h.csv
-algo-process bot_data/raw/ETH_USDT-4h.csv
+uv run algo-process bot_data/raw/BTC_USDT-15m.csv
+uv run algo-process bot_data/raw/BTC_USDT-1h.csv
+uv run algo-process bot_data/raw/BTC_USDT-4h.csv
+uv run algo-process bot_data/raw/ETH_USDT-15m.csv
+uv run algo-process bot_data/raw/ETH_USDT-1h.csv
+uv run algo-process bot_data/raw/ETH_USDT-4h.csv
 ```
 
 `algo-process` validates the time grid, forward-fills gaps up to 0.5% (synthetic
@@ -131,10 +132,10 @@ file is missing, and run for real once the data is on disk.
 
 ```bash
 # Integration checks against the real files (run after fetch + process):
-pytest tests/test_data_integrity.py -m integration -v
+uv run pytest tests/test_data_integrity.py -m integration -v
 
 # Everything, including the deterministic unit tests:
-pytest tests/test_data_integrity.py -v
+uv run pytest tests/test_data_integrity.py -v
 
 # Full project gate (lint + typecheck + tests):
 make check
@@ -182,8 +183,8 @@ first:
 
 ```bash
 rm bot_data/raw/BTC_USDT-1h.csv
-algo-fetch BTCUSDT 1h --start 2019-09-08
-algo-process bot_data/raw/BTC_USDT-1h.csv
+uv run algo-fetch BTCUSDT 1h --start 2019-09-08
+uv run algo-process bot_data/raw/BTC_USDT-1h.csv
 ```
 
 ---
@@ -198,7 +199,7 @@ the abort message). If the gaps are genuine Binance downtime and you accept
 synthetic fill, raise the threshold explicitly:
 
 ```bash
-algo-process bot_data/raw/BTC_USDT-15m.csv --max-missing-ratio 0.01
+uv run algo-process bot_data/raw/BTC_USDT-15m.csv --max-missing-ratio 0.01
 ```
 
 If you would rather keep the real gaps unfilled, that is a different design
@@ -208,8 +209,8 @@ If you would rather keep the real gaps unfilled, that is a different design
 after BTC (see note above). The `--start 2019-09-08` is a lower bound; the fetcher
 simply begins at the first candle Binance actually has.
 
-**`algo-fetch: command not found`.** The conda env is not active or the package
-is not installed editable. Run `conda activate algo_bot && pip install -e ".[dev]"`.
+**`algo-fetch: command not found`.** Do not rely on an activated environment or
+global entry point. Run `make sync`, then `uv run algo-fetch --help`.
 
 **Integration tests all skip.** That means no processed files were found — run
 Steps 1 and 2 first. The skip message points back here.

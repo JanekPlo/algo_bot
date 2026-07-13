@@ -14,6 +14,10 @@ Public API:
     ``_metrics_summary_raw`` / ``_metrics_summary_post_microstructure`` w stats.
     Opcjonalny ``data`` pozwala wstrzyknąć pre-loaded OHLCV DataFrame (testy
     deterministyczne, walk-forward per fold) zamiast ładowania z CSV.
+- run_backtest_result(..., random_seed=...) -> BacktestResult
+    Wersjonowany artefakt P8 z engine/version/source state, hashami, jawnym
+    cost modelem i checksummowanymi order/fill/position/funding ledgers. Stara
+    funkcja ``run_backtest`` pozostaje niezmienioną fasadą tuple.
 - save_outputs(rid, symbol, timeframe, strategy, params_in, stats, equity, trades) -> str
     Zapisuje wyniki do results/backtests/<run_id>/{summary.json, params.json, equity.csv, trades.csv}.
 - run_id(strategy, symbol, timeframe, params) -> str
@@ -46,12 +50,28 @@ import math
 import os
 from dataclasses import asdict, is_dataclass
 from datetime import UTC, datetime
+from importlib.metadata import version as distribution_version
+from pathlib import Path
 from typing import Any
 
 import pandas as pd
 from backtesting import Backtest, Strategy as BTStrategy
 
 from algo_bot.data_loader import load_funding
+from algo_bot.engine.backtest_result import (
+    BACKTEST_RESULT_SCHEMA_VERSION,
+    BacktestResult,
+    ResultClass,
+    SourceTreeState,
+    assess_eligibility,
+    capture_source_tree_state,
+    combined_data_hash,
+    derive_legacy_ledgers,
+    empty_funding_ledger,
+    json_hash,
+    legacy_adr011_cost_model,
+    public_stats,
+)
 from algo_bot.log import get_logger, setup_logging
 from algo_bot.metrics import MetricsSummary, summarize
 from algo_bot.microstructure import (
@@ -164,7 +184,12 @@ def coerce_params(StratClass, params_dict: dict[str, Any]) -> Any:
 # ------------------------------
 # Wrapper do backtesting.py z egzekucją SL/TP/Trailing + cooldown
 # ------------------------------
-def make_bt_wrapper(StratClass, params_obj, risk_limits: RiskLimits | None = None):
+def make_bt_wrapper(
+    StratClass,
+    params_obj,
+    risk_limits: RiskLimits | None = None,
+    trade_on_close: bool | None = None,
+):
     """
     Wrapper StrategyBase -> backtesting.py, z egzekucją SL/TP/traila na podstawie meta.
     Oczekuje, że strategia w meta przekaże: sl, tp, trail (opcjonalnie) oraz że na hold
@@ -179,8 +204,18 @@ def make_bt_wrapper(StratClass, params_obj, risk_limits: RiskLimits | None = Non
     backward-compatible.
     """
 
+    # ``Backtest(..., trade_on_close=...)`` is the actual broker execution
+    # control.  Historically the wrapper independently read the strategy param,
+    # so its explicit-exit branch could disagree with the broker.  The runner
+    # now passes the engine value here; the fallback preserves direct callers.
+    wrapper_trade_on_close = (
+        bool(getattr(params_obj, "trade_on_close", False))
+        if trade_on_close is None
+        else bool(trade_on_close)
+    )
+
     class Wrapped(BTStrategy):
-        trade_on_close = getattr(params_obj, "trade_on_close", False)
+        trade_on_close = wrapper_trade_on_close
 
         def init(self):
             self._algo = StratClass(params_obj)
@@ -488,7 +523,12 @@ def run_backtest(
 
     # 4) Adapter (StrategyBase vs legacy)
     if issubclass(StratClass, StrategyBase):
-        BTStrat = make_bt_wrapper(StratClass, params_obj, risk_limits=risk_limits)
+        BTStrat = make_bt_wrapper(
+            StratClass,
+            params_obj,
+            risk_limits=risk_limits,
+            trade_on_close=trade_on_close,
+        )
         run_kwargs = {}
     else:
         if risk_limits is not None:
@@ -612,6 +652,139 @@ def run_backtest(
         stats["_risk_limits"] = asdict(risk_limits)
 
     return stats, equity, trades
+
+
+def run_backtest_result(
+    symbol: str,
+    timeframe: str,
+    strategy: str,
+    params: dict[str, Any],
+    *,
+    random_seed: int,
+    strategy_version: str | None = None,
+    start: str | None = None,
+    end: str | None = None,
+    cash: float = DEFAULT_CASH,
+    commission: float = DEFAULT_COMMISSION,
+    trade_on_close: bool = True,
+    unit_scale: float | None = None,
+    data: pd.DataFrame | None = None,
+    risk_limits: RiskLimits | None = None,
+    microstructure: MicrostructureConfig | None = None,
+    funding_historical: pd.Series | None = None,
+    source_tree: SourceTreeState | None = None,
+    repo_root: Path | None = None,
+) -> BacktestResult:
+    """Run the legacy engine and return the versioned P8 source artifact.
+
+    ``run_backtest`` remains the compatibility facade and is deliberately not
+    changed.  This richer entry point executes the same legacy path, preserves
+    the ADR-011 overlay, records the exact engine input/config hashes, and
+    derives an explicitly labeled closed-trade order/fill ledger.  Because the
+    legacy ledger and OHLC cost models are approximate, this factory always
+    produces ``SMOKE_ONLY / NOT_ELIGIBLE`` evidence.
+
+    Native Nautilus callers construct :class:`BacktestResult` from their real
+    orders, fills, positions, commissions, funding settlements, and explicit
+    execution model.  Until the P7 native funding fixture supplies that
+    evidence, a ``MISSING`` funding component will fail eligibility closed.
+    """
+
+    engine_data = load_ohlcv_csv(symbol, timeframe) if data is None else data.copy()
+    if start:
+        engine_data = engine_data[engine_data.index >= pd.to_datetime(start, utc=True)]
+    if end:
+        engine_data = engine_data[engine_data.index <= pd.to_datetime(end, utc=True)]
+    if engine_data.empty:
+        raise ValueError("Zakres dat zwrócił pusty zbiór danych.")
+    if unit_scale is not None and float(unit_scale) != 1.0:
+        for column in ("Open", "High", "Low", "Close"):
+            engine_data[column] = engine_data[column] * float(unit_scale)
+
+    effective_funding = funding_historical
+    if (
+        effective_funding is None
+        and microstructure is not None
+        and microstructure.enabled
+        and microstructure.funding_source == "historical"
+    ):
+        with contextlib.suppress(FileNotFoundError):
+            effective_funding = load_funding(symbol)
+
+    stats, equity, trades = run_backtest(
+        symbol=symbol,
+        timeframe=timeframe,
+        strategy=strategy,
+        params=params,
+        cash=cash,
+        commission=commission,
+        trade_on_close=trade_on_close,
+        data=engine_data,
+        risk_limits=risk_limits,
+        microstructure=microstructure,
+        funding_historical=effective_funding,
+    )
+    orders, fills, positions = derive_legacy_ledgers(trades)
+
+    microstructure_enabled = microstructure is not None and microstructure.enabled
+    cost_model = legacy_adr011_cost_model(
+        commission_rate=commission,
+        microstructure_enabled=microstructure_enabled,
+        slip_bps=microstructure.slip_bps if microstructure is not None else 0.0,
+        funding_source=microstructure.funding_source if microstructure is not None else "none",
+    )
+    eligibility = assess_eligibility(
+        cost_model,
+        extra_reasons=("LEGACY_DERIVED_ORDER_FILL_LEDGER",),
+        noneligible_class=ResultClass.SMOKE_ONLY,
+    )
+    resolved_strategy_version = strategy_version or f"legacy/{strategy}/1"
+    config_hash = json_hash(
+        {
+            "symbol": symbol,
+            "timeframe": timeframe,
+            "strategy": strategy,
+            "strategy_version": resolved_strategy_version,
+            "params": params,
+            "start": start,
+            "end": end,
+            "cash": cash,
+            "commission": commission,
+            "trade_on_close": trade_on_close,
+            "unit_scale": unit_scale,
+            "risk_limits": asdict(risk_limits) if risk_limits is not None else None,
+            "microstructure": asdict(microstructure) if microstructure is not None else None,
+            "random_seed": random_seed,
+            "cost_model": cost_model.to_dict(),
+        }
+    )
+    captured_source_tree = source_tree or capture_source_tree_state(repo_root or Path(PROJECT_ROOT))
+    funding_used_as_data = (
+        effective_funding
+        if microstructure_enabled
+        and microstructure is not None
+        and microstructure.funding_source == "historical"
+        else None
+    )
+    return BacktestResult(
+        schema_version=BACKTEST_RESULT_SCHEMA_VERSION,
+        engine="backtesting.py",
+        engine_version=distribution_version("backtesting"),
+        strategy_version=resolved_strategy_version,
+        source_tree=captured_source_tree,
+        stats=public_stats(stats),
+        equity=equity,
+        trades=trades,
+        orders=orders,
+        fills=fills,
+        positions=positions,
+        funding=empty_funding_ledger(),
+        data_hash=combined_data_hash(engine_data, funding_used_as_data),
+        config_hash=config_hash,
+        random_seed=random_seed,
+        cost_model=cost_model,
+        eligibility=eligibility,
+    )
 
 
 def _metrics_summary_to_json_safe(summary: MetricsSummary) -> dict[str, Any]:

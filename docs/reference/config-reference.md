@@ -36,7 +36,10 @@ These are **not four parameter sets** — they are four *random-search spaces*. 
 
 ### Per-parameter spec grammar
 
-Each parameter maps to one of three spec shapes (parsed by `_sample_from_spec`):
+Each random-search parameter maps to one of three spec shapes (parsed by
+`_sample_from_spec`). `load_space_from_any` validates that every non-meta random
+parameter is a mapping/spec before returning; a stray YAML line caused by a missing
+`#` therefore fails while loading the config instead of later inside the sweep loop:
 
 | Spec | Form | Sampling |
 |---|---|---|

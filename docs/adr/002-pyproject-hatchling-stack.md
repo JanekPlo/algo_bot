@@ -1,9 +1,16 @@
 # ADR-002: pyproject.toml + hatchling + conda + pip-tools + ruff + mypy
 
-- **Status:** Accepted
+- **Status:** Superseded in part by ADR-014 / MR-Session 3 Beta
 - **Data:** 2026-05-14
 - **Faza projektu:** 1 (Foundation)
 - **Autorzy:** Janek Płoński
+
+> **Implementation note (2026-07-13):** this ADR remains the historical record for the
+> package layout, Hatchling, Ruff, and mypy choices. Its Python 3.11, Conda, pip-tools,
+> and TA-Lib installation decisions were replaced by the Beta 0 runtime described in
+> [ADR-014](014-engine-migration-nautilus.md): managed CPython 3.12, `uv`, `uv.lock`, and
+> the binary TA-Lib wheel. The context and rejected alternatives below are intentionally
+> not rewritten as if that later evidence had been available in May.
 
 ## Context
 

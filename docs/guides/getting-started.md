@@ -1,43 +1,51 @@
 # Getting Started
 
-Pełny walkthrough setupu algo_bot od zera. Wymaga **~10 minut** pierwszym razem.
+Pełny walkthrough setupu algo_bot od zera. Domyślny runtime Beta 0 to
+**uv 0.11.28 + vanilla CPython 3.12.13 + `uv.lock`**. Pierwsza instalacja
+zwykle zajmuje kilka minut.
 
 ## Wymagania systemowe
 
-- **OS**: Linux (Ubuntu 22+) lub macOS. Windows native niezalecane — używaj WSL2.
-- **Python**: 3.11+ (instalowane automatycznie przez conda)
-- **conda lub miniconda**: do zarządzania env z TA-Lib
-- **git**: do clone'a repo
-- **make**: standardowy GNU make (na Ubuntu domyślnie, na macOS: `xcode-select --install`)
-- **~3 GB** wolnego miejsca (conda env + deps)
+- **OS**: Linux (Ubuntu 22+) lub macOS. Na Windows używaj WSL2.
+- **uv**: dokładnie 0.11.28.
+- **Python**: nie musi być zainstalowany systemowo; uv pobierze vanilla CPython
+  3.12.13 wskazany przez `.python-version`.
+- **git**, **make** i **curl**.
+- Około **3 GB** wolnego miejsca na interpreter, `.venv` i zależności.
 
-### Sprawdź co masz
+Conda nie jest domyślnym ani równorzędnym workflow. Historyczny setup z
+`environment.yml`, Minicondą i TA-Lib z conda-forge jest **superseded**.
+Wróć do niego wyłącznie jako diagnostycznego fallbacku, jeżeli standardowy
+smoke test uv ujawni konkretny blocker platformy.
 
-```bash
-git --version       # >= 2.0
-make --version      # >= 3.81
-conda --version     # >= 4.10 (jeśli zainstalowane)
-```
-
-### Brakuje conda?
+### Sprawdź narzędzia bazowe
 
 ```bash
-# Linux/WSL:
-wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
-bash Miniconda3-latest-Linux-x86_64.sh
-# (zaakceptuj defaultową ścieżkę, na końcu wybierz `yes` dla conda init)
-source ~/.bashrc
-
-# macOS (Intel):
-brew install --cask miniconda
-# macOS (Apple Silicon):
-brew install --cask miniconda
-
-# Po instalacji w nowej shellu:
-conda --version  # powinno działać
+git --version
+make --version
+curl --version
 ```
 
-## Krok 1 — Clone repo
+## Krok 1 — zainstaluj przypięte uv
+
+Oficjalny instalator z wersjonowanego URL:
+
+```bash
+curl -LsSf https://astral.sh/uv/0.11.28/install.sh | sh
+```
+
+Otwórz nowy terminal (albo wykonaj instrukcję aktualizacji `PATH` wypisaną
+przez instalator), a następnie sprawdź wersję:
+
+```bash
+uv --version
+# uv 0.11.28
+```
+
+Nie używaj nieprzypiętego `latest` w CI lub na VPS. Jeżeli masz inną wersję uv,
+ponownie uruchom powyższy instalator.
+
+## Krok 2 — sklonuj repo
 
 ```bash
 mkdir -p ~/quant_projects
@@ -46,118 +54,91 @@ git clone git@github.com:JanekPlo/algo_bot.git
 cd algo_bot
 ```
 
-(Lub przez HTTPS: `git clone https://github.com/JanekPlo/algo_bot.git` jeśli nie masz SSH key skonfigurowanego.)
+Jeżeli nie masz skonfigurowanego klucza SSH:
 
-## Krok 2 — Stwórz conda env
+```bash
+git clone https://github.com/JanekPlo/algo_bot.git
+```
+
+## Krok 3 — odtwórz środowisko
 
 ```bash
 make env
 ```
 
-To uruchomi `conda env create -f environment.yml`. Tworzy env o nazwie `algo_bot` z:
-- Python 3.11
-- TA-Lib (system library + Python bindings z conda-forge)
-- numpy, pandas, scipy (z MKL/OpenBLAS — szybsze niż PyPI wheels)
-- jupyterlab + ipykernel (dla notebooków research)
-- pip (do instalacji reszty)
+Target wykonuje `uv sync --locked`. uv:
 
-Czas: **~3-5 minut** (conda ściąga ~500 MB).
+- odczytuje `3.12.13` z `.python-version` i w razie potrzeby pobiera vanilla
+  CPython;
+- tworzy repozytoryjne `.venv`;
+- instaluje projekt editable oraz domyślną grupę dev;
+- odtwarza dokładny graf zależności zapisany w `uv.lock`.
 
-Jeśli env już istnieje, `make env` zrobi `conda env update -f environment.yml --prune` (idempotentne).
+W Beta 0 kluczowe przypięcia runtime to:
 
-## Krok 3 — Aktywuj env
+- **NautilusTrader 1.230.0** (stabilne wydanie, bez nightly/pre-release);
+- **TA-Lib 0.7.0**; publikowany wheel zawiera również bibliotekę C, więc nie
+  instaluj systemowego `libta-lib` ani pakietu z conda-forge;
+- legacy **backtesting.py 0.6.5**, utrzymany na czas migracji silnika.
 
-```bash
-conda activate algo_bot
-```
+`make install` jest obecnie równoważnym aliasem do `uv sync --locked`. Po clone
+wystarczy jeden z tych targetów.
 
-Twój prompt powinien teraz zaczynać się od `(algo_bot)`:
-```
-(algo_bot) janek@hostname:~/quant_projects/algo_bot$
-```
+## Krok 4 — uruchamiaj przez `uv run`
 
-**WAŻNE**: env musi być aktywowane przed KAŻDĄ pracą. Stała konwencja: pierwszy krok dnia = `conda activate algo_bot`.
-
-## Krok 4 — Zainstaluj pakiet
+Nie aktywuj `.venv` i nie polegaj na globalnym `python`, `pip` ani CLI z
+`PATH`. Standardem projektu jest `uv run`:
 
 ```bash
-make install
+uv run python --version
+uv run algo-backtest --help
+uv run algo-fetch --help
+uv run algo-process --help
+uv run algo-sweep --help
+uv run algo-walkforward --help
 ```
 
-To uruchomi `pip install -e ".[dev]"` — instaluje algo_bot w trybie editable z dev dependencies:
-- Runtime: ccxt, pandas, backtesting, PyYAML, python-dotenv, tzdata, matplotlib
-- Dev: pytest, pytest-cov, ruff, mypy, pip-tools, pre-commit, pandas-stubs, types-PyYAML
+Makefile robi to samo z dodatkowym `--locked`, dlatego `make test`,
+`make lint` i `make check` są również bezpiecznymi entry pointami.
 
-Czas: **~30-60 sekund**.
-
-"Editable mode" znaczy że zmiany w plikach `.py` są widoczne natychmiast — nie trzeba reinstall po edycji.
-
-## Krok 5 — Sprawdź setup
+## Krok 5 — zweryfikuj runtime
 
 ```bash
-# CLI entries (powinny działać po pip install):
-algo-backtest --help
-algo-fetch --help
-algo-process --help
-algo-sweep --help
-
-# Sprawdź import pakietu z dowolnego miejsca:
-python -c "from algo_bot.strategy_base import StrategyBase; print('OK:', StrategyBase)"
-
-# Sprawdź TA-Lib:
-python -c "import talib; print('TA-Lib:', talib.__version__)"
-
-# Sprawdź wszystko razem (CI-style):
+uv --version
+uv run python --version
+uv run python -c 'from importlib.metadata import version; print("TA-Lib", version("TA-Lib")); print("NautilusTrader", version("nautilus-trader"))'
+uv run python -c 'import talib, nautilus_trader; print("runtime imports: OK")'
 make check
 ```
 
-`make check` uruchamia:
-1. `ruff check` (lint)
-2. `ruff format --check` (style)
-3. `mypy algo_bot` (typecheck)
-4. `pytest` (testy)
+Oczekiwane wersje to odpowiednio uv 0.11.28, Python 3.12.13, TA-Lib 0.7.0
+i NautilusTrader 1.230.0. `make check` jest twardą bramką: lint,
+format-check, mypy i pełny pytest muszą przejść.
 
-Częściowe failures są OK na MVP (legacy kod ma TODO znane bugi). Powinno przejść **lint** i **typecheck** clean.
-
-## Krok 6 — Pre-commit hooks (opcjonalnie)
+## Krok 6 — pre-commit hooks (opcjonalnie)
 
 ```bash
 make precommit-install
+make precommit-run      # ręczny przebieg po całym repo
 ```
 
-Installs `.git/hooks/pre-commit`. The hook runs fast local file checks:
-standard whitespace/YAML/TOML checks plus `ruff-check` and `ruff-format`.
-`mypy` stays in the heavier project gate through `make check` and CI.
+Hook uruchamia szybkie kontrole plików oraz Ruff. Pełna bramka projektu
+pozostaje w `make check`.
 
-You can run the same hooks manually:
+## Krok 7 — pierwszy backtest
+
+Jeżeli nie masz `bot_data/processed/binance_BTCUSDT_4h.csv`, najpierw pobierz
+i przetwórz dane:
 
 ```bash
-make precommit-run
+uv run algo-fetch BTC/USDT 4h --start 2020-01-01
+uv run algo-process
 ```
 
-## Krok 6a — CI behaviour
-
-GitHub Actions runs `make check` on every pull request and every push to
-`master`. CI uses `environment.yml` through micromamba, so it gets the same
-Python 3.11 + TA-Lib setup as local development. CI does not use secrets and
-does not run live exchange/API tests by default.
-
-## Krok 7 — Pierwszy backtest (smoke test)
-
-**Najpierw potrzebne dane historyczne**. Jeśli nie masz `bot_data/processed/binance_BTCUSDT_4h.csv`:
+Potem uruchom backtest:
 
 ```bash
-# Pobierz dane (CCXT → bot_data/raw/):
-algo-fetch BTC/USDT 4h --start 2020-01-01
-
-# Przetwórz raw → processed z indykatorami:
-algo-process
-```
-
-Potem pierwszy backtest:
-
-```bash
-algo-backtest \
+uv run algo-backtest \
     --symbol BTC/USDT \
     --timeframe 4h \
     --strategy bghtrend_pullback \
@@ -165,21 +146,28 @@ algo-backtest \
 ```
 
 Output trafia do `results/backtests/<run_id>/`:
-- `summary.json` — metryki (Sharpe, Calmar, drawdown, win rate, ...)
-- `equity.csv` — equity per bar
-- `trades.csv` — log transakcji
-- `params.json` — użyte parametry + metadata
 
-## Krok 8 — IDE setup (opcjonalnie, ale zalecane)
+- `summary.json` — metryki i metadata;
+- `equity.csv` — krzywa kapitału;
+- `trades.csv` — log transakcji;
+- `params.json` — użyte parametry.
 
-### VSCode
+## Krok 8 — notebooki i IDE (opcjonalnie)
 
-Stwórz `.vscode/settings.json`:
+Notebooki są osobną grupą zależności:
+
+```bash
+uv sync --locked --group notebooks
+uv run --group notebooks jupyter lab notebooks/
+```
+
+W VS Code lub PyCharm wybierz interpreter `<repo>/.venv/bin/python` (na
+Windows native: `<repo>/.venv/Scripts/python.exe`). Nie wybieraj dawnego
+interpretera Conda. Dla VS Code wystarczy m.in.:
+
 ```json
 {
-    "python.defaultInterpreterPath": "~/miniconda3/envs/algo_bot/bin/python",
-    "python.linting.enabled": false,
-    "python.formatting.provider": "none",
+    "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
     "[python]": {
         "editor.defaultFormatter": "charliermarsh.ruff",
         "editor.formatOnSave": true,
@@ -187,82 +175,74 @@ Stwórz `.vscode/settings.json`:
             "source.organizeImports": "explicit"
         }
     },
-    "ruff.organizeImports": true,
     "python.testing.pytestEnabled": true,
     "python.testing.pytestArgs": ["tests"]
 }
 ```
 
-Rozszerzenia VSCode do zainstalowania:
-- **Python** (Microsoft) — Pylance, debug
-- **Ruff** (charliermarsh) — auto-format on save
-- **Even Better TOML** — syntax highlighting dla `pyproject.toml`
-- **Jupyter** — notebooks
+## CI
 
-### PyCharm
-
-Settings → Project → Python Interpreter → Add → Conda Environment → Existing → wybierz env `algo_bot`.
+GitHub Actions uruchamia `make check` na pull requestach i pushach do
+`master`. Workflow przypina uv 0.11.28 i Python 3.12.13, wykonuje
+`uv sync --locked`, a następnie tę samą bramkę co lokalnie. Domyślny workflow
+nie używa sekretów ani live exchange/API tests.
 
 ## Co dalej
 
 - **[Daily Workflow](daily-workflow.md)** — codzienne komendy i cykl pracy
-- **[Makefile Cheatsheet](makefile-cheatsheet.md)** — każdy `make <target>` wytłumaczony
-- **[Package Overview](../reference/package-overview.md)** — co siedzi w którym katalogu
-- **[Architecture](../ARCHITECTURE.md)** — wysokopoziomowa mapa systemu
+- **[Makefile Cheatsheet](makefile-cheatsheet.md)** — każdy target Makefile
+- **[Data fetching](data-fetching.md)** — przygotowanie danych
+- **[Running a backtest](running-backtest.md)** — pełny runbook backtestu
+- **[Package Overview](../reference/package-overview.md)** — mapa repo
 
 ## Troubleshooting
 
-### `make env` fails z "package not found"
+### `uv: command not found`
 
-Czasem conda-forge channel ma chwilowe problemy. Spróbuj:
+Otwórz nowy terminal po instalacji i wykonaj instrukcję aktualizacji `PATH`
+wypisaną przez instalator. Następnie `uv --version` musi zwrócić 0.11.28.
+
+### `uv sync --locked` zgłasza nieaktualny lockfile
+
+Najpierw zaktualizuj checkout (`git pull`) i upewnij się, że `pyproject.toml`
+oraz `uv.lock` pochodzą z tego samego commita. Zwykły setup nie powinien
+uruchamiać `uv lock`; ten target służy wyłącznie do świadomej zmiany deps.
+
+### `import talib` lub `import nautilus_trader` kończy się błędem
+
 ```bash
-conda clean --all
-conda env create -f environment.yml --force-reinstall
+make sync
+uv run python -c 'import talib, nautilus_trader; print("OK")'
 ```
 
-### `import talib` ImportError
-
-TA-Lib NIE jest w pip dependencies — musi być z conda. Sprawdź:
-```bash
-conda activate algo_bot
-conda list | grep ta-lib
-# Powinno pokazać: ta-lib    <version>    <build>    conda-forge
-```
-
-Jeśli brak: `conda install -c conda-forge ta-lib`
+Nie diagnozuj importu przez systemowy `python`. Jeżeli uv nie znajduje wheel
+dla konkretnej platformy, zachowaj pełny komunikat z `uv sync --locked` — to
+jest warunek do rozważenia odseparowanego fallbacku, nie powód do zmiany
+domyślnego workflow na Condę.
 
 ### `algo-backtest: command not found`
 
-CLI entries są tworzone przez `pip install -e .` i żyją w env's `bin/`. Sprawdź:
+Użyj entry pointu przez środowisko projektu:
+
 ```bash
-which algo-backtest
-# Powinno pokazać: ~/miniconda3/envs/algo_bot/bin/algo-backtest
+uv run algo-backtest --help
 ```
 
-Jeśli brak — env nie jest aktywowany albo `make install` nie został uruchomiony.
+Jeżeli nadal go nie ma, wykonaj `make sync`; uv instaluje projekt editable z
+sekcji `[project.scripts]`.
 
-### `make: command not found` (macOS)
+### `make: command not found` na macOS
 
 ```bash
 xcode-select --install
 ```
 
-### `git clone` fails z permission denied (SSH)
+### Import `algo_bot` nie działa
 
-Albo nie masz SSH key w GitHubie, albo użyj HTTPS:
 ```bash
-git clone https://github.com/JanekPlo/algo_bot.git
+uv run python -c 'import algo_bot; print(algo_bot.__file__)'
+uv pip show algo_bot
 ```
 
-### Importy `from algo_bot.X` ImportError mimo `pip install -e .`
-
-Sprawdź czy env aktywne (`conda activate algo_bot`) i czy install się powiódł:
-```bash
-pip show algo_bot
-# Powinno pokazać: Location: /path/to/repo (editable install)
-```
-
-Jeśli brak:
-```bash
-pip install -e ".[dev]"  # reinstall
-```
+W razie braku pakietu wykonaj `uv sync --locked` zamiast ręcznego
+`pip install -e .`.

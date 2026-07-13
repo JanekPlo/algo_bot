@@ -4,7 +4,7 @@ How to run one backtest with `algo-backtest` and read its outputs. For
 parameter sweeps see `docs/guides/running-sweep.md`; for the metric
 definitions see `docs/reference/metrics-reference.md`.
 
-> **TL;DR:** `algo-backtest --symbol BTC/USDT --timeframe 1h --strategy
+> **TL;DR:** `uv run algo-backtest --symbol BTC/USDT --timeframe 1h --strategy
 > bghtrend_pullback --params '<json>'` writes
 > `results/backtests/<run_id>/{summary.json, params.json, equity.csv,
 > trades.csv}`. Read `_metrics_summary_post_microstructure` in `summary.json`
@@ -15,9 +15,10 @@ definitions see `docs/reference/metrics-reference.md`.
 ## Invocation
 
 ```bash
-cd ~/quant_projects/algo_bot && conda activate algo_bot
+cd ~/quant_projects/algo_bot
+make sync       # first run or after uv.lock changes; no env activation
 
-algo-backtest --symbol BTC/USDT --timeframe 1h \
+uv run algo-backtest --symbol BTC/USDT --timeframe 1h \
   --strategy bghtrend_pullback \
   --params '{"ema_fast": 17, "ema_mid": 55, "ema_slow": 200, "rr_target": 1.5}' \
   --start 2019-09-08 --end 2026-07-04 \
@@ -55,7 +56,7 @@ Frequently used flags (defaults in parentheses):
   `bot_data/processed/binance_<SYMBOL>_<TF>.csv` is missing. Fetch it per
   `docs/guides/data-fetching.md`.
 - **Funding WARNING (synthetic fallback)** — historical funding CSV missing;
-  run `algo-fetch-funding --symbol <SYM> --start <YYYY-MM-DD>`.
+  run `uv run algo-fetch-funding --symbol <SYM> --start <YYYY-MM-DD>`.
 - **Params seem ignored** — key not in `ParamSchema` (typo?), it was filtered
   out. Check `params.json` in the output dir to see what was actually used.
 - **`n_trades = 0` / NaN metrics** — entry conditions never fired on the

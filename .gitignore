@@ -35,7 +35,6 @@ htmlcov/
 .venv/
 venv/
 env/
-.python-version
 
 # === IDE / Editor ===
 .vscode/

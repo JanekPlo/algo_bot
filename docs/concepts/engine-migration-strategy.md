@@ -1,6 +1,6 @@
 # Engine migration strategy
 
-> **Status: DRAFT** (MR-Session 3 Alpha, 2026-07-13). User-facing orientation for the
+> **Status: ACTIVE — Beta complete, `ITERATE BETA`** (2026-07-14). User-facing orientation for the
 > `backtesting.py` → `nautilus_trader` migration. The authoritative decision record is
 > [ADR-014](../adr/014-engine-migration-nautilus.md); this document is the mental model and
 > is expanded in later sessions as the migration proceeds.
@@ -80,13 +80,12 @@ Downstream tooling does not move. Both `nautilus_trader` paths return the same
 `(stats, equity, trades)` *format* that `run_backtest` returns today, so walk-forward and
 sweep keep working unchanged. What is **not** shared is the cost *method*: the legacy
 `backtesting.py` path keeps the post-hoc [ADR-011](../adr/011-microstructure-adjustments.md)
-overlay, while the `nautilus_trader` path takes costs from the engine's native fills,
-commissions, and funding settlements — more accurate, and it handles multi-leg (pyramided)
-turnover natively instead of needing an overlay extension. Approximate net-position costing
-is fine for the Beta smoke test only; the eligibility sweep runs on native nautilus costing,
-because add-ons increase turnover and therefore cost. Behind the tuple, the native result
-also carries `orders`, `fills`, `positions`, and an `engine_version` — the data you need to
-debug the pyramiding state machine and to attribute a result to a pinned runtime.
+overlay, while the native-v2 PyO3 path takes fills, commissions and perpetual-funding
+adjustments from the engine. The Cython engine used by Tier-1 equivalence does not settle
+funding in 1.230.0, so it is not a cost-eligible substitute. Even PyO3 stays ineligible when
+mark-price/order-book history or a declared fee/fill model is missing: "native" is an
+accounting property, not proof of realism. Behind the tuple, the source result also carries
+`orders`, `fills`, `positions`, cost metadata and an `engine_version` for auditability.
 
 ## Migration timeline (milestones)
 
@@ -95,11 +94,10 @@ robustness budget on a strategy that has not first shown in-sample edge.
 
 1. **MR-Session 3 Alpha (this session, done):** ADR-014 + this concept doc + ROADMAP.
    Zero code.
-2. **MR-Session 3 Beta:** starts with **Beta 0 (runtime)** — bump to Python 3.12, pin a
-   stable `nautilus_trader` version, decide conda-3.12 vs the officially supported `uv`, and
-   get `make check` green on the new runtime (recording `engine_version` per result). This is
-   the first hard gate; an env conflict is a runtime-migration task (or a separate
-   env/container), not a reason to abandon the engine. Then: the Tier-1 compat adapter with a
+2. **MR-Session 3 Beta (completed):** Beta 0 runs on vanilla CPython 3.12.13
+   with `uv==0.11.28`, `nautilus_trader==1.230.0`, `TA-Lib==0.7.0`,
+   `backtesting==0.6.5`, and a committed `uv.lock`; full `make check` is green. Then: the
+   executable v2 specification, timestamp/execution and OMS PoCs, Tier-1 compat adapter with a
    cross-engine equivalence test, and `mean_reversion_bb_stoch` v2 as a pure
    `MastermindStateMachine` + thin native wrapper — base entry + pyramiding (base x1 + **one**
    add-on x1 = x2, fired by **either** the confirming candle **or** the Stochastic cross) +
@@ -107,16 +105,21 @@ robustness budget on a strategy that has not first shown in-sample edge.
    model: virtual base/add-on legs over a NETTING venue position with reduce-only stops,
    validated in the PoC. A small direction-check sweep closes the session. Runs entirely on
    H1 — M5/M10 deferred (the deferred edge's triggers are H1-native; M5 is fidelity, not
-   capability).
-3. **MR-Session 4:** a full v2 sweep on `nautilus_trader`, run unconditionally — it is the
-   first real test of the *claimed* edge, not the already-failed bare core.
+   capability). The frozen development-only P9 matrix completed 12/12 runs and 264/264
+   invariant checks without reading holdout. Every result remains
+   `SMOKE_ONLY / NOT_ELIGIBLE`; see the
+   [P9 report](../experiments/mms-v2-beta-results.md). The resulting decision is
+   **iterate Beta**, not bailout and not variant selection.
+3. **MR-Session 4:** a full v2 sweep on `nautilus_trader`, conditional on a new
+   preregistration after Binance Close-All parity, mark-price/fill/cost evidence, M5/M10
+   fidelity and the intended multi-instrument scope are resolved. It must not inherit the
+   earlier unconditional schedule from a non-eligible smoke profile.
 4. **MR-Session 5:** walk-forward → Monte Carlo → stress → go/no-go, gated on the Session-4
    sweep clearing in-sample eligibility. This is the full-MMS-system verdict, the analogue
    of the bghtrend Session-8 decision.
 
-**Bailout is explicit.** A runtime/env conflict is fixed by migrating the runtime (Python
-3.12, `uv`, or a container), not by abandoning the engine — only a total failure across
-conda, `uv`, *and* a container escalates. Beyond that, if the equivalence test cannot reach
+**Bailout is explicit.** The runtime gate resolved cleanly with `uv`; Conda/container
+fallbacks were not needed. Beyond that, if the equivalence test cannot reach
 an acceptable tolerance, or the adapter consumes disproportionate effort with no strategy
 progress, the migration stops and we either build a minimal custom event loop or abandon the
 MMS full system and pivot. `vectorbt` is not the fallback here: it *can* express an

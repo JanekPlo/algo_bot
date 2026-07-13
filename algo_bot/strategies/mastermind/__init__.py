@@ -1,0 +1,80 @@
+"""Pure domain model for the MMS-inspired v2 H1/BB mechanization.
+
+The public surface deliberately contains no engine or dataframe types.  A live or
+backtest adapter translates its native callbacks into the events exported here and
+translates the returned intents in the opposite direction.
+"""
+
+from algo_bot.strategies.mastermind.model import (
+    AccountEquityUpdated,
+    AddonTriggerPolicy,
+    BarClosed,
+    CloseReason,
+    CloseRequested,
+    DomainEvent,
+    DomainIntent,
+    FundingApplied,
+    MastermindConfig,
+    OrderAccepted,
+    OrderCanceled,
+    OrderFilled,
+    OrderLifecycle,
+    OrderPartiallyFilled,
+    OrderRejected,
+    OrderRole,
+    OrderSubmitted,
+    OrderTimedOut,
+    PositionBuild,
+    PositionChanged,
+    PositionClosed,
+    ReconciledOrder,
+    ReconciliationCompleted,
+    RecoveryEntryFill,
+    RecoveryOrder,
+    RecoverySnapshotLoaded,
+    RecoveryView,
+    RiskLimitTriggered,
+    RiskMode,
+    Side,
+)
+from algo_bot.strategies.mastermind.snapshot import SnapshotError
+from algo_bot.strategies.mastermind.state_machine import (
+    MastermindStateMachine,
+    TransitionResult,
+)
+
+__all__ = [
+    "AccountEquityUpdated",
+    "AddonTriggerPolicy",
+    "BarClosed",
+    "CloseReason",
+    "CloseRequested",
+    "DomainEvent",
+    "DomainIntent",
+    "FundingApplied",
+    "MastermindConfig",
+    "MastermindStateMachine",
+    "OrderAccepted",
+    "OrderCanceled",
+    "OrderFilled",
+    "OrderLifecycle",
+    "OrderPartiallyFilled",
+    "OrderRejected",
+    "OrderRole",
+    "OrderSubmitted",
+    "OrderTimedOut",
+    "PositionBuild",
+    "PositionChanged",
+    "PositionClosed",
+    "ReconciledOrder",
+    "ReconciliationCompleted",
+    "RecoveryEntryFill",
+    "RecoveryOrder",
+    "RecoverySnapshotLoaded",
+    "RecoveryView",
+    "RiskLimitTriggered",
+    "RiskMode",
+    "Side",
+    "SnapshotError",
+    "TransitionResult",
+]

@@ -17,11 +17,58 @@ Sekcje na każdą wersję:
 
 ## [Unreleased]
 
+### Added (Phase 2 MR-Session 3 Beta — P1–P9 complete, 2026-07-13)
+- **Executable MMS v2 domain:** frozen specification, pure engine-independent
+  `MastermindStateMachine`, deterministic identifiers, transition invariants, durable
+  snapshots/outbox, idempotency and fail-safe recovery for late or unattributed fills.
+- **Nautilus migration PoCs and adapters:** causal timestamp/execution probe, NETTING OMS
+  probe with virtual base/add-on legs, Tier-1 legacy compatibility/equivalence adapter, and
+  thin PyO3 `NautilusMastermindStrategy` wrapper with explicitly profiled smoke execution.
+- **Auditable results:** versioned `BacktestResult` with engine/source/cost eligibility,
+  tables for equity/trades/orders/fills/positions/funding, hashes and round-trip validation.
+- **Frozen development-only P9 benchmark:** preregistered 2 × 6 matrix on BTCUSDT H1,
+  native commissions/funding/slippage ledger, holdout boundary, 22 invariant checks per run
+  and frozen ablation contrasts. The completed suite produced **12/12 runs, 264/264 passed
+  invariant checks and 22 ablation rows**. Full report:
+  `docs/experiments/mms-v2-beta-results.md`.
+
+### Changed (Phase 2 MR-Session 3 Beta — final decision, 2026-07-14)
+- **Decision: `ITERATE BETA`.** All P9 results remain unconditionally
+  `SMOKE_ONLY / NOT_ELIGIBLE`; they are descriptive mechanics evidence, not a ranking or
+  profitability claim. MR-Session 4 is blocked until Binance Close-All parity,
+  mark-price/order-book or equivalent fill/cost evidence, M5/M10 fidelity and the exact
+  multi-instrument scope are resolved and preregistered. Holdout remains unread.
+- `README`, ROADMAP, ADR-014, the engine-migration concept and docs index now point to the
+  final P9 evidence and replace the earlier unconditional Session-4 schedule.
+
+### Added (Phase 2 MR-Session 3 Beta — P0/Beta 0, 2026-07-13)
+- **Python 3.12 + `uv` runtime:** `.python-version` pins CPython 3.12.13;
+  `uv==0.11.28` is enforced in `pyproject.toml`; `uv.lock` is the authoritative lock and
+  `requirements.txt` is now a generated compatibility export. The primary Conda
+  `environment.yml` was removed after the wheel smoke test made the fallback unnecessary.
+- **Pinned engine dependencies:** `nautilus_trader==1.230.0`, `TA-Lib==0.7.0`, and the
+  legacy baseline `backtesting==0.6.5`. Runtime regressions assert the exact versions and
+  execute a C-backed TA-Lib SMA, rather than checking imports only.
+- **P0 sweep-config guard:** `load_space_from_any` now rejects non-mapping random parameter
+  specs while loading. A missing YAML comment marker can no longer survive until sampling;
+  repository-wide config and malformed-fixture tests pin the behavior.
+
+### Changed (Phase 2 MR-Session 3 Beta — P0/Beta 0, 2026-07-13)
+- `Makefile` setup/check/CLI targets and CI now run through locked `uv`; CI pins Ubuntu
+  22.04, Python 3.12.13, uv 0.11.28, and the official setup action. Ruff targets `py312`,
+  mypy checks Python 3.12, and the pre-commit Ruff hook matches the lock.
+- Full local hard gate passed on the new runtime: **282 passed, 1 skipped**. The P0 baseline
+  immediately before migration also passed on Python 3.11: **280 passed, 1 skipped**.
+- Corrected `mr_b3.yaml`'s accidental `git#` first line and synchronized the Alpha docs:
+  nine decisions, pinned legacy wording, native Nautilus costs, VectorBT callback capability
+  without a live path, one add-on with trigger A/B, the positions link, and
+  “author-claimed prop track record”.
+
 ### Added (Phase 2 MR-Session 3 Alpha — Engine migration ADR, 2026-07-13)
 - **ADR-014 `docs/adr/014-engine-migration-nautilus.md`** (English, format ADR-011) — adopt
   `nautilus_trader` as the primary engine for event-driven / state-machine strategies,
-  **coexisting in parallel** with `backtesting.py` (retained as legacy, sacred infrastructure
-  for single-position baselines). Motivation: MR-Session 2's bare-core failure did not test
+  **coexisting in parallel** with `backtesting.py` (retained as a pinned legacy baseline
+  for single-position strategies). Motivation: MR-Session 2's bare-core failure did not test
   the deferred MMS sizing layer (pyramiding + sequential leverage), which is a state machine
   above single positions that `backtesting.py` cannot express cleanly; migration is also
   justified independently as a capability upgrade (backtest-live parity, multi-TF, portfolio)
@@ -52,7 +99,8 @@ Sekcje na każdą wersję:
   constraint:** repo Python 3.11 → **≥3.12** (nautilus requirement; CPython+`uv` recommended,
   conda not officially supported) as Beta 0. **MMS math fix:** pyramiding is **one** add-on x1
   (two alternative triggers), total x2 — not "two add-ons" (x1+x1+x1=x3 was contradictory);
-  sequential leverage binary x1↔x0.1. **Zero code.**
+  sequential leverage binary x1↔x0.1. The confirming-candle and Stochastic paths are trigger
+  A/B policies for the same single add-on, not add-on #1/#2. **Zero code.**
 - **`docs/concepts/engine-migration-strategy.md`** (English, DRAFT) — user-facing overview:
   why we migrate, what is not changing (backward-compat depth), how the two engines coexist
   (native lane + compat lane), and the migration timeline milestones (Alpha done → Beta PoC →
