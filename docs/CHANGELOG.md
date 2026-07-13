@@ -25,22 +25,34 @@ Sekcje na każdą wersję:
   the deferred MMS sizing layer (pyramiding + sequential leverage), which is a state machine
   above single positions that `backtesting.py` cannot express cleanly; migration is also
   justified independently as a capability upgrade (backtest-live parity, multi-TF, portfolio)
-  for future event-driven candidates. Eight decisions formalised with options + trade-offs:
+  for future event-driven candidates. Nine decisions formalised with options + trade-offs:
   (1) **two-tier adapter** — a Tier-1 compat shim (`on_bar`→nautilus, for legacy strategies +
-  cross-engine equivalence testing) plus **native** nautilus strategies for full control
-  (`mean_reversion_bb_stoch` v2 is native, not adapter-hosted, because `on_bar(df)->Signal`
-  cannot express pyramiding); (2) coexistence dispatch by base class + `__engine__` opt-in +
-  `--engine` CLI override; (3) **M5 data deferred** — the deferred edge's triggers are
-  H1-native (fidelity, not capability), v2 PoC runs on H1; (4) `StrategyBase` frozen (v2 is
-  native, so it does not evolve); (5) adapter preserves the `run_backtest` →
-  `(stats, equity, trades)` contract so WF/sweep/microstructure are unchanged — with an
-  honest caveat that the ADR-011 single-position overlay needs a **multi-leg extension** for
-  pyramided trades (approximate net-position costing for the PoC, exact costing deferred);
-  (6) staged completion criteria (v2 native end-to-end → full-MMS go/no-go); (7) bailout
-  tripwires — time (>8h/>12h on adapter) **and** capability (env conflict at Task 0;
-  equivalence-tolerance failure), with `vectorbt` explicitly **not** a pyramiding fallback
-  (vectorized ≠ across-trade state machine); (8) legacy baselines frozen on `backtesting.py`
-  forever. Supersedes the migration note in ADR-005 (triggers now activated). **Zero code.**
+  cross-engine equivalence testing) plus **native** strategies where the MMS logic is a
+  **pure `MastermindStateMachine`** (no nautilus imports, `pytest`-tested) wrapped by a thin
+  `NautilusMastermindStrategy` — a library breaking change lands on the wrapper, not the edge
+  logic; (2) coexistence dispatch by base class + `__engine__` opt-in + `--engine` CLI
+  override; (3) **M5 data deferred** — the deferred edge's triggers are H1-native (fidelity,
+  not capability), v2 PoC runs on H1; (4) `StrategyBase` frozen (v2 is native, so it does not
+  evolve); (5) shared result **format** `(stats, equity, trades)` (WF/sweep unchanged) but
+  engine-specific cost **method** — legacy keeps the ADR-011 overlay, **nautilus uses native
+  fills/commissions/funding** (multi-leg pyramided turnover costed natively; approximate
+  net-position costing only for the Beta smoke test, never for eligibility); native result is
+  a richer `BacktestResult` (orders/fills/positions/`engine_version`/hashes) behind the tuple
+  facade; (6) staged completion with a **Beta 0 runtime step** first (v2 native end-to-end →
+  full-MMS go/no-go); (7) bailout tripwires — a runtime/env conflict is a **runtime-migration
+  task** (Python 3.12, `uv`, or container), *not* a custom-engine trigger; time (>8h/>12h) and
+  trust (equivalence tolerance) tripwires beyond that; `vectorbt` is not the pyramiding
+  fallback (it *can* via `from_order_func` callbacks, but less readably and with **no live
+  path**); (8) `backtesting.py` **retained as a pinned legacy baseline**
+  (tag/lockfile/snapshot/fixtures/container), supported through the migration, retirement a
+  separate ADR (softened from "forever/sacred"); (9) **position model** — virtual base/add-on
+  legs over a NETTING venue position with reduce-only conditional stops, given the Binance
+  adapter's constraints (no bracket orders; `reduce_only` disabled in Hedge Mode), validated
+  in the PoC. Supersedes the migration note in ADR-005 (triggers activated). **Runtime
+  constraint:** repo Python 3.11 → **≥3.12** (nautilus requirement; CPython+`uv` recommended,
+  conda not officially supported) as Beta 0. **MMS math fix:** pyramiding is **one** add-on x1
+  (two alternative triggers), total x2 — not "two add-ons" (x1+x1+x1=x3 was contradictory);
+  sequential leverage binary x1↔x0.1. **Zero code.**
 - **`docs/concepts/engine-migration-strategy.md`** (English, DRAFT) — user-facing overview:
   why we migrate, what is not changing (backward-compat depth), how the two engines coexist
   (native lane + compat lane), and the migration timeline milestones (Alpha done → Beta PoC →

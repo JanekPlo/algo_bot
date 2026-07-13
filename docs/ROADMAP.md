@@ -148,14 +148,22 @@ Faza 5: Production na VPS              → 1-2 tyg.
   event-driven candidates). Plus `docs/concepts/engine-migration-strategy.md` (DRAFT).
   Zero code. (This session.)
 - **MR-Session 3 Beta (nautilus PoC + `mean_reversion_bb_stoch` v2) — NEXT** —
-  env setup (make-or-break: `nautilus_trader` + `backtesting.py` + TA-Lib coexist in
-  one conda env — bailout tripwire per ADR-014 Decision 7); Tier-1 compat adapter
-  (`algo_bot/engine/nautilus_adapter.py`, strict-on-new); **v2 native** on nautilus —
-  base entry (H1 armed→reaction as v1) + **pyramiding** (base x1 + ≤2 add-ons x1,
-  total cap x2 / 3% equity, add-on SL wick-pair ≤1% — [mms/02](references/mms/02-position-management-filters.md))
-  + **binary sequential leverage** (first full 2% SL → x0.1 scout → first TP → x1 —
-  [mms/03](references/mms/03-stop-loss-sequential.md)); mini-benchmark sweep
-  (1 symbol × 1-2y × 10-20 samples) as direction check. **On H1 only** (M5 deferred).
+  **Beta 0 (runtime, hard gate first):** bump to **Python 3.12**, pin a stable
+  `nautilus_trader` version, decide **conda-3.12 vs `uv`** (Nautilus: Python ≥3.12,
+  CPython+uv recommended, conda not officially supported), `make check` zielony na
+  nowym runtime, zapis `engine`+`engine_version` per wynik. Env conflict = zadanie
+  migracji runtime (albo osobny env/container), **nie** trigger custom-engine
+  (ADR-014 Decision 7). Potem: Tier-1 compat adapter + cross-engine equivalence test;
+  **v2 = pure `MastermindStateMachine` (bez importów nautilusa) + cienki
+  `NautilusMastermindStrategy`** (ADR-014 Decision 1); logika: base entry
+  (H1 armed→reaction jak v1) + **pyramiding** (base x1 + **jedna** dokładka x1 =
+  x2 total; **dwa alternatywne triggery**: świeca potwierdzająca **lub** Stoch %K&%D
+  cross; add-on SL wick-pair ≤1%; cap 3% equity — [mms/02](references/mms/02-position-management-filters.md))
+  + **binary sequential leverage** (pierwszy pełny 2% SL → x0.1 scout → pierwszy TP → x1 —
+  [mms/03](references/mms/03-stop-loss-sequential.md)); position model = **virtual legs
+  over NETTING + reduce-only conditional stops** (ADR-014 Decision 9, do walidacji w PoC).
+  Mini-benchmark sweep (1 symbol × 1-2y × 10-20 sampli, approx costing OK tylko tu).
+  **Na H1** (M5 deferred). State-machine table + open interpretation points → przed kodem.
   Decision post-PoC: commit / iterate adapter / bailout.
 - **MR-Session 4 (full v2 sweep on nautilus)** — full 6-symbol × full-history sweep of
   v2, run **unconditionally** (first real test of the *claimed* sizing-layer edge, not
@@ -493,7 +501,7 @@ Drobne znaleziska z Sesji 1 (2026-06-05) audytu strategii i configi. Żadne nie 
 ## Po MVP — kierunki rozwoju
 
 - **Portfolio z 2-3 strategii nieskorelowanych** (np. trend-following BTC + mean-reversion ETH + funding arb)
-- **Migracja silnika backtestowego**: ~~decyzja po MVP~~ → **rozpoczęta w Fazie 2** ([ADR-014](adr/014-engine-migration-nautilus.md), 2026-07-13): `nautilus_trader` jako primary engine dla strategii event-driven / state-machine, parallel coexistence z `backtesting.py`. `vectorbt` (super szybkie, multi-asset, ale wektorowe — brak state machine) pozostaje kandydatem na *sweep-speed* po MVP, nie na pyramiding
+- **Migracja silnika backtestowego**: ~~decyzja po MVP~~ → **rozpoczęta w Fazie 2** ([ADR-014](adr/014-engine-migration-nautilus.md), 2026-07-13): `nautilus_trader` jako primary engine dla strategii event-driven / state-machine, parallel coexistence z `backtesting.py`. `vectorbt` (super szybkie, multi-asset; state machine da się przez callbacki `from_order_func`, ale mniej czytelnie i **bez live path**) pozostaje kandydatem na *sweep-speed* po MVP, nie na pyramiding ani backtest-live parity
 - **Live execution na wielu giełdach**: Bybit, OKX, dYdX (już jest `binance_ws.py` i `bybit_testnet.py` scaffolding)
 - **Smart order routing**: TWAP/VWAP, iceberg orders dla większego kapitału
 - **Research pipeline**: notebooki + literatura + zlecone strategie z papers, np. funding arb, basis trade

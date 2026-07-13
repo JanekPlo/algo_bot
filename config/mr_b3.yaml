@@ -1,4 +1,4 @@
-# Implied timeframe: 15m (mr_b3 = MR FAST/agile; patrz docs/reference/modules/strategy-mean-reversion-bb-stoch.md)
+git# Implied timeframe: 15m (mr_b3 = MR FAST/agile; patrz docs/reference/modules/strategy-mean-reversion-bb-stoch.md)
 # Oś timescale: b3 fast (15m) vs b1/b2 medium (1h). Krótsze okna BB, szybszy
 # Stoch, wąskie SL. Bazowe wejście bb_only; więcej dotknięć na krótszym TF.
 __implied_tf: "15m"
