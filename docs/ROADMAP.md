@@ -134,12 +134,37 @@ Faza 5: Production na VPS              → 1-2 tyg.
   - [x] Verdict: **bare core FAILS** — 0/180 eligible; best raw Sharpe −0.291;
     169/180 post-cost curves reach equity ≤ 0 and best valid Sharpe_post is −0.497.
     This does not test/falsify the deferred MMS pyramiding + sequential-sizing edge.
-- **MR-Session 3 (Pyramiding ADR + engine decision)** — do **not** run WF on the
-  failed bare core. Specify the MMS add-on/sequential-leverage state machine and
-  compare engine-migration/prototype cost against an immediate candidate pivot.
-  If migration is declined, formalise the implemented MR-line no-go and pivot.
-- **MR-Session 4+ (conditional WF → MC → Stress → ADR go/no-go)** — only for a
-  future implementation that first demonstrates in-sample eligibility.
+- **MR-Session 3 Alpha (Engine migration ADR) — DONE 2026-07-13** — do **not** run
+  WF on the failed bare core. [ADR-014](adr/014-engine-migration-nautilus.md):
+  adopt `nautilus_trader` as the primary engine for event-driven / state-machine
+  strategies, **coexisting in parallel** with `backtesting.py` (legacy, sacred infra
+  for single-position baselines). Eight decisions formalised: two-tier adapter
+  (compat shim + native), coexistence dispatch, **M5 deferred** (deferred edge is
+  H1-native — fidelity not capability), `StrategyBase` frozen, adapter returns the
+  `(stats, equity, trades)` contract (WF/sweep/microstructure unchanged; multi-leg
+  microstructure extension flagged), staged completion criteria, time+capability
+  bailout tripwires (vectorbt is *not* a pyramiding fallback), legacy frozen forever.
+  Migration justified independently of the MMS rescue (capability upgrade for future
+  event-driven candidates). Plus `docs/concepts/engine-migration-strategy.md` (DRAFT).
+  Zero code. (This session.)
+- **MR-Session 3 Beta (nautilus PoC + `mean_reversion_bb_stoch` v2) — NEXT** —
+  env setup (make-or-break: `nautilus_trader` + `backtesting.py` + TA-Lib coexist in
+  one conda env — bailout tripwire per ADR-014 Decision 7); Tier-1 compat adapter
+  (`algo_bot/engine/nautilus_adapter.py`, strict-on-new); **v2 native** on nautilus —
+  base entry (H1 armed→reaction as v1) + **pyramiding** (base x1 + ≤2 add-ons x1,
+  total cap x2 / 3% equity, add-on SL wick-pair ≤1% — [mms/02](references/mms/02-position-management-filters.md))
+  + **binary sequential leverage** (first full 2% SL → x0.1 scout → first TP → x1 —
+  [mms/03](references/mms/03-stop-loss-sequential.md)); mini-benchmark sweep
+  (1 symbol × 1-2y × 10-20 samples) as direction check. **On H1 only** (M5 deferred).
+  Decision post-PoC: commit / iterate adapter / bailout.
+- **MR-Session 4 (full v2 sweep on nautilus)** — full 6-symbol × full-history sweep of
+  v2, run **unconditionally** (first real test of the *claimed* sizing-layer edge, not
+  the failed bare core; Janek's call, ADR-014 Decision 6).
+- **MR-Session 5 (conditional WF → MC → Stress → ADR go/no-go)** — full-MMS-system
+  verdict (analogue of the bghtrend Session-8 go/no-go), **gated** on the Session-4
+  sweep clearing in-sample eligibility (don't run the expensive robustness layer on a
+  strategy that has not shown edge). If v2 fails, formalise the implemented MR-line
+  no-go and pivot.
 
 ---
 
@@ -315,6 +340,7 @@ Faza 5: Production na VPS              → 1-2 tyg.
 | ADR-011 | 3 | Microstructure adjustments — gdzie i jak |
 | ADR-012 | Pivot A (2026-07-05) | MVP **no-go** dla bghtrend (nie "go" — sweep bez edge'u); kept-as-baseline |
 | ADR-013 | Pivot A (2026-07-05) | WF-eligibility thresholds — pre-WF filter `WF_ELIGIBILITY_THRESHOLDS` (przeniesienie z pierwotnego "diagnostics package"; diagnostics wróci jako osobny ADR w MR-cyklu jeśli wydzielimy `algo_bot.diagnostics`) |
+| ADR-014 | MR-Session 3 Alpha (2026-07-13) | Engine migration to `nautilus_trader` — parallel coexistence with `backtesting.py`; primary engine for event-driven / state-machine strategies (first user: `mean_reversion_bb_stoch` v2 with pyramiding + sequential leverage); legacy baselines frozen on `backtesting.py` |
 
 ### Kryteria sukcesu MVP (z ADR-009 `MVP_THRESHOLDS`, hardcoded w `algo_bot.engine.walkforward`)
 
@@ -467,7 +493,7 @@ Drobne znaleziska z Sesji 1 (2026-06-05) audytu strategii i configi. Żadne nie 
 ## Po MVP — kierunki rozwoju
 
 - **Portfolio z 2-3 strategii nieskorelowanych** (np. trend-following BTC + mean-reversion ETH + funding arb)
-- **Migracja silnika backtestowego**: backtesting.py jest wygodne, ale wolne. Kandydaci: `vectorbt` (super szybkie, multi-asset), `nautilus_trader` (event-driven, production-grade) — decyzja po MVP
+- **Migracja silnika backtestowego**: ~~decyzja po MVP~~ → **rozpoczęta w Fazie 2** ([ADR-014](adr/014-engine-migration-nautilus.md), 2026-07-13): `nautilus_trader` jako primary engine dla strategii event-driven / state-machine, parallel coexistence z `backtesting.py`. `vectorbt` (super szybkie, multi-asset, ale wektorowe — brak state machine) pozostaje kandydatem na *sweep-speed* po MVP, nie na pyramiding
 - **Live execution na wielu giełdach**: Bybit, OKX, dYdX (już jest `binance_ws.py` i `bybit_testnet.py` scaffolding)
 - **Smart order routing**: TWAP/VWAP, iceberg orders dla większego kapitału
 - **Research pipeline**: notebooki + literatura + zlecone strategie z papers, np. funding arb, basis trade

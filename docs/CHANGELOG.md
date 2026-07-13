@@ -17,6 +17,43 @@ Sekcje na każdą wersję:
 
 ## [Unreleased]
 
+### Added (Phase 2 MR-Session 3 Alpha — Engine migration ADR, 2026-07-13)
+- **ADR-014 `docs/adr/014-engine-migration-nautilus.md`** (English, format ADR-011) — adopt
+  `nautilus_trader` as the primary engine for event-driven / state-machine strategies,
+  **coexisting in parallel** with `backtesting.py` (retained as legacy, sacred infrastructure
+  for single-position baselines). Motivation: MR-Session 2's bare-core failure did not test
+  the deferred MMS sizing layer (pyramiding + sequential leverage), which is a state machine
+  above single positions that `backtesting.py` cannot express cleanly; migration is also
+  justified independently as a capability upgrade (backtest-live parity, multi-TF, portfolio)
+  for future event-driven candidates. Eight decisions formalised with options + trade-offs:
+  (1) **two-tier adapter** — a Tier-1 compat shim (`on_bar`→nautilus, for legacy strategies +
+  cross-engine equivalence testing) plus **native** nautilus strategies for full control
+  (`mean_reversion_bb_stoch` v2 is native, not adapter-hosted, because `on_bar(df)->Signal`
+  cannot express pyramiding); (2) coexistence dispatch by base class + `__engine__` opt-in +
+  `--engine` CLI override; (3) **M5 data deferred** — the deferred edge's triggers are
+  H1-native (fidelity, not capability), v2 PoC runs on H1; (4) `StrategyBase` frozen (v2 is
+  native, so it does not evolve); (5) adapter preserves the `run_backtest` →
+  `(stats, equity, trades)` contract so WF/sweep/microstructure are unchanged — with an
+  honest caveat that the ADR-011 single-position overlay needs a **multi-leg extension** for
+  pyramided trades (approximate net-position costing for the PoC, exact costing deferred);
+  (6) staged completion criteria (v2 native end-to-end → full-MMS go/no-go); (7) bailout
+  tripwires — time (>8h/>12h on adapter) **and** capability (env conflict at Task 0;
+  equivalence-tolerance failure), with `vectorbt` explicitly **not** a pyramiding fallback
+  (vectorized ≠ across-trade state machine); (8) legacy baselines frozen on `backtesting.py`
+  forever. Supersedes the migration note in ADR-005 (triggers now activated). **Zero code.**
+- **`docs/concepts/engine-migration-strategy.md`** (English, DRAFT) — user-facing overview:
+  why we migrate, what is not changing (backward-compat depth), how the two engines coexist
+  (native lane + compat lane), and the migration timeline milestones (Alpha done → Beta PoC →
+  Session-4 full sweep → Session-5 go/no-go). Expanded in later sessions.
+
+### Changed (Phase 2 MR-Session 3 Alpha, 2026-07-13)
+- **`docs/ROADMAP.md`** — MR-Session 3 split into Alpha (this session, done) + Beta (nautilus
+  PoC + v2, next), with MR-Session 4 (unconditional full v2 sweep) and MR-Session 5
+  (conditional WF/MC/stress + full-MMS go/no-go). Engine migration recorded as an active
+  Phase-2 strand; ADR planning table gains ADR-014; the "Po MVP" engine-migration note updated
+  (nautilus migration started early in Phase 2; vectorbt reframed as a post-MVP sweep-speed
+  candidate, not a pyramiding solution). `docs/adr/README.md` index gains the ADR-014 row.
+
 ### Added (Phase 2 MR-Session 2 — Sweep, 2026-07-13)
 - **`notebooks/04_mr_sweep_review.ipynb`** — dedicated mean-reversion sweep review with a prior recorded before loading results; heuristics A–E, imported `WF_ELIGIBILITY_THRESHOLDS`, MR-specific b2 `entry_mode` split (F), and calendar-year top-3 regime robustness (G). The executed notebook audits post-cost equity positivity before accepting log-return metrics and exports the evidence record.
 - **`results/experiments/mr_sweep_review.json`** — six matched-TF groups × 30 samples (180 runs): group summaries, raw top-10 params/clustering, cross-symbol consistency, b2 entry-mode split, eligibility survivors and per-year regime tables. Verdict: **bare core FAILS** — 0/180 eligible, global best raw Sharpe −0.291, 169/180 post-cost curves reach equity ≤ 0, best valid Sharpe_post −0.497.
