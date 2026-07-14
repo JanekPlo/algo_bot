@@ -312,6 +312,20 @@ HEDGING is distinct from Binance account Hedge Mode, and the rejected hypothesis
 account in one-way/NETTING mode. It was rejected because its virtual position accounting
 diverged from a whole-net Close-All fill, not because `reduce_only` was unavailable.
 
+#### Bybit note (amended by [ADR-015](015-exchange-migration-bybit.md), 2026-07-14)
+
+The §9 mapping above is **Binance-specific** (the Binance adapter constraints: conditional
+stops yes, bracket orders no, `reduce_only` disabled in Binance account Hedge Mode). Forward
+work migrates the venue to **Bybit v5 linear USDT perpetuals** (ADR-015). The position-model
+selection carries over cleanly: Bybit's **system-default position mode is One-Way / NETTING**
+(`positionIdx=0`), which is exactly the account mode OMS-A_NETTING_VIRTUAL_LEGS_V1 assumes,
+and Bybit **supports `reduce_only`** without the Binance Hedge-Mode restriction — so the
+virtual-legs-over-NETTING + reduce-only-stops design holds. Close-All parity on Bybit is
+realised via the sequential **cancel-all-orders → market `reduce_only` close** flow
+(`live_bybit.close_all_positions()`), not the Binance STOP_MARKET `closePosition` primitive;
+the CCXT live path is used now, with the native `nautilus_trader.adapters.bybit` reserved for
+the future backtest lane. Fee/funding constants move to per-exchange config (ADR-015 §5).
+
 #### P4 evidence record (2026-07-13)
 
 The real pinned `BacktestEngine` ran base BUY `1.000`, add-on BUY `1.000`, and a whole-net

@@ -181,6 +181,8 @@ module = [
     "algo_bot.engine.backtest_result",  # MR-Session Beta P8 versioned result artifact
     "algo_bot.engine.mms_beta_data",  # MR-Session Beta P9 development-only data boundary
     "algo_bot.engine.mms_beta_benchmark",  # MR-Session Beta P9 frozen ablation runner
+    "algo_bot.engine.exchanges.bybit_adapter",  # ADR-015 Bybit v5 CCXT wrapper
+    "algo_bot.live.live_bybit",  # ADR-015 Bybit live runner (testnet-first)
 ]
 disallow_untyped_defs = true
 disallow_incomplete_defs = true

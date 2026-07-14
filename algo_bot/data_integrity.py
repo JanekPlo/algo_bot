@@ -43,6 +43,9 @@ TF_MS: dict[str, int] = {
     "1m": 60_000,
     "3m": 180_000,
     "5m": 300_000,
+    # 10m nie jest natywnym interwałem giełd — powstaje offline z 5m (ADR-015,
+    # process_data.aggregate_processed). Ujęty tu, by integrity check obejmował M10.
+    "10m": 600_000,
     "15m": 900_000,
     "30m": 1_800_000,
     "1h": 3_600_000,

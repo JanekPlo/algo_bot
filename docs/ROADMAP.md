@@ -176,6 +176,19 @@ Faza 5: Production na VPS              → 1-2 tyg.
   Raport: [mms-v2-beta-results.md](experiments/mms-v2-beta-results.md).
   Decyzja post-PoC: **iterate Beta** — mechanika działa, lecz nie spełnia jeszcze
   warunków pełnego sweepu.
+- **MR-Session 3 Beta Iteration 1 (Exchange migration Binance→Bybit) — DONE 2026-07-14** —
+  pierwszy z 4 blockerów przed Session 4 rozwiązany: **venue = Bybit** (Binance nieaktywny
+  w UE dla Janka; Bybit account aktywny + prior MMS na Bybit). [ADR-015](adr/015-exchange-migration-bybit.md):
+  Bybit v5 linear USDT perp dla pracy forward, Binance CSV zostają jako pinned reference.
+  Dostarczone: `--exchange {binance,bybit}` w fetch/funding/process + backtest/sweep/walkforward
+  (per-exchange `EXCHANGE_DEFAULTS`: bybit taker 0.00055), CCXT `bybit_adapter.py` (One-Way,
+  reduce_only, TP/SL trading-stop), testnet-first `algo_bot/live/live_bybit.py` z
+  `close_all_positions()` (Close-All parity: cancel-all → market reduce-only close), M10
+  offline z M5. Native `nautilus_trader.adapters.bybit` zweryfikowany (dostępny w 1.230.0,
+  zarezerwowany dla backtest lane). ADR-014 §9 / ADR-011 / ADR-005 uzupełnione notami Bybit.
+  Dane historyczne fetchowane operator-side na VPS (Bybit linear inception ~2020-03-25).
+  **Iteration 2 next:** mark-price/native fills, M5/M10 fidelity, doprecyzowanie zakresu
+  instrumentów (BTC + ETH osobno) — pozostałe 3 blockery przed Session 4.
 - **MR-Session 4 (full v2 sweep on nautilus) — BLOCKED / CONDITIONAL** — pełny zakres
   zostanie prerejestrowany dopiero po: rozwiązaniu parytetu Binance Close-All w
   backteście, dostarczeniu mark-price i kwalifikowalnego cost/fill profile,

@@ -15,6 +15,10 @@ from algo_bot.log import get_logger, setup_logging
 logger = get_logger(__name__)
 
 # === Konfiguracja kroków czasowych (ms) ===
+# UWAGA: 10m NIE jest natywnym interwałem żadnej z giełd (Binance/Bybit klines to
+# 1/3/5/15/30/60/120/240... min). M10 powstaje offline przez agregację z M5 —
+# patrz algo_bot/process_data.py (--resample-to). Dlatego 10m NIE jest w choices
+# fetcha (nie da się go pobrać), tylko w mapach czasu procesora danych.
 TF_MS = {
     "1m": 60_000,
     "3m": 180_000,
@@ -26,6 +30,35 @@ TF_MS = {
     "4h": 14_400_000,
     "1d": 86_400_000,
 }
+
+# Giełdy wspierane przez fetch (ADR-015 — migracja Binance→Bybit).
+EXCHANGE_CHOICES = ["binance", "bybit"]
+
+
+def to_market_symbol(symbol_ccxt: str, exchange: str, market: str) -> str:
+    """Mapuje unified symbol ('BTC/USDT') na market-specific symbol danej giełdy.
+
+    Bybit linear USDT perp używa w CCXT notacji z settle-suffixem
+    ('BTC/USDT:USDT'); Binance USDT-M future rozpoznaje 'BTC/USDT' przy
+    ``defaultType=future``. Nazwy plików RAW/PROCESSED zawsze bazują na
+    unified symbolu (bez suffixu) — patrz ``raw_filename``.
+    """
+    if exchange == "bybit" and market in ("future", "swap"):
+        base, quote = symbol_ccxt.split("/")
+        return f"{base}/{quote}:{quote}"
+    return symbol_ccxt
+
+
+def make_exchange(exchange: str, market: str) -> ccxt.Exchange:
+    """Tworzy publiczny (bez kluczy) klient CCXT dla fetchu OHLCV."""
+    default_type = "future" if market == "future" else "spot"
+    if exchange == "binance":
+        return ccxt.binance({"enableRateLimit": True, "options": {"defaultType": default_type}})
+    if exchange == "bybit":
+        # Bybit linear perp = 'swap' w CCXT; spot = 'spot'.
+        bybit_type = "swap" if market == "future" else "spot"
+        return ccxt.bybit({"enableRateLimit": True, "options": {"defaultType": bybit_type}})
+    raise NotImplementedError(f"Nieobsługiwana giełda: {exchange}")
 
 
 # === Utils ===
@@ -48,10 +81,18 @@ def to_ccxt_symbol(sym: str) -> str:
     return f"{s}/USDT"
 
 
-def raw_filename(symbol_ccxt: str, timeframe: str) -> Path:
-    """RAW zapisujemy w legacy formacie: bot_data/raw/BTC_USDT-5m.csv"""
+def raw_filename(symbol_ccxt: str, timeframe: str, exchange: str = "binance") -> Path:
+    """Ścieżka pliku RAW.
+
+    Binance zachowuje legacy format bez prefiksu (``BTC_USDT-5m.csv``) dla
+    wstecznej zgodności z istniejącymi danymi; pozostałe giełdy dostają prefiks
+    (``bybit_BTC_USDT-5m.csv``), żeby dane różnych giełd nie kolidowały.
+    """
     base, quote = symbol_ccxt.split("/")
-    fn = f"{base}_{quote}-{timeframe}.csv"
+    if exchange == "binance":
+        fn = f"{base}_{quote}-{timeframe}.csv"
+    else:
+        fn = f"{exchange}_{base}_{quote}-{timeframe}.csv"
     return Path("bot_data/raw") / fn
 
 
@@ -180,7 +221,9 @@ def _save_append(path: Path, new_df: pd.DataFrame) -> None:
 
 # === Main CLI ===
 def main():
-    ap = argparse.ArgumentParser(description="Pobiera OHLCV do RAW (z resume) - Binance Futures")
+    ap = argparse.ArgumentParser(
+        description="Pobiera OHLCV do RAW (z resume) — Binance/Bybit Futures (ADR-015)"
+    )
     ap.add_argument("symbol", help="np. BTC/USDT, BTC_USDT lub BTCUSDT")
     ap.add_argument("timeframe", choices=list(TF_MS.keys()))
     ap.add_argument("--start", required=True, help="Początek zakresu w UTC, np. 2024-01-01")
@@ -189,7 +232,10 @@ def main():
         "--limit", type=int, default=1000, help="Limit świec na jeden request (domyślnie 1000)"
     )
     ap.add_argument(
-        "--exchange", default="binance", choices=["binance"], help="Na razie wspieramy binance"
+        "--exchange",
+        default="binance",
+        choices=EXCHANGE_CHOICES,
+        help="Giełda źródłowa (binance | bybit). ADR-015.",
     )
     ap.add_argument(
         "--market", default="future", choices=["future", "spot"], help="Typ rynku dla CCXT"
@@ -217,19 +263,15 @@ def main():
         end_dt = pd.to_datetime(args.end, utc=True)
         until_ms = int(end_dt.timestamp() * 1000)
 
-    # CCXT client
-    if args.exchange == "binance":
-        ex = ccxt.binance(
-            {
-                "enableRateLimit": True,
-                "options": {"defaultType": "future" if args.market == "future" else "spot"},
-            }
-        )
-    else:
-        raise NotImplementedError("Tylko binance na tę chwilę")
+    # CCXT client (publiczny — OHLCV nie wymaga kluczy)
+    ex = make_exchange(args.exchange, args.market)
+
+    # Symbol dla wywołań CCXT (Bybit linear wymaga 'BTC/USDT:USDT'); nazwa pliku
+    # bazuje na unified symbolu (bez suffixu).
+    market_symbol = to_market_symbol(symbol, args.exchange, args.market)
 
     # Plik RAW + resume
-    out_path = raw_filename(symbol, tf)
+    out_path = raw_filename(symbol, tf, args.exchange)
     ensure_parent(out_path)
 
     last_in_file = last_ts_from_file(out_path)
@@ -249,7 +291,9 @@ def main():
     buffers: list[pd.DataFrame] = []
     total_rows = 0
     try:
-        for batch in fetch_ohlcv_batches(ex, symbol, tf, since_ms, until_ms, limit=args.limit):
+        for batch in fetch_ohlcv_batches(
+            ex, market_symbol, tf, since_ms, until_ms, limit=args.limit
+        ):
             df = pd.DataFrame(batch, columns=["ts", "Open", "High", "Low", "Close", "Volume"])
             df["datetime"] = pd.to_datetime(df["ts"], unit="ms", utc=True)
             buffers.append(df)

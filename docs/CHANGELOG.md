@@ -17,6 +17,28 @@ Sekcje na każdą wersję:
 
 ## [Unreleased]
 
+### Added (Phase 2 MR-Session 3 Beta Iteration 1 — Exchange migration Binance→Bybit, 2026-07-14)
+- **ADR-015 — venue migration to Bybit.** Forward-only work moves to Bybit v5 linear USDT
+  perpetuals (Binance inactive in the EU for Janek; Bybit account active + MMS prior on Bybit).
+  Binance historical CSVs kept unchanged as a pinned reference baseline. First of four
+  MR-Session-4 blockers resolved. See `docs/adr/015-exchange-migration-bybit.md`.
+- **Per-exchange data pipeline:** `--exchange {binance,bybit}` on `algo-fetch`,
+  `algo-fetch-funding` (Bybit v5 `fetch_funding_rate_history`) and `algo-process`
+  (exchange-prefixed RAW/PROCESSED naming, backward-compatible with legacy Binance files).
+  M10 has no native Bybit kline → offline aggregation from M5 via `algo-process --resample-to 10m`.
+- **Per-exchange cost model:** `EXCHANGE_DEFAULTS` in `backtester.py` (binance taker 0.0004,
+  bybit 0.00055) with a shared `--exchange` flag on `algo-backtest`/`algo-sweep`/`algo-walkforward`
+  that also selects which `<exchange>_*.csv` is loaded. Default `binance` is backward-compatible;
+  explicit `--commission`/`--slip_bps`/`--funding_rate_synthetic` still override.
+- **Bybit CCXT adapter + live runner:** `algo_bot/engine/exchanges/bybit_adapter.py` (One-Way
+  mode, `reduce_only`, TP/SL via v5 position trading-stop; mypy strict) and testnet-first
+  `algo_bot/live/live_bybit.py` with `close_all_positions()` implementing Bybit Close-All
+  parity (sequential cancel-all-orders → market `reduce_only` close, logged, best-effort retry).
+- **`.env.example`** documenting Bybit testnet/mainnet + Binance keys (secrets stay out of git).
+- **Tests:** `tests/test_bybit_adapter.py` (pure `to_market_symbol` unit + opt-in Bybit-testnet
+  smoke, no mocks, auto-skip without keys). Native `nautilus_trader.adapters.bybit` verified
+  available in 1.230.0 (reserved for the future backtest lane).
+
 ### Added (Phase 2 MR-Session 3 Beta — P1–P9 complete, 2026-07-13)
 - **Executable MMS v2 domain:** frozen specification, pure engine-independent
   `MastermindStateMachine`, deterministic identifiers, transition invariants, durable

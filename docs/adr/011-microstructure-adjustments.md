@@ -125,6 +125,12 @@ def load_funding(symbol: str, *, exchange: str = "binance",
 
 8. **Funding default rate — `0.0001` (0.01 % / 8 h).** This is Binance's fixed interest-rate component, the documented baseline around which the variable premium oscillates — an economically grounded default, not a round number. Capped conceptually at ±0.75 %/8 h per Binance; the synthetic path never exceeds the constant, and historical values carry their own (already-capped) magnitudes.
 
+   > **Amended by [ADR-015](015-exchange-migration-bybit.md) (2026-07-14):** the commission
+   > (`0.0004`) and funding defaults here are **Binance-specific**. They are now per-exchange
+   > (`EXCHANGE_DEFAULTS` in `backtester.py`; Bybit taker `0.00055`), selected by the
+   > `--exchange` CLI flag; an explicit `--commission`/`--slip_bps`/`--funding_rate_synthetic`
+   > still overrides. Default `binance` preserves the values documented in this ADR.
+
 9. **Metrics — raw and post side by side (Decision 9a).** `summary.json` gains `_metrics_summary_raw` (engine output, i.e. *including* the exchange commission/taker fee, which has always lived in the engine) and `_metrics_summary_post_microstructure` (raw equity and raw trade PnL minus slippage and funding). The boundary is explicit: the taker **fee is part of "raw"** (it is the engine's `commission`); **slippage and funding are the microstructure overlay**. Walk-forward and sweep aggregate whichever the operator reads; Session 8 reads the spread between the two.
 
 10. **Per-trade breakdown — four columns on `trades.csv` (Decision 10a).** `slip_cost_quote`, `funding_cost_quote`, `pnl_raw`, `pnl_post`. The journal layer (ADR-006 separation) stays the per-trade audit trail; an aggregate `_microstructure_breakdown` (totals + config) also lands in `summary.json`.

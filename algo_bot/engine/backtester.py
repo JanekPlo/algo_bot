@@ -99,7 +99,28 @@ OUT_DIR = os.path.join(PROJECT_ROOT, "results", "backtests")
 # trzymać własne kopie; config.yaml ich NIE definiuje (sekcja backtest: jest
 # informacyjna — patrz docs/reference/config-reference.md).
 DEFAULT_CASH = 1_000_000.0  # >> max(High) BTC — bez warningu fractional trading
-DEFAULT_COMMISSION = 0.0004  # 4 bps = Binance USDT-M taker fee
+DEFAULT_COMMISSION = 0.0004  # 4 bps = Binance USDT-M taker fee (backward-compat default)
+
+# Per-exchange defaults kosztów (ADR-015). CLI --exchange pulluje te wartości
+# automatycznie; jawny --commission / --slip_bps / --funding_rate_synthetic
+# nadal je nadpisuje. Binance zachowuje historyczne wartości (backward-compat).
+#   * commission: taker fee jako fraction (Binance USDT-M 0.04%; Bybit linear
+#     standard non-VIP taker 0.055% — realny per-account przez /v5/account/fee-rate).
+#   * slip_bps: slippage per side w bps (na TOP of fee) — ADR-011.
+#   * funding_rate_synthetic: stały rate per 8h dla synthetic/fallback.
+EXCHANGE_DEFAULTS: dict[str, dict[str, float]] = {
+    "binance": {"commission": 0.0004, "slip_bps": 1.0, "funding_rate_synthetic": 0.0001},
+    "bybit": {"commission": 0.00055, "slip_bps": 1.0, "funding_rate_synthetic": 0.0001},
+}
+DEFAULT_EXCHANGE = "binance"
+
+
+def exchange_defaults(exchange: str) -> dict[str, float]:
+    """Zwraca dict defaultów kosztów dla giełdy (KeyError → nieobsługiwana)."""
+    ex = exchange.lower()
+    if ex not in EXCHANGE_DEFAULTS:
+        raise ValueError(f"Nieobsługiwana giełda: {exchange} (znane: {sorted(EXCHANGE_DEFAULTS)})")
+    return EXCHANGE_DEFAULTS[ex]
 
 
 # ------------------------------
@@ -118,13 +139,13 @@ def ensure_dir(path: str) -> None:
     os.makedirs(path, exist_ok=True)
 
 
-def load_ohlcv_csv(symbol: str, timeframe: str) -> pd.DataFrame:
+def load_ohlcv_csv(symbol: str, timeframe: str, exchange: str = "binance") -> pd.DataFrame:
     """
-    Oczekuje pliku: bot_data/processed/binance_<SYMBOL_BEZ_SLASH>_<TF>.csv
-    np. binance_BTCUSDT_5m.csv
+    Oczekuje pliku: bot_data/processed/<exchange>_<SYMBOL_BEZ_SLASH>_<TF>.csv
+    np. binance_BTCUSDT_5m.csv, bybit_BTCUSDT_15m.csv (ADR-015)
     """
     safe_symbol = symbol.replace("/", "")
-    filename = f"binance_{safe_symbol}_{timeframe}.csv"
+    filename = f"{exchange.lower()}_{safe_symbol}_{timeframe}.csv"
     path = os.path.join(RAW_DIR, filename)
     if not os.path.exists(path):
         raise FileNotFoundError(f"Brak pliku danych: {path}")
@@ -464,6 +485,7 @@ def run_backtest(
     risk_limits: RiskLimits | None = None,
     microstructure: MicrostructureConfig | None = None,
     funding_historical: pd.Series | None = None,
+    exchange: str = "binance",
 ) -> tuple[dict[str, Any], pd.DataFrame, pd.DataFrame]:
     """
     Zwraca: (stats_raw, equity_df, trades_df_exec_adjusted)
@@ -501,7 +523,7 @@ def run_backtest(
         if not isinstance(df.index, pd.DatetimeIndex):
             raise ValueError("Wstrzyknięty DataFrame musi mieć DatetimeIndex")
     else:
-        df = load_ohlcv_csv(symbol, timeframe)
+        df = load_ohlcv_csv(symbol, timeframe, exchange)
     if start:
         df = df[df.index >= pd.to_datetime(start, utc=True)]
     if end:
@@ -609,11 +631,11 @@ def run_backtest(
         fh = funding_historical
         if fh is None and microstructure.funding_source == "historical":
             try:
-                fh = load_funding(symbol)
+                fh = load_funding(symbol, exchange=exchange)
             except FileNotFoundError:
                 logger.warning(
                     "Funding CSV not found — synthetic fallback",
-                    extra={"symbol": symbol},
+                    extra={"symbol": symbol, "exchange": exchange},
                 )
                 fh = None
         funding = resolve_funding(fh, df.index[0], df.index[-1], microstructure)
@@ -674,6 +696,7 @@ def run_backtest_result(
     funding_historical: pd.Series | None = None,
     source_tree: SourceTreeState | None = None,
     repo_root: Path | None = None,
+    exchange: str = "binance",
 ) -> BacktestResult:
     """Run the legacy engine and return the versioned P8 source artifact.
 
@@ -690,7 +713,7 @@ def run_backtest_result(
     evidence, a ``MISSING`` funding component will fail eligibility closed.
     """
 
-    engine_data = load_ohlcv_csv(symbol, timeframe) if data is None else data.copy()
+    engine_data = load_ohlcv_csv(symbol, timeframe, exchange) if data is None else data.copy()
     if start:
         engine_data = engine_data[engine_data.index >= pd.to_datetime(start, utc=True)]
     if end:
@@ -709,7 +732,7 @@ def run_backtest_result(
         and microstructure.funding_source == "historical"
     ):
         with contextlib.suppress(FileNotFoundError):
-            effective_funding = load_funding(symbol)
+            effective_funding = load_funding(symbol, exchange=exchange)
 
     stats, equity, trades = run_backtest(
         symbol=symbol,
@@ -720,6 +743,7 @@ def run_backtest_result(
         commission=commission,
         trade_on_close=trade_on_close,
         data=engine_data,
+        exchange=exchange,
         risk_limits=risk_limits,
         microstructure=microstructure,
         funding_historical=effective_funding,
@@ -901,8 +925,19 @@ def parse_args():
     )
     ap.add_argument("--start", default=None)
     ap.add_argument("--end", default=None)
+    ap.add_argument(
+        "--exchange",
+        default=DEFAULT_EXCHANGE,
+        choices=sorted(EXCHANGE_DEFAULTS),
+        help="Giełda danych + źródło defaultów kosztów (ADR-015). Domyślnie binance.",
+    )
     ap.add_argument("--cash", type=float, default=DEFAULT_CASH)
-    ap.add_argument("--commission", type=float, default=DEFAULT_COMMISSION)
+    ap.add_argument(
+        "--commission",
+        type=float,
+        default=None,
+        help="Taker fee jako fraction. Brak → default per --exchange (binance 0.0004, bybit 0.00055).",
+    )
     ap.add_argument("--trade_on_close", action="store_true")
     ap.add_argument(
         "--unit_scale",
@@ -928,7 +963,7 @@ def parse_args():
         type=float,
         default=None,
         help=(
-            "% equity per trade jako fraction (np. 0.01 = 1%%). Używane przez "
+            "%% equity per trade jako fraction (np. 0.01 = 1%%). Używane przez "
             "position_size helper — strategia musi go zawołać explicit."
         ),
     )
@@ -948,8 +983,8 @@ def parse_args():
     ap.add_argument(
         "--slip_bps",
         type=float,
-        default=1.0,
-        help="Slippage per side w bps, na TOP of fee (--commission). Default 1.0.",
+        default=None,
+        help="Slippage per side w bps, na TOP of fee (--commission). Brak → default per --exchange (1.0).",
     )
     ap.add_argument(
         "--funding_source",
@@ -960,8 +995,8 @@ def parse_args():
     ap.add_argument(
         "--funding_rate_synthetic",
         type=float,
-        default=0.0001,
-        help="Stały funding rate per 8h dla synthetic/fallback (default 0.0001 = 0.01%%).",
+        default=None,
+        help="Stały funding rate per 8h dla synthetic/fallback. Brak → default per --exchange (0.0001).",
     )
     return ap.parse_args()
 
@@ -976,6 +1011,16 @@ def main():
         raise SystemExit(f"Niepoprawny JSON w --params: {e}") from e
 
     rid = run_id(args.strategy, args.symbol, args.timeframe, params)
+
+    # Per-exchange defaults kosztów (ADR-015). Jawny flag nadpisuje; None → default giełdy.
+    ex_defaults = exchange_defaults(args.exchange)
+    commission = args.commission if args.commission is not None else ex_defaults["commission"]
+    slip_bps = args.slip_bps if args.slip_bps is not None else ex_defaults["slip_bps"]
+    funding_rate_synthetic = (
+        args.funding_rate_synthetic
+        if args.funding_rate_synthetic is not None
+        else ex_defaults["funding_rate_synthetic"]
+    )
 
     # Risk limits z CLI (ADR-008) — None gdy żaden próg nie podany
     risk_limits = None
@@ -993,9 +1038,9 @@ def main():
 
     microstructure = MicrostructureConfig(
         enabled=(args.microstructure == "full"),
-        slip_bps=args.slip_bps,
+        slip_bps=slip_bps,
         funding_source=args.funding_source,
-        funding_rate_synthetic=args.funding_rate_synthetic,
+        funding_rate_synthetic=funding_rate_synthetic,
     )
 
     stats, equity, trades = run_backtest(
@@ -1006,11 +1051,12 @@ def main():
         start=args.start,
         end=args.end,
         cash=args.cash,
-        commission=args.commission,
+        commission=commission,
         trade_on_close=args.trade_on_close,
         unit_scale=args.unit_scale,
         risk_limits=risk_limits,
         microstructure=microstructure,
+        exchange=args.exchange,
     )
 
     save_outputs(

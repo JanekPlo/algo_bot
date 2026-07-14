@@ -92,6 +92,11 @@ Kontekst kosztów migracji:
 
 ## Notes
 
+- **Zakres giełdy (historyczny, zaktualizowany).** Ten ADR i wczesne dane zakładały
+  **Binance USDT-M perpetual** jako venue (dane `binance_*.csv`). Dla pracy *forward*
+  venue został zmieniony na **Bybit** ([ADR-015](015-exchange-migration-bybit.md),
+  2026-07-14) — Binance nieaktywny w UE dla Janka, Bybit account aktywny + prior MMS na
+  Bybit. Dane Binance zostają jako pinned reference; nowe dane/adaptery są Bybit-scoped.
 - **Po fazie 4** (live mainnet MVP) zrobimy formalną rewizję — osobny ADR (np. ADR-0XX). Kryteria decyzji o migracji:
   - Czy sweep czas blokuje research (>30 min na sweep)? → migracja na vectorbt
   - Czy multi-asset portfolio jest priorytetem? → migracja na vectorbt lub nautilus

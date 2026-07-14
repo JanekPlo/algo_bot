@@ -26,6 +26,7 @@ Format: lekki, oparty na propozycji [Michael Nygard'a](https://cognitect.com/blo
 | [012](012-mvp-no-go-bghtrend.md) | MVP no-go for `bghtrend_pullback` — kept as historical baseline | Accepted | 2026-07-05 | 2 |
 | [013](013-wf-eligibility-thresholds.md) | WF-eligibility thresholds — pre-WF filter (`WF_ELIGIBILITY_THRESHOLDS`) | Accepted | 2026-07-05 | 2 |
 | [014](014-engine-migration-nautilus.md) | Engine migration to `nautilus_trader` — parallel coexistence with `backtesting.py` | Accepted | 2026-07-13 | 2 |
+| [015](015-exchange-migration-bybit.md) | Exchange migration Binance → Bybit for forward-only work (Binance CSVs kept as reference) | Accepted | 2026-07-14 | 2 |
 
 ## Polityka
 

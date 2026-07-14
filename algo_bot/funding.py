@@ -1,21 +1,27 @@
-"""algo_bot/funding.py — fetcher historycznych funding rates Binance USDT-M perp.
+"""algo_bot/funding.py — fetcher historycznych funding rates perp USDT (Binance/Bybit).
 
-CLI ``algo-fetch-funding`` pobiera funding rate history przez ccxt
-(``/fapi/v1/fundingRate``) i zapisuje do
-``bot_data/processed/binance_<SYMBOL>_funding.csv`` w schemacie ``datetime``
+CLI ``algo-fetch-funding`` pobiera funding rate history przez ccxt i zapisuje do
+``bot_data/processed/<exchange>_<SYMBOL>_funding.csv`` w schemacie ``datetime``
 (UTC) + ``funding_rate``. Konsumowane przez ``data_loader.load_funding`` i
 warstwę microstructure (ADR-011).
 
+Per-giełda źródło (ADR-015):
+    * Binance — implicit endpoint ``/fapi/v1/fundingRate`` (``fapiPublicGetFundingRate``),
+      zwraca ``fundingTime`` + ``fundingRate``.
+    * Bybit — unified ``fetch_funding_rate_history`` (v5 ``/v5/market/funding/history``,
+      linear USDT perp, symbol ``BTC/USDT:USDT``), zwraca ``timestamp`` + ``fundingRate``.
+
 Funding rate jest publiczny (brak API key). Settlement co 8h (00/08/16 UTC) —
-endpoint zwraca rzeczywisty ``fundingTime`` per settlement, więc obsługuje też
-ewentualne off-cycle settlementy Binance.
+endpointy zwracają rzeczywisty timestamp per settlement, więc obsługują też
+ewentualne off-cycle settlementy.
 
 Uruchomienie (w WSL, z zablokowanego środowiska ``uv``):
     uv run --locked algo-fetch-funding --symbol BTC/USDT --start 2019-09-08
-    uv run --locked python -m algo_bot.funding --symbol ETH/USDT --start 2019-11-01
+    uv run --locked algo-fetch-funding --exchange bybit --symbol BTC/USDT --start 2020-03-25
 
 See also:
     docs/adr/011-microstructure-adjustments.md (Decyzja 6/7 — źródło i storage)
+    docs/adr/015-exchange-migration-bybit.md (migracja Binance→Bybit)
     algo_bot/data_loader.py (load_funding — konsument tego pliku)
 """
 
@@ -33,8 +39,11 @@ from algo_bot.log import get_logger, setup_logging
 
 logger = get_logger(__name__)
 
-# Max liczba rekordów per request (limit Binance fapi).
-_LIMIT = 1000
+# Max liczba rekordów per request. Binance fapi = 1000; Bybit v5 funding = 200.
+_LIMIT_BINANCE = 1000
+_LIMIT_BYBIT = 200
+
+EXCHANGE_CHOICES = ["binance", "bybit"]
 
 
 def _to_iso(value: str) -> str:
@@ -44,26 +53,20 @@ def _to_iso(value: str) -> str:
     return value + "T00:00:00Z"
 
 
-def fetch_funding(symbol: str, start: str, end: str | None = None) -> pd.DataFrame:
-    """Pobiera funding history dla symbolu w zakresie ``[start, end]``.
+def _bybit_market_symbol(symbol: str) -> str:
+    """'BTC/USDT' → 'BTC/USDT:USDT' (linear USDT perp w notacji CCXT)."""
+    base, quote = symbol.split("/") if "/" in symbol else (symbol[:-4], symbol[-4:])
+    return f"{base}/{quote}:{quote}"
 
-    Args:
-        symbol: np. ``"BTC/USDT"``.
-        start: ISO date/datetime UTC, np. ``"2019-09-08"``.
-        end: ISO date/datetime UTC; ``None`` → bieżący moment.
 
-    Returns:
-        DataFrame z kolumnami ``datetime`` (UTC) i ``funding_rate``, posortowany,
-        bez duplikatów. Pusty DataFrame gdy brak danych.
-    """
-    ex = ccxt.binance()
+def _fetch_funding_binance(ex: ccxt.Exchange, symbol: str, since: int, end_ms: int) -> list[dict]:
+    """Loop po ``fapiPublicGetFundingRate`` (Binance implicit endpoint)."""
     market = symbol_noslash(symbol)  # 'BTC/USDT' → 'BTCUSDT'
-    since = ex.parse8601(_to_iso(start))
-    end_ms = ex.parse8601(_to_iso(end)) if end else ex.milliseconds()
-
     rows: list[dict] = []
     while since < end_ms:
-        data = ex.fapiPublicGetFundingRate({"symbol": market, "startTime": since, "limit": _LIMIT})
+        data = ex.fapiPublicGetFundingRate(
+            {"symbol": market, "startTime": since, "limit": _LIMIT_BINANCE}
+        )
         if not data:
             break
         for d in data:
@@ -79,9 +82,69 @@ def fetch_funding(symbol: str, start: str, end: str | None = None) -> pd.DataFra
             break
         since = last + 1
         time.sleep(ex.rateLimit / 1000)
+    return rows
+
+
+def _fetch_funding_bybit(ex: ccxt.Exchange, symbol: str, since: int, end_ms: int) -> list[dict]:
+    """Loop po unified ``fetch_funding_rate_history`` (Bybit v5 linear USDT perp)."""
+    market = _bybit_market_symbol(symbol)  # 'BTC/USDT' → 'BTC/USDT:USDT'
+    rows: list[dict] = []
+    while since < end_ms:
+        data = ex.fetch_funding_rate_history(market, since=since, limit=_LIMIT_BYBIT)
+        if not data:
+            break
+        for d in data:
+            ts = int(d["timestamp"])
+            rows.append(
+                {
+                    "datetime": pd.to_datetime(ts, unit="ms", utc=True),
+                    "funding_rate": float(d["fundingRate"]),
+                }
+            )
+        last = int(data[-1]["timestamp"])
+        if last <= since:
+            break
+        since = last + 1
+        time.sleep(ex.rateLimit / 1000)
+    return rows
+
+
+def fetch_funding(
+    symbol: str, start: str, end: str | None = None, exchange: str = "binance"
+) -> pd.DataFrame:
+    """Pobiera funding history dla symbolu w zakresie ``[start, end]``.
+
+    Args:
+        symbol: np. ``"BTC/USDT"``.
+        start: ISO date/datetime UTC, np. ``"2019-09-08"`` (Binance) / ``"2020-03-25"`` (Bybit).
+        end: ISO date/datetime UTC; ``None`` → bieżący moment.
+        exchange: ``"binance"`` (implicit fapi endpoint) lub ``"bybit"``
+            (unified ``fetch_funding_rate_history``).
+
+    Returns:
+        DataFrame z kolumnami ``datetime`` (UTC) i ``funding_rate``, posortowany,
+        bez duplikatów. Pusty DataFrame gdy brak danych.
+    """
+    if exchange == "binance":
+        ex = ccxt.binance({"options": {"defaultType": "future"}})
+    elif exchange == "bybit":
+        ex = ccxt.bybit({"options": {"defaultType": "swap"}})
+    else:
+        raise NotImplementedError(f"Nieobsługiwana giełda funding: {exchange}")
+
+    since = ex.parse8601(_to_iso(start))
+    end_ms = ex.parse8601(_to_iso(end)) if end else ex.milliseconds()
+
+    if exchange == "binance":
+        rows = _fetch_funding_binance(ex, symbol, since, end_ms)
+    else:
+        rows = _fetch_funding_bybit(ex, symbol, since, end_ms)
 
     if not rows:
-        logger.warning("No funding rows fetched", extra={"symbol": symbol, "start": start})
+        logger.warning(
+            "No funding rows fetched",
+            extra={"symbol": symbol, "start": start, "exchange": exchange},
+        )
         return pd.DataFrame(columns=["datetime", "funding_rate"])
 
     df = (
@@ -97,6 +160,7 @@ def fetch_funding(symbol: str, start: str, end: str | None = None) -> pd.DataFra
         "Funding history fetched",
         extra={
             "symbol": symbol,
+            "exchange": exchange,
             "rows": len(df),
             "first": str(df["datetime"].iloc[0]),
             "last": str(df["datetime"].iloc[-1]),
@@ -106,10 +170,13 @@ def fetch_funding(symbol: str, start: str, end: str | None = None) -> pd.DataFra
 
 
 def save_funding(df: pd.DataFrame, symbol: str, exchange: str = "binance") -> Path:
-    """Zapisuje funding DataFrame do bot_data/processed/binance_<SYMBOL>_funding.csv."""
+    """Zapisuje funding DataFrame do bot_data/processed/<exchange>_<SYMBOL>_funding.csv."""
     path = get_funding_path(symbol, exchange)
     df.to_csv(path, index=False)
-    logger.info("Funding saved", extra={"out_path": str(path), "rows": len(df), "symbol": symbol})
+    logger.info(
+        "Funding saved",
+        extra={"out_path": str(path), "rows": len(df), "symbol": symbol, "exchange": exchange},
+    )
     return path
 
 
@@ -117,17 +184,23 @@ def main() -> None:
     """Entry point dla ``algo-fetch-funding``."""
     setup_logging()
     ap = argparse.ArgumentParser(
-        description="algo-fetch-funding — Binance USDT-M funding history (ADR-011)"
+        description="algo-fetch-funding — USDT perp funding history Binance/Bybit (ADR-011/015)"
     )
     ap.add_argument("--symbol", required=True, help="np. BTC/USDT")
     ap.add_argument("--start", required=True, help="YYYY-MM-DD (UTC)")
     ap.add_argument("--end", default=None, help="YYYY-MM-DD (UTC); brak → teraz")
+    ap.add_argument(
+        "--exchange",
+        default="binance",
+        choices=EXCHANGE_CHOICES,
+        help="Giełda źródłowa funding (binance | bybit). ADR-015.",
+    )
     args = ap.parse_args()
 
-    df = fetch_funding(args.symbol, args.start, args.end)
+    df = fetch_funding(args.symbol, args.start, args.end, exchange=args.exchange)
     if df.empty:
-        raise SystemExit(f"Brak danych funding dla {args.symbol} od {args.start}")
-    save_funding(df, args.symbol)
+        raise SystemExit(f"Brak danych funding dla {args.symbol} od {args.start} ({args.exchange})")
+    save_funding(df, args.symbol, exchange=args.exchange)
 
 
 if __name__ == "__main__":

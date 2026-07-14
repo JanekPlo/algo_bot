@@ -53,7 +53,9 @@ except ImportError:
 # używamy istniejącego backtestera jako silnika
 from algo_bot.engine.backtester import (
     DEFAULT_CASH,
-    DEFAULT_COMMISSION,
+    DEFAULT_EXCHANGE,
+    EXCHANGE_DEFAULTS,
+    exchange_defaults,
     run_backtest,
     run_id as make_run_id,
     save_outputs,
@@ -302,8 +304,19 @@ def parse_args():
     ap.add_argument("--seed", type=int, default=42)
 
     # backtest engine params (wspólne) — defaults z backtester.py (single source of truth)
+    ap.add_argument(
+        "--exchange",
+        default=DEFAULT_EXCHANGE,
+        choices=sorted(EXCHANGE_DEFAULTS),
+        help="Giełda danych + źródło defaultów kosztów (ADR-015). Domyślnie binance.",
+    )
     ap.add_argument("--cash", type=float, default=DEFAULT_CASH)
-    ap.add_argument("--commission", type=float, default=DEFAULT_COMMISSION)
+    ap.add_argument(
+        "--commission",
+        type=float,
+        default=None,
+        help="Taker fee jako fraction. Brak → default per --exchange (binance 0.0004, bybit 0.00055).",
+    )
     ap.add_argument("--trade_on_close", action="store_true")
     # Microstructure flags (ADR-011) — wspólne z algo-backtest / algo-walkforward
     ap.add_argument(
@@ -315,8 +328,8 @@ def parse_args():
     ap.add_argument(
         "--slip_bps",
         type=float,
-        default=1.0,
-        help="Slippage per side w bps, na TOP of fee. Default 1.0.",
+        default=None,
+        help="Slippage per side w bps, na TOP of fee. Brak → default per --exchange (1.0).",
     )
     ap.add_argument(
         "--funding_source",
@@ -326,8 +339,8 @@ def parse_args():
     ap.add_argument(
         "--funding_rate_synthetic",
         type=float,
-        default=0.0001,
-        help="Stały funding rate per 8h dla synthetic/fallback (default 0.0001).",
+        default=None,
+        help="Stały funding rate per 8h dla synthetic/fallback. Brak → default per --exchange (0.0001).",
     )
 
     # walk-forward (opcjonalnie)
@@ -394,12 +407,22 @@ def main():
 
     StratClass = resolve_strategy_class(args.strategy)
 
+    # Per-exchange defaults kosztów (ADR-015). Jawny flag nadpisuje; None → default giełdy.
+    ex_defaults = exchange_defaults(args.exchange)
+    commission = args.commission if args.commission is not None else ex_defaults["commission"]
+    slip_bps = args.slip_bps if args.slip_bps is not None else ex_defaults["slip_bps"]
+    funding_rate_synthetic = (
+        args.funding_rate_synthetic
+        if args.funding_rate_synthetic is not None
+        else ex_defaults["funding_rate_synthetic"]
+    )
+
     # Microstructure config (ADR-011) — wspólny dla wszystkich runów sweepa.
     microstructure = MicrostructureConfig(
         enabled=(args.microstructure == "full"),
-        slip_bps=args.slip_bps,
+        slip_bps=slip_bps,
         funding_source=args.funding_source,
-        funding_rate_synthetic=args.funding_rate_synthetic,
+        funding_rate_synthetic=funding_rate_synthetic,
     )
 
     # wczytaj/rozszerz przestrzeń parametrów
@@ -458,7 +481,7 @@ def main():
                     PROJECT_ROOT,
                     "bot_data",
                     "processed",
-                    f"binance_{sym.replace('/', '')}_{tf}.csv",
+                    f"{args.exchange}_{sym.replace('/', '')}_{tf}.csv",
                 )
                 df_tmp = (
                     pd.read_csv(data_path, parse_dates=["datetime"])
@@ -489,9 +512,10 @@ def main():
                         start=args.start,
                         end=args.end,
                         cash=args.cash,
-                        commission=args.commission,
+                        commission=commission,
                         trade_on_close=args.trade_on_close,
                         microstructure=microstructure,
+                        exchange=args.exchange,
                     )
                     outdir = save_outputs(
                         rid, sym, tf, args.strategy, p_clean, stats, equity, trades
@@ -521,9 +545,10 @@ def main():
                             start=str(pd.to_datetime(tstart).date()),
                             end=str(pd.to_datetime(tend).date()),
                             cash=args.cash,
-                            commission=args.commission,
+                            commission=commission,
                             trade_on_close=args.trade_on_close,
                             microstructure=microstructure,
+                            exchange=args.exchange,
                         )
                         outdir = save_outputs(
                             rid, sym, tf, args.strategy, p_clean, stats, equity, trades

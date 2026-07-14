@@ -27,7 +27,10 @@ import pandas as pd
 from algo_bot.engine.backtester import (
     DEFAULT_CASH,
     DEFAULT_COMMISSION,
+    DEFAULT_EXCHANGE,
+    EXCHANGE_DEFAULTS,
     PROJECT_ROOT,
+    exchange_defaults,
     load_ohlcv_csv,
     run_backtest,
 )
@@ -428,6 +431,7 @@ def run_fold(
     cash: float = DEFAULT_CASH,
     commission: float = DEFAULT_COMMISSION,
     microstructure: MicrostructureConfig | None = None,
+    exchange: str = "binance",
 ) -> FoldResult:
     """Wykonuje pojedynczy fold przez ``run_backtest`` na test slice.
 
@@ -476,6 +480,7 @@ def run_fold(
         cash=cash,
         commission=commission,
         microstructure=microstructure,
+        exchange=exchange,
     )
 
     # MetricsSummary z OOS equity — preferuj post-microstructure gdy dostępne
@@ -726,6 +731,7 @@ def walk_forward(
     commission: float = DEFAULT_COMMISSION,
     wf_run_id: str | None = None,
     save: bool = True,
+    exchange: str = "binance",
 ) -> WalkForwardReport:
     """Top-level entry: generuje foldy, wykonuje, agreguje, opcjonalnie zapisuje.
 
@@ -749,7 +755,7 @@ def walk_forward(
     t_start = time.time()
 
     if data is None:
-        df = load_ohlcv_csv(symbol, timeframe)
+        df = load_ohlcv_csv(symbol, timeframe, exchange)
     else:
         df = data.copy()
         if not isinstance(df.index, pd.DatetimeIndex):
@@ -794,6 +800,7 @@ def walk_forward(
             cash=cash,
             commission=commission,
             microstructure=config.microstructure,
+            exchange=exchange,
         )
         fold_results.append(fr)
 
@@ -1005,8 +1012,19 @@ def parse_args() -> Any:
         help="próg ostrzeżenia gdy expected_folds < this",
     )
     # Defaults z backtester.py (single source of truth)
+    ap.add_argument(
+        "--exchange",
+        default=DEFAULT_EXCHANGE,
+        choices=sorted(EXCHANGE_DEFAULTS),
+        help="Giełda danych + źródło defaultów kosztów (ADR-015). Domyślnie binance.",
+    )
     ap.add_argument("--cash", type=float, default=DEFAULT_CASH)
-    ap.add_argument("--commission", type=float, default=DEFAULT_COMMISSION)
+    ap.add_argument(
+        "--commission",
+        type=float,
+        default=None,
+        help="Taker fee jako fraction. Brak → default per --exchange (binance 0.0004, bybit 0.00055).",
+    )
     # Risk flags (ADR-008)
     ap.add_argument(
         "--max_dd_pct",
@@ -1047,8 +1065,8 @@ def parse_args() -> Any:
     ap.add_argument(
         "--slip_bps",
         type=float,
-        default=1.0,
-        help="Slippage per side w bps, na TOP of fee. Default 1.0.",
+        default=None,
+        help="Slippage per side w bps, na TOP of fee. Brak → default per --exchange (1.0).",
     )
     ap.add_argument(
         "--funding_source",
@@ -1058,8 +1076,8 @@ def parse_args() -> Any:
     ap.add_argument(
         "--funding_rate_synthetic",
         type=float,
-        default=0.0001,
-        help="Stały funding rate per 8h dla synthetic/fallback (default 0.0001).",
+        default=None,
+        help="Stały funding rate per 8h dla synthetic/fallback. Brak → default per --exchange (0.0001).",
     )
     return ap.parse_args()
 
@@ -1087,11 +1105,21 @@ def main() -> None:
             daily_reset_tz=args.daily_reset_tz,
         )
 
+    # Per-exchange defaults kosztów (ADR-015). Jawny flag nadpisuje; None → default giełdy.
+    ex_defaults = exchange_defaults(args.exchange)
+    commission = args.commission if args.commission is not None else ex_defaults["commission"]
+    slip_bps = args.slip_bps if args.slip_bps is not None else ex_defaults["slip_bps"]
+    funding_rate_synthetic = (
+        args.funding_rate_synthetic
+        if args.funding_rate_synthetic is not None
+        else ex_defaults["funding_rate_synthetic"]
+    )
+
     microstructure = MicrostructureConfig(
         enabled=(args.microstructure == "full"),
-        slip_bps=args.slip_bps,
+        slip_bps=slip_bps,
         funding_source=args.funding_source,
-        funding_rate_synthetic=args.funding_rate_synthetic,
+        funding_rate_synthetic=funding_rate_synthetic,
     )
 
     config = WalkForwardConfig(
@@ -1111,7 +1139,8 @@ def main() -> None:
         params=params,
         config=config,
         cash=args.cash,
-        commission=args.commission,
+        commission=commission,
+        exchange=args.exchange,
     )
 
     print(f"walk-forward done: {report.wf_run_id}")

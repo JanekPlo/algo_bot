@@ -114,12 +114,20 @@ Shared across `algo-backtest`, `algo-sweep`, `algo-walkforward`:
 
 | Flag | Default | Meaning |
 |---|---|---|
+| `--exchange {binance,bybit}` | `binance` | Venue: data prefix + cost defaults ([ADR-015](../../adr/015-exchange-migration-bybit.md)). |
 | `--microstructure {none,full}` | `full` | Master switch. `none` = backward-compatible raw mode. |
-| `--slip_bps FLOAT` | `1.0` | Slippage per side (bps), on top of `--commission`. |
+| `--commission FLOAT` | per `--exchange` | Taker fee (fraction). `binance` 0.0004, `bybit` 0.00055. |
+| `--slip_bps FLOAT` | per `--exchange` (1.0) | Slippage per side (bps), on top of `--commission`. |
 | `--funding_source {historical,synthetic,none}` | `historical` | Funding source. |
-| `--funding_rate_synthetic FLOAT` | `0.0001` | Synthetic / fallback rate per 8 h. |
+| `--funding_rate_synthetic FLOAT` | per `--exchange` (0.0001) | Synthetic / fallback rate per 8 h. |
 
-Funding history is fetched separately: `algo-fetch-funding --symbol BTC/USDT --start 2019-09-08` → `bot_data/processed/binance_BTCUSDT_funding.csv` (`datetime`,`funding_rate`).
+**Exchange-scoped defaults (ADR-015).** Commission / slippage / synthetic funding are
+per-exchange (`EXCHANGE_DEFAULTS` in `backtester.py`), selected by `--exchange`; an explicit
+flag still overrides. The taker-fee, slippage-magnitude and funding-default *justifications*
+in §Funding mechanics and ADR-011 are **Binance-specific** — Bybit uses its own taker
+(0.055 %) and the same slippage/funding-synthetic priors until re-measured.
+
+Funding history is fetched per exchange, e.g. `algo-fetch-funding --exchange bybit --symbol BTC/USDT --start 2020-03-25` → `bot_data/processed/bybit_BTCUSDT_funding.csv` (`datetime`,`funding_rate`); Binance uses `--start 2019-09-08` → `binance_BTCUSDT_funding.csv`.
 
 ## Edge cases
 
