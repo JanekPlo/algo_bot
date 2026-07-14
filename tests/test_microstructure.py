@@ -21,10 +21,17 @@ import pandas as pd
 import pytest
 
 from algo_bot.microstructure import (
+    LeveragedPosition,
+    MaintenanceMarginTier,
+    MarkPriceContext,
     MicrostructureConfig,
     apply_microstructure,
+    first_liquidation_event,
     funding_cost_for_trade,
     funding_flows_for_trade,
+    liquidation_check,
+    liquidation_price,
+    maintenance_margin_tiers_from_bybit,
     resolve_funding,
     settlements_in_window,
     slippage_cost,
@@ -501,3 +508,93 @@ class TestTzHandling:
         assert res.per_trade[0].funding_cost_quote == pytest.approx(1.5)
         # indeks znormalizowany do tz-naive
         assert res.equity_adjusted.index.tz is None
+
+
+# ============================================================================
+# Bybit mark-price basis — niezależne ręczne wartości referencyjne
+# ============================================================================
+
+
+def test_bybit_isolated_liquidation_reference_and_crossing() -> None:
+    position = LeveragedPosition(
+        position_id="long-1",
+        side="long",
+        quantity=1.0,
+        entry_price=40_000.0,
+        leverage=50.0,
+        extra_margin=3_000.0,
+    )
+    # Bybit UTA isolated formula:
+    # numerator = 40000 - 800 - 3000/(1-0.00055) = 36198.349...
+    # denominator = 1 * (1-0.005) = 0.995
+    # LP = 36380.25 (official worked example, rounding to cents).
+    threshold = liquidation_price(position, 0.005, taker_fee_rate=0.00055)
+    assert threshold == pytest.approx(36_380.25, abs=0.01)
+    assert liquidation_check(position, 36_381.0, 0.005) is False
+
+    event = liquidation_check(
+        position,
+        36_000.0,
+        0.005,
+        observed_at=pd.Timestamp("2024-01-01T02:00:00Z"),
+        source="handcomputed-mark-h1",
+    )
+    assert event is not False
+    assert event.mark_price == 36_000.0
+    assert event.liquidation_price == pytest.approx(36_380.25, abs=0.01)
+
+
+def test_mark_price_context_is_causal_and_emits_first_h1_range_crossing() -> None:
+    index = pd.date_range("2024-01-01", periods=3, freq="1h", tz="UTC")
+    bars = pd.DataFrame(
+        {
+            "Open": [40_000.0, 39_000.0, 37_000.0],
+            "High": [40_200.0, 39_100.0, 37_200.0],
+            "Low": [39_800.0, 36_000.0, 35_500.0],
+            "Close": [40_000.0, 37_000.0, 36_000.0],
+        },
+        index=index,
+    )
+    context = MarkPriceContext(
+        symbol="BTCUSDT",
+        exchange="bybit",
+        timeframe="1h",
+        bars=bars,
+        source="handcomputed-bybit-mark-h1",
+        maintenance_margin_tiers=(MaintenanceMarginTier(None, 0.005),),
+    )
+    with pytest.raises(LookupError):
+        context.completed_bar_at(pd.Timestamp("2024-01-01T00:59:59Z"))
+    assert context.completed_bar_at(pd.Timestamp("2024-01-01T01:00:00Z")).close == 40_000.0
+
+    position = LeveragedPosition("long-2", "long", 1.0, 40_000.0, 50.0, 3_000.0)
+    event = first_liquidation_event(
+        position,
+        context,
+        pd.Timestamp("2024-01-01T01:00:00Z"),
+        pd.Timestamp("2024-01-01T03:00:00Z"),
+    )
+    assert event is not None
+    assert event.observed_at == pd.Timestamp("2024-01-01T02:00:00Z")
+    assert event.mark_price == 36_000.0
+
+
+def test_bybit_risk_tiers_parse_empty_first_deduction() -> None:
+    tiers = maintenance_margin_tiers_from_bybit(
+        [
+            {
+                "riskLimitValue": "2000000",
+                "maintenanceMargin": "0.005",
+                "mmDeduction": "",
+            },
+            {
+                "riskLimitValue": "2600000",
+                "maintenanceMargin": "0.0056",
+                "mmDeduction": "1200",
+            },
+        ]
+    )
+    assert tiers == (
+        MaintenanceMarginTier(2_000_000.0, 0.005, 0.0),
+        MaintenanceMarginTier(2_600_000.0, 0.0056, 1_200.0),
+    )

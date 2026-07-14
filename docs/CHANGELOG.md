@@ -17,6 +17,37 @@ Sekcje na każdą wersję:
 
 ## [Unreleased]
 
+### Added (Phase 2 MR-Session 3 Beta Iteration 2 — evidence and M5/M10 fidelity, 2026-07-15)
+
+- **Native Bybit mark-price pipeline:** `algo-fetch --price-source mark` routes through the
+  Bybit mark-OHLCV endpoint; `algo-process` writes OHLC-only
+  `bybit_<SYMBOL>_mark_1h.csv` and applies a fail-closed validator (positive OHLC, exact UTC
+  grid, completed bars, no gaps and no synthetic fill). Local BTCUSDT/ETHUSDT H1 histories
+  match the complete overlap of their trade-OHLCV series.
+- **Isolated-margin evidence in `microstructure.py`:** frozen mark-price/risk-tier/position
+  types, causal completed-bar lookup, Bybit risk-limit normalization, current UTA isolated
+  liquidation formula and first-crossing detection (`Low` long / `High` short). A crossing
+  is a recorded hard-stop economic outcome, not an evidence-quality rejection.
+- **`BacktestResult` schema v2:** independent `FillMethod` and `MarginMethod`, explicit
+  mark-price source and serialized liquidation events. Eligibility fails closed unless fills
+  are `nautilus_native_bar` and margin is `mark_price_isolated`. Schema-v1 P9 artifacts are
+  migrated in memory as `close_naive`/`none` without rewriting the originals.
+- **Native M5/M10 marking stream:** `MarkingBarClosed` in the pure
+  `MastermindStateMachine`, first-touch comparison against the last completed H1 Bands,
+  strict interval ordering, one configured marking TF and two-step marking-before-H1
+  execution. The thin Nautilus wrapper subscribes to and routes multiple native `BarType`s;
+  H1-only remains an explicitly diagnostic fallback.
+- **Regression coverage:** hand-computed liquidation oracle, causal/gap integrity cases,
+  schema-v1 migration and schema-v2 liquidation round-trip, M5/M10 prefix invariance and
+  a PyO3 two-stream ordering fixture.
+
+### Changed (Phase 2 MR-Session 3 Beta Iteration 2 — Session-4 authorization, 2026-07-15)
+
+- Accepted architecture `1a/2a/3R/4R/5c/6a/7R`. MR-Session 4 is now unconditional after
+  preregistration, with BTCUSDT and ETHUSDT evaluated separately, H1 execution and M5/M10
+  marking variants. The H1-only profile is diagnostic. Holdout remains unread until the
+  new preregistration; P9 remains immutable `SMOKE_ONLY / NOT_ELIGIBLE` evidence.
+
 ### Added (Phase 2 MR-Session 3 Beta Iteration 1 — Exchange migration Binance→Bybit, 2026-07-14)
 - **ADR-015 — venue migration to Bybit.** Forward-only work moves to Bybit v5 linear USDT
   perpetuals (Binance inactive in the EU for Janek; Bybit account active + MMS prior on Bybit).

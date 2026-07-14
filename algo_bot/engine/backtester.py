@@ -61,6 +61,8 @@ from algo_bot.data_loader import load_funding
 from algo_bot.engine.backtest_result import (
     BACKTEST_RESULT_SCHEMA_VERSION,
     BacktestResult,
+    FillMethod,
+    MarginMethod,
     ResultClass,
     SourceTreeState,
     assess_eligibility,
@@ -759,7 +761,15 @@ def run_backtest_result(
     )
     eligibility = assess_eligibility(
         cost_model,
-        extra_reasons=("LEGACY_DERIVED_ORDER_FILL_LEDGER",),
+        extra_reasons=(
+            "LEGACY_DERIVED_ORDER_FILL_LEDGER",
+            (
+                "FILL_METHOD_CLOSE_PLUS_SLIPPAGE"
+                if microstructure_enabled
+                else "FILL_METHOD_CLOSE_NAIVE"
+            ),
+            "MARK_PRICE_MARGIN_NOT_MODELLED",
+        ),
         noneligible_class=ResultClass.SMOKE_ONLY,
     )
     resolved_strategy_version = strategy_version or f"legacy/{strategy}/1"
@@ -808,6 +818,10 @@ def run_backtest_result(
         random_seed=random_seed,
         cost_model=cost_model,
         eligibility=eligibility,
+        fill_method=(
+            FillMethod.CLOSE_PLUS_SLIPPAGE if microstructure_enabled else FillMethod.CLOSE_NAIVE
+        ),
+        margin_method=MarginMethod.NONE,
     )
 
 

@@ -449,6 +449,38 @@ Cython `RESEARCH_CAUSAL_NEXT_CLOSE_V1` profile.
   engines; the API mismatch against our `StrategyBase` idiom is precisely why the adapter
   is two-tier (Decision 1) rather than a forced one-to-one mapping.
 
+### Iteration-2 amendment: native fills, mark margin and multi-TF routing (2026-07-15)
+
+Janek accepted refinements `1a/2a/3R/4R/5c/6a/7R` after the Beta evidence review.
+They refine Decisions 3 and 5 without changing the engine choice or the two-tier design:
+
+- **Execution and margin are orthogonal evidence axes.** `BacktestResult` schema v2 records
+  `FillMethod` (`close_naive`, `close_plus_slippage`, `nautilus_native_bar`) separately from
+  `MarginMethod` (`none`, `mark_price_isolated`). Research eligibility requires native
+  Nautilus bar fills and causal mark-price isolated-margin evaluation. Schema-v1 P9
+  artifacts migrate in memory to `close_naive`/`none`; immutable files are not rewritten.
+- **Mark-price basis is native Bybit H1 OHLC.** BTCUSDT and ETHUSDT were fetched for the
+  exact local H1 trade-data overlap and pass a zero-gap hard validator. Liquidation uses
+  the applicable frozen risk-limit tier and scans H1 `Low` for longs / `High` for shorts.
+  The first crossing terminates the run and is recorded as a negative economic outcome;
+  it does not make otherwise sound evidence ineligible and equity is not forced to an
+  arbitrary zero.
+- **M5/M10 marking is a generic domain stream.** The pure state machine receives
+  `MarkingBarClosed`; the thin Nautilus wrapper owns multiple native `BarType`
+  subscriptions. A marking wick is compared with Bands from the last completed H1 bar.
+  Only the first touch arms. For an equal close timestamp all marking sub-bars are handled
+  before the H1 execution event. Exactly one marking TF is configured per run.
+- **The legacy StrategyBase contract remains frozen.** H1-only behaviour remains available
+  as an explicitly labelled diagnostic fallback; it is not silently substituted for a
+  preregistered M5/M10 evidence run.
+- **Session-4 scope is frozen:** BTCUSDT and ETHUSDT are evaluated separately, with H1
+  execution and M5/M10 marking variants. The holdout stays unread until the Session-4
+  preregistration is written; no Beta/P9 ranking is carried forward.
+
+Nautilus 1.230.0 was probed with two native bar streams and the regression fixture pins
+12 M5 closes before the equal-close H1 event. This closes the capability/fidelity blocker;
+Session 4 still has to execute its own preregistered sweep and produce schema-v2 artifacts.
+
 ## Alternatives Considered
 
 - **Engine: `vectorbt`.** Raw vectorized speed, multi-asset, great for large sweeps.

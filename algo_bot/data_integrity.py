@@ -21,6 +21,8 @@ Publiczne API:
     - ``detect_gaps`` — przerwy w siatce czasu dłuższe niż ``threshold_mult × TF``.
     - ``check_integrity`` — orkiestrator: uruchamia wszystkie checki, loguje
       (WARNING dla naruszeń i gapów, INFO gdy czysto) i zwraca ``IntegrityReport``.
+    - ``check_mark_price_integrity`` — twarda walidacja OHLC mark-price bez
+      wolumenu: dodatnie ceny, przyczynowe/aligned timestampy i zero gapów.
 
 Konwencja logowania (zgodnie z ADR-006 i preferencjami): INFO dla milestone
 ("integrity OK"), WARNING dla każdego naruszenia niezmiennika i każdego gapa.
@@ -56,6 +58,7 @@ TF_MS: dict[str, int] = {
 
 #: Kolumny OHLCV wymagane do walidacji niezmienników.
 OHLCV_COLS: tuple[str, ...] = ("Open", "High", "Low", "Close", "Volume")
+MARK_PRICE_COLS: tuple[str, ...] = ("Open", "High", "Low", "Close")
 
 #: Domyślny próg detekcji gapa: przerwa > 3 × TF (np. 45 min dla 15m).
 DEFAULT_GAP_THRESHOLD_MULT: int = 3
@@ -169,6 +172,50 @@ class IntegrityReport:
     def n_gaps(self) -> int:
         """Liczba wykrytych gapów."""
         return len(self.gaps)
+
+
+@dataclass(frozen=True)
+class MarkPriceIntegrityReport:
+    """Twardy raport dla historycznych świec mark-price.
+
+    Mark-price nie ma wolumenu i nie może korzystać z OHLCV-owego fillowania
+    małych luk: brakujący bar mógł zawierać crossing progu likwidacji. Timestamp
+    oznacza otwarcie bara; ``n_future_bars`` liczy bary, których close wypada po
+    opcjonalnym ``as_of``.
+    """
+
+    symbol: str | None
+    exchange: str
+    timeframe: str
+    n_rows: int
+    start: pd.Timestamp | None
+    end: pd.Timestamp | None
+    monotonic: MonotonicResult
+    n_non_positive: int
+    n_nan_rows: int
+    n_high_violations: int
+    n_low_violations: int
+    n_high_low_violations: int
+    n_off_grid: int
+    n_future_bars: int
+    gaps: tuple[Gap, ...]
+
+    @property
+    def ok(self) -> bool:
+        """``True`` tylko dla kompletnej, przyczynowej i poprawnej serii."""
+
+        return (
+            self.n_rows > 0
+            and self.monotonic.ok
+            and self.n_non_positive == 0
+            and self.n_nan_rows == 0
+            and self.n_high_violations == 0
+            and self.n_low_violations == 0
+            and self.n_high_low_violations == 0
+            and self.n_off_grid == 0
+            and self.n_future_bars == 0
+            and not self.gaps
+        )
 
 
 # === Utils ===
@@ -432,4 +479,97 @@ def check_integrity(
             extra={**log_ctx, "start": str(start), "end": str(end)},
         )
 
+    return report
+
+
+def check_mark_price_integrity(
+    df: pd.DataFrame,
+    timeframe: str,
+    *,
+    symbol: str | None = None,
+    exchange: str = "bybit",
+    as_of: pd.Timestamp | None = None,
+) -> MarkPriceIntegrityReport:
+    """Waliduje mark-price OHLC bez fillowania i bez użycia przyszłego close.
+
+    Indeks wejścia jest timestampem **otwarcia** świecy. Dla ``as_of`` bar jest
+    przyczynowo dostępny dopiero, gdy ``open + timeframe <= as_of``. Każdy brak
+    pojedynczego bara jest twardym błędem, ponieważ jego High/Low mogło przekroczyć
+    próg likwidacji.
+    """
+
+    if timeframe not in TF_MS:
+        raise ValueError(f"Niewspierany timeframe: {timeframe!r}")
+    idx = _require_datetime_index(df)
+    missing_columns = [column for column in MARK_PRICE_COLS if column not in df.columns]
+    if missing_columns:
+        raise ValueError(f"Brak kolumn mark-price: {missing_columns}")
+
+    prices = df.loc[:, list(MARK_PRICE_COLS)]
+    open_ = prices["Open"]
+    high = prices["High"]
+    low = prices["Low"]
+    close = prices["Close"]
+    oc = pd.concat([open_, close], axis=1)
+    monotonic = check_monotonic(df)
+    sorted_df = df.sort_index()
+    sorted_idx = _require_datetime_index(sorted_df)
+    gaps = detect_gaps(sorted_df, timeframe, threshold_mult=1)
+    ts_ms = _index_ns_utc(idx) // _NS_PER_MS
+    step_ms = TF_MS[timeframe]
+    n_off_grid = int((ts_ms % step_ms != 0).sum())
+
+    n_future_bars = 0
+    if as_of is not None:
+        as_of_utc = pd.Timestamp(as_of)
+        if as_of_utc.tzinfo is None:
+            as_of_utc = as_of_utc.tz_localize("UTC")
+        else:
+            as_of_utc = as_of_utc.tz_convert("UTC")
+        close_times = idx + pd.Timedelta(milliseconds=step_ms)
+        n_future_bars = int((close_times > as_of_utc).sum())
+
+    report = MarkPriceIntegrityReport(
+        symbol=symbol,
+        exchange=exchange,
+        timeframe=timeframe,
+        n_rows=len(df),
+        start=sorted_idx[0] if len(sorted_idx) else None,
+        end=sorted_idx[-1] if len(sorted_idx) else None,
+        monotonic=monotonic,
+        n_non_positive=int((prices <= 0).any(axis=1).sum()),
+        n_nan_rows=int(prices.isna().any(axis=1).sum()),
+        n_high_violations=int((high < oc.max(axis=1)).sum()),
+        n_low_violations=int((low > oc.min(axis=1)).sum()),
+        n_high_low_violations=int((high < low).sum()),
+        n_off_grid=n_off_grid,
+        n_future_bars=n_future_bars,
+        gaps=gaps,
+    )
+    log_context = {
+        "symbol": symbol,
+        "exchange": exchange,
+        "timeframe": timeframe,
+        "n_rows": report.n_rows,
+    }
+    if report.ok:
+        logger.info(
+            "Mark-price integrity OK",
+            extra={**log_context, "start": str(report.start), "end": str(report.end)},
+        )
+    else:
+        logger.warning(
+            "Mark-price integrity failed",
+            extra={
+                **log_context,
+                "n_non_positive": report.n_non_positive,
+                "n_nan_rows": report.n_nan_rows,
+                "n_high_violations": report.n_high_violations,
+                "n_low_violations": report.n_low_violations,
+                "n_high_low_violations": report.n_high_low_violations,
+                "n_off_grid": report.n_off_grid,
+                "n_future_bars": report.n_future_bars,
+                "n_gaps": len(report.gaps),
+            },
+        )
     return report

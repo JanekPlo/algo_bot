@@ -30,6 +30,14 @@ Public API:
     MicrostructureConfig (frozen dataclass)
     TradeCost (frozen dataclass)
     MicrostructureResult (frozen dataclass)
+    MarkPriceBar / MarkPriceContext / MaintenanceMarginTier (frozen dataclasses)
+    LeveragedPosition / LiquidationEvent (frozen dataclasses)
+    load_mark_price_context(...) -> MarkPriceContext
+    mark_price_at(ts, symbol, exchange) -> float
+    liquidation_price(position, maintenance_margin_rate, ...) -> float
+    liquidation_check(position, mark_price, maintenance_margin_rate) -> False | LiquidationEvent
+    first_liquidation_event(position, context, start, end) -> LiquidationEvent | None
+    maintenance_margin_tiers_from_bybit(rows) -> tuple[MaintenanceMarginTier, ...]
     slippage_cost(notional, slip_bps) -> float
     settlements_in_window(entry_time, exit_time, funding_index) -> pd.DatetimeIndex
     synthetic_funding_series(start, end, rate, hours_utc) -> pd.Series
@@ -47,12 +55,15 @@ See also:
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Literal
+from pathlib import Path
+from typing import Literal, cast
 
 import numpy as np
 import pandas as pd
 
+from algo_bot.data_integrity import TF_MS, check_mark_price_integrity
 from algo_bot.log import get_logger
 
 logger = get_logger(__name__)
@@ -146,6 +157,188 @@ class MicrostructureResult:
     config: MicrostructureConfig
 
 
+@dataclass(frozen=True, slots=True)
+class MaintenanceMarginTier:
+    """Jeden próg risk-limit Bybit dla linear USDT perpetual.
+
+    ``max_position_value=None`` oznacza ostatni, nieograniczony próg. Stawka i
+    deduction pochodzą z publicznego ``/v5/market/risk-limit`` i powinny być
+    zamrożone wraz z manifestem eksperymentu.
+    """
+
+    max_position_value: float | None
+    maintenance_margin_rate: float
+    maintenance_margin_deduction: float = 0.0
+
+    def __post_init__(self) -> None:
+        if self.max_position_value is not None and self.max_position_value <= 0:
+            raise ValueError("max_position_value musi być dodatnie albo None")
+        if not 0 < self.maintenance_margin_rate < 1:
+            raise ValueError("maintenance_margin_rate musi należeć do (0, 1)")
+        if self.maintenance_margin_deduction < 0:
+            raise ValueError("maintenance_margin_deduction nie może być ujemne")
+
+
+@dataclass(frozen=True, slots=True)
+class MarkPriceBar:
+    """Jedna ukończona świeca mark-price; timestampy są UTC."""
+
+    open_time: pd.Timestamp
+    close_time: pd.Timestamp
+    open: float
+    high: float
+    low: float
+    close: float
+
+
+@dataclass(frozen=True, slots=True)
+class MarkPriceContext:
+    """Przyczynowa seria mark-price i zamrożone progi maintenance margin."""
+
+    symbol: str
+    exchange: str
+    timeframe: str
+    bars: pd.DataFrame
+    source: str
+    maintenance_margin_tiers: tuple[MaintenanceMarginTier, ...] = ()
+    taker_fee_rate: float = 0.00055
+
+    def __post_init__(self) -> None:
+        if self.timeframe not in TF_MS:
+            raise ValueError(f"Niewspierany timeframe mark-price: {self.timeframe!r}")
+        if not self.symbol.strip() or not self.exchange.strip() or not self.source.strip():
+            raise ValueError("symbol, exchange i source nie mogą być puste")
+        if not 0 <= self.taker_fee_rate < 1:
+            raise ValueError("taker_fee_rate musi należeć do [0, 1)")
+        copied = self.bars.copy(deep=True).sort_index()
+        report = check_mark_price_integrity(
+            copied,
+            self.timeframe,
+            symbol=self.symbol,
+            exchange=self.exchange,
+        )
+        if not report.ok:
+            raise ValueError("MarkPriceContext wymaga kompletnej serii mark-price")
+        limits = [tier.max_position_value for tier in self.maintenance_margin_tiers]
+        finite_limits = [limit for limit in limits if limit is not None]
+        if finite_limits != sorted(finite_limits) or limits.count(None) > 1:
+            raise ValueError("maintenance margin tiers muszą być rosnące")
+        if None in limits and limits[-1] is not None:
+            raise ValueError("nieograniczony maintenance tier musi być ostatni")
+        object.__setattr__(self, "bars", copied)
+
+    @property
+    def interval(self) -> pd.Timedelta:
+        """Długość świecy mark-price."""
+
+        return pd.Timedelta(milliseconds=TF_MS[self.timeframe])
+
+    def completed_bar_at(self, ts: pd.Timestamp) -> MarkPriceBar:
+        """Zwraca ostatni bar, którego close nie wypada po ``ts``."""
+
+        timestamp = _ts_to_aware_utc(pd.Timestamp(ts))
+        cutoff_open = timestamp - self.interval
+        position = int(self.bars.index.searchsorted(cutoff_open, side="right")) - 1
+        if position < 0:
+            raise LookupError("Brak ukończonego mark-price bara przed timestampem")
+        open_time = _ts_to_aware_utc(pd.Timestamp(self.bars.index[position]))
+        row = self.bars.iloc[position]
+        return MarkPriceBar(
+            open_time=open_time,
+            close_time=open_time + self.interval,
+            open=float(row["Open"]),
+            high=float(row["High"]),
+            low=float(row["Low"]),
+            close=float(row["Close"]),
+        )
+
+    def tier_for(self, position_value: float) -> MaintenanceMarginTier:
+        """Wybiera pierwszy risk tier obejmujący dodatni position value."""
+
+        if position_value <= 0:
+            raise ValueError("position_value musi być dodatnie")
+        for tier in self.maintenance_margin_tiers:
+            if tier.max_position_value is None or position_value <= tier.max_position_value:
+                return tier
+        raise LookupError("Brak maintenance margin tier dla position value")
+
+
+@dataclass(frozen=True, slots=True)
+class LeveragedPosition:
+    """Minimalny engine-independent opis isolated linear USDT position."""
+
+    position_id: str
+    side: Literal["long", "short"]
+    quantity: float
+    entry_price: float
+    leverage: float
+    extra_margin: float = 0.0
+
+    def __post_init__(self) -> None:
+        if not self.position_id.strip():
+            raise ValueError("position_id nie może być pusty")
+        if self.side not in ("long", "short"):
+            raise ValueError("side musi być long albo short")
+        if self.quantity <= 0 or self.entry_price <= 0 or self.leverage <= 0:
+            raise ValueError("quantity, entry_price i leverage muszą być dodatnie")
+        if self.extra_margin < 0:
+            raise ValueError("extra_margin nie może być ujemny")
+
+    @property
+    def entry_notional(self) -> float:
+        """Wartość pozycji przy wejściu w quote currency."""
+
+        return self.quantity * self.entry_price
+
+
+@dataclass(frozen=True, slots=True)
+class LiquidationEvent:
+    """Audytowalny crossing mark-price przez próg isolated liquidation."""
+
+    position_id: str
+    side: Literal["long", "short"]
+    observed_at: pd.Timestamp | None
+    mark_price: float
+    liquidation_price: float
+    maintenance_margin_rate: float
+    maintenance_margin_deduction: float
+    source: str | None = None
+
+    def to_dict(self) -> dict[str, str | float | None]:
+        """Stabilna reprezentacja do manifestu ``BacktestResult``."""
+
+        return {
+            "position_id": self.position_id,
+            "side": self.side,
+            "observed_at": None if self.observed_at is None else self.observed_at.isoformat(),
+            "mark_price": self.mark_price,
+            "liquidation_price": self.liquidation_price,
+            "maintenance_margin_rate": self.maintenance_margin_rate,
+            "maintenance_margin_deduction": self.maintenance_margin_deduction,
+            "source": self.source,
+        }
+
+    @classmethod
+    def from_dict(cls, raw: dict[str, object]) -> LiquidationEvent:
+        """Odtwarza event zapisany w manifeście wyniku."""
+
+        observed = raw.get("observed_at")
+        side = str(raw["side"])
+        if side not in ("long", "short"):
+            raise ValueError(f"Nieprawidłowa strona liquidation event: {side!r}")
+        typed_side = cast("Literal['long', 'short']", side)
+        return cls(
+            position_id=str(raw["position_id"]),
+            side=typed_side,
+            observed_at=None if observed is None else pd.Timestamp(str(observed)),
+            mark_price=float(str(raw["mark_price"])),
+            liquidation_price=float(str(raw["liquidation_price"])),
+            maintenance_margin_rate=float(str(raw["maintenance_margin_rate"])),
+            maintenance_margin_deduction=float(str(raw["maintenance_margin_deduction"])),
+            source=None if raw.get("source") is None else str(raw["source"]),
+        )
+
+
 # ============================================================================
 # Helpery tz
 # ============================================================================
@@ -168,6 +361,216 @@ def _ts_to_naive_utc(ts: pd.Timestamp) -> pd.Timestamp:
     if ts.tz is not None:
         return ts.tz_convert("UTC").tz_localize(None)
     return ts
+
+
+def _ts_to_aware_utc(ts: pd.Timestamp) -> pd.Timestamp:
+    """Normalizuje pojedynczy timestamp do tz-aware UTC."""
+
+    if ts.tz is None:
+        return ts.tz_localize("UTC")
+    return ts.tz_convert("UTC")
+
+
+# ============================================================================
+# Mark-price basis i isolated liquidation
+# ============================================================================
+
+
+def _mark_price_path(symbol: str, exchange: str, timeframe: str) -> Path:
+    normalized = symbol.upper().split(":", maxsplit=1)[0].replace("/", "").replace("_", "")
+    return (
+        Path(__file__).resolve().parents[1]
+        / "bot_data"
+        / "processed"
+        / f"{exchange.lower()}_{normalized}_mark_{timeframe}.csv"
+    )
+
+
+def load_mark_price_context(
+    symbol: str,
+    exchange: str,
+    *,
+    timeframe: str = "1h",
+    maintenance_margin_tiers: tuple[MaintenanceMarginTier, ...] = (),
+    taker_fee_rate: float = 0.00055,
+    path: Path | None = None,
+) -> MarkPriceContext:
+    """Ładuje i twardo waliduje przetworzoną serię mark-price."""
+
+    source_path = path or _mark_price_path(symbol, exchange, timeframe)
+    frame = pd.read_csv(source_path, parse_dates=["datetime"])
+    frame["datetime"] = pd.to_datetime(frame["datetime"], utc=True)
+    frame = frame.set_index("datetime").loc[:, ["Open", "High", "Low", "Close"]]
+    return MarkPriceContext(
+        symbol=symbol,
+        exchange=exchange,
+        timeframe=timeframe,
+        bars=frame,
+        source=str(source_path),
+        maintenance_margin_tiers=maintenance_margin_tiers,
+        taker_fee_rate=taker_fee_rate,
+    )
+
+
+def maintenance_margin_tiers_from_bybit(
+    rows: Sequence[Mapping[str, object]],
+) -> tuple[MaintenanceMarginTier, ...]:
+    """Normalizuje publiczną odpowiedź Bybit risk-limit do zamrożonych tierów."""
+
+    tiers: list[MaintenanceMarginTier] = []
+    for row in rows:
+        try:
+            limit = float(str(row["riskLimitValue"]))
+            rate = float(str(row["maintenanceMargin"]))
+            raw_deduction = row.get("mmDeduction")
+            deduction = (
+                0.0
+                if raw_deduction is None or str(raw_deduction).strip() == ""
+                else float(str(raw_deduction))
+            )
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError(f"Nieprawidłowy Bybit risk tier: {row!r}") from exc
+        tiers.append(MaintenanceMarginTier(limit, rate, deduction))
+    tiers.sort(
+        key=lambda tier: (
+            float("inf") if tier.max_position_value is None else tier.max_position_value
+        )
+    )
+    if not tiers:
+        raise ValueError("Bybit risk-limit response nie może być pusta")
+    return tuple(tiers)
+
+
+def mark_price_at(ts: pd.Timestamp, symbol: str, exchange: str) -> float:
+    """Zwraca Close ostatniego **ukończonego** H1 mark-price bara.
+
+    Plik przechowuje timestamp otwarcia. Odjęcie interwału w
+    :meth:`MarkPriceContext.completed_bar_at` zapobiega odczytowi close aktualnie
+    formującej się świecy.
+    """
+
+    return load_mark_price_context(symbol, exchange).completed_bar_at(pd.Timestamp(ts)).close
+
+
+def liquidation_price(
+    position: LeveragedPosition,
+    maintenance_margin_rate: float,
+    *,
+    maintenance_margin_deduction: float = 0.0,
+    taker_fee_rate: float = 0.00055,
+) -> float:
+    """Liczy aktualny Bybit UTA isolated LP dla linear USDT contract.
+
+    Formuła po zmianie margin calculation z 2025 r. używa entry notional dla
+    initial margin, MMR i maintenance-margin deduction oraz korekty extra margin
+    o szacowaną opłatę zamknięcia.
+    """
+
+    if not 0 < maintenance_margin_rate < 1:
+        raise ValueError("maintenance_margin_rate musi należeć do (0, 1)")
+    if maintenance_margin_deduction < 0:
+        raise ValueError("maintenance_margin_deduction nie może być ujemne")
+    if not 0 <= taker_fee_rate < 1:
+        raise ValueError("taker_fee_rate musi należeć do [0, 1)")
+
+    quantity = position.quantity
+    entry_notional = position.entry_notional
+    initial_margin = entry_notional / position.leverage
+    if position.side == "long":
+        numerator = (
+            entry_notional
+            - initial_margin
+            - position.extra_margin / (1 - taker_fee_rate)
+            - maintenance_margin_deduction
+        )
+        denominator = quantity * (1 - maintenance_margin_rate)
+    else:
+        numerator = (
+            entry_notional
+            + initial_margin
+            + position.extra_margin / (1 + taker_fee_rate)
+            + maintenance_margin_deduction
+        )
+        denominator = quantity * (1 + maintenance_margin_rate)
+    price = numerator / denominator
+    if price <= 0 or not np.isfinite(price):
+        raise ValueError("Wyliczony liquidation price musi być dodatni i skończony")
+    return float(price)
+
+
+def liquidation_check(
+    position: LeveragedPosition,
+    mark_price: float,
+    maintenance_margin_rate: float,
+    *,
+    maintenance_margin_deduction: float = 0.0,
+    taker_fee_rate: float = 0.00055,
+    observed_at: pd.Timestamp | None = None,
+    source: str | None = None,
+) -> Literal[False] | LiquidationEvent:
+    """Zwraca event, gdy mark osiągnął isolated LP, w przeciwnym razie ``False``."""
+
+    if mark_price <= 0 or not np.isfinite(mark_price):
+        raise ValueError("mark_price musi być dodatni i skończony")
+    threshold = liquidation_price(
+        position,
+        maintenance_margin_rate,
+        maintenance_margin_deduction=maintenance_margin_deduction,
+        taker_fee_rate=taker_fee_rate,
+    )
+    crossed = mark_price <= threshold if position.side == "long" else mark_price >= threshold
+    if not crossed:
+        return False
+    return LiquidationEvent(
+        position_id=position.position_id,
+        side=position.side,
+        observed_at=None if observed_at is None else _ts_to_aware_utc(observed_at),
+        mark_price=float(mark_price),
+        liquidation_price=threshold,
+        maintenance_margin_rate=maintenance_margin_rate,
+        maintenance_margin_deduction=maintenance_margin_deduction,
+        source=source,
+    )
+
+
+def first_liquidation_event(
+    position: LeveragedPosition,
+    context: MarkPriceContext,
+    start: pd.Timestamp,
+    end: pd.Timestamp,
+) -> LiquidationEvent | None:
+    """Skanuje ukończone mark OHLC i zwraca pierwszy crossing w ``(start, end]``.
+
+    Long używa Low, short używa High, więc H1 mark zachowuje intrabar crossing
+    bez pobierania M5 mark-price. Brak eventu oznacza bezpieczeństwo wyłącznie
+    przy kompletnej serii, co gwarantuje konstruktor ``MarkPriceContext``.
+    """
+
+    start_utc = _ts_to_aware_utc(pd.Timestamp(start))
+    end_utc = _ts_to_aware_utc(pd.Timestamp(end))
+    if end_utc < start_utc:
+        raise ValueError("end nie może poprzedzać start")
+    tier = context.tier_for(position.entry_notional)
+    for open_time, row in context.bars.iterrows():
+        open_utc = _ts_to_aware_utc(pd.Timestamp(str(open_time)))
+        close_time = open_utc + context.interval
+        if close_time <= start_utc:
+            continue
+        if close_time > end_utc:
+            break
+        adverse_mark = float(row["Low"] if position.side == "long" else row["High"])
+        event = liquidation_check(
+            position,
+            adverse_mark,
+            tier.maintenance_margin_rate,
+            maintenance_margin_deduction=tier.maintenance_margin_deduction,
+            taker_fee_rate=context.taker_fee_rate,
+            observed_at=close_time,
+            source=context.source,
+        )
+        if event is not False:
+            return event
+    return None
 
 
 def _mark_at(close: pd.Series, ts: pd.Timestamp) -> float:

@@ -6,6 +6,7 @@ import logging
 import time
 from collections.abc import Iterable
 from pathlib import Path
+from typing import Literal
 
 import ccxt
 import pandas as pd
@@ -33,6 +34,8 @@ TF_MS = {
 
 # Giełdy wspierane przez fetch (ADR-015 — migracja Binance→Bybit).
 EXCHANGE_CHOICES = ["binance", "bybit"]
+PRICE_SOURCES = ["trade", "mark"]
+type PriceSource = Literal["trade", "mark"]
 
 
 def to_market_symbol(symbol_ccxt: str, exchange: str, market: str) -> str:
@@ -81,7 +84,12 @@ def to_ccxt_symbol(sym: str) -> str:
     return f"{s}/USDT"
 
 
-def raw_filename(symbol_ccxt: str, timeframe: str, exchange: str = "binance") -> Path:
+def raw_filename(
+    symbol_ccxt: str,
+    timeframe: str,
+    exchange: str = "binance",
+    price_source: PriceSource = "trade",
+) -> Path:
     """Ścieżka pliku RAW.
 
     Binance zachowuje legacy format bez prefiksu (``BTC_USDT-5m.csv``) dla
@@ -89,10 +97,11 @@ def raw_filename(symbol_ccxt: str, timeframe: str, exchange: str = "binance") ->
     (``bybit_BTC_USDT-5m.csv``), żeby dane różnych giełd nie kolidowały.
     """
     base, quote = symbol_ccxt.split("/")
+    suffix = f"-mark-{timeframe}.csv" if price_source == "mark" else f"-{timeframe}.csv"
     if exchange == "binance":
-        fn = f"{base}_{quote}-{timeframe}.csv"
+        fn = f"{base}_{quote}{suffix}"
     else:
-        fn = f"{exchange}_{base}_{quote}-{timeframe}.csv"
+        fn = f"{exchange}_{base}_{quote}{suffix}"
     return Path("bot_data/raw") / fn
 
 
@@ -135,7 +144,8 @@ def fetch_ohlcv_batches(
     since_ms: int,
     until_ms: int | None = None,
     limit: int = 1000,
-) -> Iterable[list[list[float]]]:
+    price_source: PriceSource = "trade",
+) -> Iterable[list[list[float | None]]]:
     """
     Generator batchy OHLCV (z retry) od 'since_ms' do 'until_ms' (jeśli podane).
     """
@@ -150,7 +160,14 @@ def fetch_ohlcv_batches(
         ohlcv = None
         for i in range(6):
             try:
-                ohlcv = ex.fetch_ohlcv(symbol, timeframe=timeframe, since=cursor, limit=limit)
+                params = {"price": "mark"} if price_source == "mark" else {}
+                ohlcv = ex.fetch_ohlcv(
+                    symbol,
+                    timeframe=timeframe,
+                    since=cursor,
+                    limit=limit,
+                    params=params,
+                )
                 break
             except (ccxt.NetworkError, ccxt.DDoSProtection, ccxt.ExchangeNotAvailable) as e:
                 logger.warning(
@@ -172,7 +189,11 @@ def fetch_ohlcv_batches(
         if not ohlcv:
             return
 
-        yield ohlcv
+        bounded = (
+            [row for row in ohlcv if int(row[0]) <= until_ms] if until_ms is not None else ohlcv
+        )
+        if bounded:
+            yield bounded
 
         # przesuwamy kursor na koniec batcha + jedna świeca
         last_ts = ohlcv[-1][0]
@@ -182,12 +203,14 @@ def fetch_ohlcv_batches(
         time.sleep(ex.rateLimit / 1000.0)
 
 
-def _save_append(path: Path, new_df: pd.DataFrame) -> None:
+def _save_append(path: Path, new_df: pd.DataFrame, *, include_volume: bool = True) -> None:
     """
     Dopisuje nowe wiersze do RAW, deduplikuje po 'ts', sortuje.
     Gwarantuje kolumny: ts, datetime, Open, High, Low, Close, Volume
     """
-    cols = ["ts", "datetime", "Open", "High", "Low", "Close", "Volume"]
+    cols = ["ts", "datetime", "Open", "High", "Low", "Close"]
+    if include_volume:
+        cols.append("Volume")
 
     if path.exists():
         old = pd.read_csv(path)
@@ -241,12 +264,21 @@ def main():
         "--market", default="future", choices=["future", "spot"], help="Typ rynku dla CCXT"
     )
     ap.add_argument(
+        "--price-source",
+        default="trade",
+        choices=PRICE_SOURCES,
+        help="Źródło OHLC: trade (standard) albo mark (Bybit linear futures).",
+    )
+    ap.add_argument(
         "--log-level",
         default="INFO",
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
         help="Poziom logowania dla fetch CLI.",
     )
     args = ap.parse_args()
+
+    if args.price_source == "mark" and (args.exchange != "bybit" or args.market != "future"):
+        ap.error("--price-source mark jest wspierane wyłącznie dla Bybit futures")
 
     # ADR-006: setup_logging na entry point CLI (idempotentne).
     setup_logging(level=getattr(logging, args.log_level))
@@ -271,7 +303,7 @@ def main():
     market_symbol = to_market_symbol(symbol, args.exchange, args.market)
 
     # Plik RAW + resume
-    out_path = raw_filename(symbol, tf, args.exchange)
+    out_path = raw_filename(symbol, tf, args.exchange, args.price_source)
     ensure_parent(out_path)
 
     last_in_file = last_ts_from_file(out_path)
@@ -292,15 +324,27 @@ def main():
     total_rows = 0
     try:
         for batch in fetch_ohlcv_batches(
-            ex, market_symbol, tf, since_ms, until_ms, limit=args.limit
+            ex,
+            market_symbol,
+            tf,
+            since_ms,
+            until_ms,
+            limit=args.limit,
+            price_source=args.price_source,
         ):
             df = pd.DataFrame(batch, columns=["ts", "Open", "High", "Low", "Close", "Volume"])
+            if args.price_source == "mark":
+                df = df.drop(columns=["Volume"])
             df["datetime"] = pd.to_datetime(df["ts"], unit="ms", utc=True)
             buffers.append(df)
 
             if len(buffers) >= 12:  # co kilka batchy flush – zmniejsza zużycie RAM
                 flush = pd.concat(buffers, ignore_index=True)
-                _save_append(out_path, flush)
+                _save_append(
+                    out_path,
+                    flush,
+                    include_volume=args.price_source == "trade",
+                )
                 total_rows += len(flush)
                 buffers = []
                 logger.info(
@@ -310,7 +354,11 @@ def main():
 
         if buffers:
             flush = pd.concat(buffers, ignore_index=True)
-            _save_append(out_path, flush)
+            _save_append(
+                out_path,
+                flush,
+                include_volume=args.price_source == "trade",
+            )
             total_rows += len(flush)
             logger.info(
                 "Final flush of buffered batches",

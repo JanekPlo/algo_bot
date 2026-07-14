@@ -36,7 +36,9 @@ from algo_bot.engine.backtest_result import (
     CostComponent,
     CostModel,
     CostProvenance,
+    FillMethod,
     JsonValue,
+    MarginMethod,
     ResultClass,
     SourceTreeState,
     assess_eligibility,
@@ -932,6 +934,8 @@ def _execute_benchmark_config(
     cost_model = _native_smoke_cost_model()
     extra_reasons: tuple[str, ...] = (
         *UNCONDITIONAL_INELIGIBILITY_REASONS,
+        "FILL_METHOD_CLOSE_NAIVE",
+        "MARK_PRICE_MARGIN_NOT_MODELLED",
         *(("SYNTHETIC_FIXTURE",) if synthetic_fixture else ()),
     )
     eligibility = assess_eligibility(
@@ -957,6 +961,8 @@ def _execute_benchmark_config(
         random_seed=run_config.seed,
         cost_model=cost_model,
         eligibility=eligibility,
+        fill_method=FillMethod.CLOSE_NAIVE,
+        margin_method=MarginMethod.NONE,
     )
     if result.eligibility.status.value != "NOT_ELIGIBLE" or (
         result.eligibility.result_class is not ResultClass.SMOKE_ONLY

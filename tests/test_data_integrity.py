@@ -20,15 +20,28 @@ import pytest
 from algo_bot.data_integrity import (
     TF_MS,
     check_integrity,
+    check_mark_price_integrity,
     check_monotonic,
     check_ohlcv_invariants,
     detect_gaps,
 )
 from algo_bot.data_loader import get_processed_path, load_processed
+from algo_bot.fetch_data import raw_filename
+from algo_bot.process_data import is_mark_price_raw, parse_raw_name, processed_filename
 
 # Pełen set Fazy 2 (Decyzja 1/3: Binance Futures USDT-M).
 SYMBOLS = ["BTC/USDT", "ETH/USDT"]
 TIMEFRAMES = ["15m", "1h", "4h"]
+
+
+def test_mark_price_pipeline_names_are_unambiguous() -> None:
+    raw = raw_filename("BTC/USDT", "1h", "bybit", "mark")
+    assert raw.as_posix().endswith("bot_data/raw/bybit_BTC_USDT-mark-1h.csv")
+    assert is_mark_price_raw(raw)
+    assert parse_raw_name(raw) == ("bybit", "BTCUSDT", "1h")
+    assert processed_filename("BTCUSDT", "1h", "bybit", mark_price=True).name == (
+        "bybit_BTCUSDT_mark_1h.csv"
+    )
 
 
 # ============================================================================
@@ -142,6 +155,28 @@ def test_invariants_missing_column_raises() -> None:
     df = _make_clean_ohlcv(n=5).drop(columns=["Volume"])
     with pytest.raises(ValueError, match="Volume"):
         check_ohlcv_invariants(df)
+
+
+def test_mark_price_integrity_is_strict_about_single_gap_and_non_positive_price() -> None:
+    frame = _make_clean_ohlcv(n=6, timeframe="1h").drop(columns=["Volume"])
+    clean = check_mark_price_integrity(frame, "1h", symbol="BTCUSDT")
+    assert clean.ok
+
+    broken = frame.drop(index=frame.index[2]).copy()
+    broken.iloc[0, broken.columns.get_loc("Low")] = 0.0
+    report = check_mark_price_integrity(broken, "1h", symbol="BTCUSDT")
+    assert not report.ok
+    assert report.n_non_positive == 1
+    assert len(report.gaps) == 1
+    assert report.gaps[0].missing_bars == 1
+
+
+def test_mark_price_integrity_rejects_not_yet_completed_bar() -> None:
+    frame = _make_clean_ohlcv(n=2, timeframe="1h").drop(columns=["Volume"])
+    as_of = frame.index[-1] + pd.Timedelta(minutes=30)
+    report = check_mark_price_integrity(frame, "1h", as_of=as_of)
+    assert not report.ok
+    assert report.n_future_bars == 1
 
 
 # ============================================================================

@@ -76,8 +76,43 @@ class BybitFuturesAdapter:
         result = self.exchange.fetch_ohlcv(self.sym(symbol), timeframe=timeframe, limit=limit)
         return cast("list[list[float]]", result)
 
+    def fetch_mark_price_ohlcv(
+        self,
+        symbol: str,
+        timeframe: str,
+        *,
+        since: int | None = None,
+        limit: int = 200,
+    ) -> list[list[float | None]]:
+        """Pobiera publiczne historyczne świece mark-price z Bybit v5.
+
+        CCXT 4.5.x deklaruje ``fetchMarkOHLCV``, ale routuje je przez
+        ``fetch_ohlcv(..., params={"price": "mark"})``. Bybit nie zwraca
+        wolumenu dla mark-price, dlatego ostatnia wartość w wierszu CCXT jest
+        ``None``.
+        """
+
+        result = self.exchange.fetch_ohlcv(
+            self.sym(symbol),
+            timeframe=timeframe,
+            since=since,
+            limit=limit,
+            params={"price": "mark"},
+        )
+        return cast("list[list[float | None]]", result)
+
     def fetch_ticker_last(self, symbol: str) -> float:
         return float(self.exchange.fetch_ticker(self.sym(symbol))["last"])
+
+    def fetch_risk_limits(self, symbol: str) -> list[dict[str, Any]]:
+        """Pobiera publiczne maintenance-margin tiers dla linear contract."""
+
+        market = self.exchange.market(self.sym(symbol))
+        response = self.exchange.public_get_v5_market_risk_limit(
+            {"category": "linear", "symbol": market["id"]}
+        )
+        rows = response.get("result", {}).get("list", [])
+        return cast("list[dict[str, Any]]", rows)
 
     # --- Private (account / position config) ---
     def set_position_mode_oneway(self, symbol: str) -> None:

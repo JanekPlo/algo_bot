@@ -38,6 +38,7 @@ from algo_bot.strategies.mastermind.model import (
     DomainEvent,
     DomainIntent,
     FundingApplied,
+    MarkingBarClosed,
     OrderAccepted,
     OrderCanceled,
     OrderFilled,
@@ -380,6 +381,8 @@ class NautilusMastermindStrategy(Pyo3Strategy):
         instrument_id: Any,
         bar_type: Any,
         feature_source: BarFeatureSource,
+        marking_bar_type: Any | None = None,
+        marking_interval_ns: int | None = None,
         interval_ns: int = HOUR_NS,
         reconcile_on_start: bool = False,
         known_client_order_ids: Iterable[str] = (),
@@ -394,6 +397,10 @@ class NautilusMastermindStrategy(Pyo3Strategy):
     ) -> None:
         if interval_ns <= 0:
             raise ValueError("interval_ns must be positive")
+        if (marking_bar_type is None) != (marking_interval_ns is None):
+            raise ValueError("marking_bar_type i marking_interval_ns muszą występować razem")
+        if marking_interval_ns not in (None, 300_000_000_000, 600_000_000_000):
+            raise ValueError("marking_interval_ns musi reprezentować M5 albo M10")
         if not slippage_per_unit.is_finite() or slippage_per_unit < ZERO:
             raise ValueError("slippage_per_unit must be finite and non-negative")
         if not serialize_transition_snapshots and (
@@ -431,6 +438,13 @@ class NautilusMastermindStrategy(Pyo3Strategy):
         self._bar_type = bar_type
         self._feature_source = feature_source
         self._interval_ns = interval_ns
+        self._marking_bar_type = marking_bar_type
+        self._marking_interval_ns = marking_interval_ns
+        self._marking_timeframe = (
+            None
+            if marking_interval_ns is None
+            else ("5m" if marking_interval_ns == 300_000_000_000 else "10m")
+        )
         self._reconcile_on_start = reconcile_on_start
         self._persist_transition = persist_transition
         self._persist_recovery_transition = persist_recovery_transition
@@ -851,6 +865,8 @@ class NautilusMastermindStrategy(Pyo3Strategy):
         try:
             self._bind_cached_orders_for_recovery()
             self._prime_restored_funding_adjustments()
+            if self._marking_bar_type is not None:
+                self.subscribe_bars(self._marking_bar_type)
             self.subscribe_bars(self._bar_type)
             self.subscribe_funding_rates(self._instrument_id)
             if self._reconcile_on_start:
@@ -864,11 +880,19 @@ class NautilusMastermindStrategy(Pyo3Strategy):
 
         self._drain_funding_adjustments()
         self._try_finalize_flat_reconciliation()
+        if self._marking_bar_type is not None:
+            self.unsubscribe_bars(self._marking_bar_type)
         self.unsubscribe_bars(self._bar_type)
         self.unsubscribe_funding_rates(self._instrument_id)
 
     def on_bar(self, bar: Any) -> None:
         """Execute prior strategic intents, then deliver this final closed bar."""
+
+        if self._marking_bar_type is not None and bar.bar_type == self._marking_bar_type:
+            self._ingest_marking_bar(bar)
+            return
+        if bar.bar_type != self._bar_type:
+            return
 
         self._drain_funding_adjustments()
         self._drain_deferred_reconciliation()
@@ -919,6 +943,33 @@ class NautilusMastermindStrategy(Pyo3Strategy):
         )
         self._apply_domain_event(event)
         self._last_delivered_bar_close_ns = close_ns
+        self._persist_adapter_checkpoint()
+
+    def _ingest_marking_bar(self, bar: Any) -> None:
+        """Mapuje natywny M5/M10 bar na czysty domain event bez signal logic."""
+
+        if self._marking_interval_ns is None or self._marking_timeframe is None:
+            raise Pyo3SmokeProfileError("marking callback without configured interval")
+        close_ns = int(bar.ts_init)
+        open_ns = close_ns - self._marking_interval_ns + MILLISECOND_NS
+        event = MarkingBarClosed(
+            **self._envelope(
+                event_id=f"marking:{self._instrument_id}:{self._marking_timeframe}:{close_ns}",
+                occurred_ns=close_ns,
+                source=f"nautilus_pyo3.marking.{self._marking_timeframe}",
+            ),
+            bar_id=f"{self._instrument_id}:{self._marking_timeframe}:{close_ns}",
+            timeframe=self._marking_timeframe,
+            open_time_utc=_datetime_from_ns(open_ns),
+            close_time_utc=_datetime_from_ns(close_ns),
+            open=bar.open.as_decimal(),
+            high=bar.high.as_decimal(),
+            low=bar.low.as_decimal(),
+            close=bar.close.as_decimal(),
+            volume=bar.volume.as_decimal(),
+            is_final=True,
+        )
+        self._apply_domain_event(event)
         self._persist_adapter_checkpoint()
 
     def on_order_submitted(self, event: Any) -> None:
@@ -2214,6 +2265,9 @@ def run_pyo3_mastermind_smoke(
     bar_type: Any,
     data: Sequence[Any],
     feature_source: BarFeatureSource,
+    marking_bar_type: Any | None = None,
+    marking_data: Sequence[Any] = (),
+    marking_interval_ns: int | None = None,
     starting_balance: Decimal = Decimal("100000"),
     fill_model: Any | None = None,
     reconcile_on_start: bool = False,
@@ -2231,6 +2285,12 @@ def run_pyo3_mastermind_smoke(
 
     if not data:
         raise ValueError("data must not be empty")
+    if (marking_bar_type is None) != (marking_interval_ns is None):
+        raise ValueError("marking bar type and interval must be configured together")
+    if marking_bar_type is None and marking_data:
+        raise ValueError("marking_data requires marking_bar_type")
+    if marking_bar_type is not None and not marking_data:
+        raise ValueError("configured marking_bar_type requires marking_data")
     if starting_balance <= ZERO or not starting_balance.is_finite():
         raise ValueError("starting_balance must be finite and positive")
     settlement_currency = instrument.settlement_currency
@@ -2262,13 +2322,15 @@ def run_pyo3_mastermind_smoke(
         bar_adaptive_high_low_ordering=True,
     )
     engine.add_instrument(instrument)
-    engine.add_data(list(data), sort=True)
+    engine.add_data([*marking_data, *data], sort=True)
     strategy = NautilusMastermindStrategy(
         machine=machine,
         strategy_id=strategy_id,
         instrument_id=instrument.id,
         bar_type=bar_type,
         feature_source=feature_source,
+        marking_bar_type=marking_bar_type,
+        marking_interval_ns=marking_interval_ns,
         reconcile_on_start=reconcile_on_start,
         known_client_order_ids=known_client_order_ids,
         persist_transition=persist_transition,

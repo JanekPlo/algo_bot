@@ -4,6 +4,10 @@
 > **Decyzja:** **ITERATE BETA**<br>
 > **Klasa wyników:** `SMOKE_ONLY / NOT_ELIGIBLE`<br>
 > **Interpretacja:** opis mechaniki; bez rankingu, doboru wariantu ani wniosku o edge
+>
+> **Iteration-2 follow-up (2026-07-15):** this report and its P9 artifacts remain
+> immutable. The blockers described below were subsequently resolved by native fill/margin
+> evidence and M5/M10 routing; this does not retroactively make P9 eligible.
 
 ## Zakres i integralność eksperymentu
 
@@ -96,3 +100,19 @@ Przed pełnym sweepem trzeba więc: rozwiązać lub formalnie zastąpić parytet
 Close-All, dostarczyć mark-price i wiarygodniejszy profil fill/cost, zdecydować o
 fidelity M5/M10 oraz zamrozić jednoznaczny zakres Session 4. Holdout pozostaje
   zamknięty do czasu nowej prerejestracji kwalifikowalnego eksperymentu.
+
+## Iteration-2 resolution (2026-07-15)
+
+The historical `ITERATE BETA` verdict above remains correct for P9. The subsequent
+Iteration-2 implementation resolves the prerequisites prospectively:
+
+- Bybit H1 mark-price OHLC for BTCUSDT and ETHUSDT covers the exact local trade-data
+  overlap and passes a zero-gap hard validator;
+- `BacktestResult` schema v2 distinguishes native Nautilus bar fills from mark-price
+  isolated-margin evidence and records liquidation events without rewriting P9;
+- the pure v2 state machine and thin Nautilus wrapper now support first-touch M5/M10
+  marking before H1 execution via multiple native bar streams;
+- Session 4 is authorized after a new preregistration for BTCUSDT and ETHUSDT separately,
+  H1 execution × M5/M10 marking. H1-only is diagnostic and the holdout remains unread.
+
+No metric or ablation from this P9 report is promoted into that preregistration.

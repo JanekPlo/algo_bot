@@ -1,6 +1,6 @@
 # Module reference — `algo_bot.strategies.mean_reversion_bb_stoch`
 
-> **Status: FULL** (MR-Session 1 Audit, 2026-07-11; supersedes the Beta DRAFT of
+> **Status: FULL** (MR-Session 3 Beta Iteration 2 update, 2026-07-15; supersedes the Beta DRAFT of
 > 2026-07-10). Hybrid format per the bghtrend Session-1 pattern: critical paths
 > verbatim, mechanical helpers summarised. Includes the parameter taxonomy with
 > overfitting watchlist, the independent-oracle audit record, and the Mastermind
@@ -234,7 +234,7 @@ end-to-end: code → this reference → mms extraction → screenshots in `mms/r
 | 1 | Envelope = TMA / NW / **BB**, settings "currently irrelevant", parametrization decides [[mms/01](../../references/mms/01-position-building.md)] | Bollinger Bands, `bb_window`/`bb_num_std` swept | **Y** | Choice within MMS-sanctioned freedom; BB mainstream + in `core.py` |
 | 2 | Both directions, band-to-band flow (TP of one side = arming level of the other) [[mms/01](../../references/mms/01-position-building.md)] | `side="both"`, TP = opposite live band | **Y** | — |
 | 3 | Wait for candle close before acting [[mms/01](../../references/mms/01-position-building.md)] | Closed-bar `on_bar`, `trade_on_close` | **Y** | — |
-| 4 | Entry on the *first reaction candle from the new interval*, marked on M5/M10 within H1 [[mms/01](../../references/mms/01-position-building.md), [mms/04](../../references/mms/04-interval-marking.md)] | Two-bar H1 proxy: wick-touch arms, next H1 body = reaction | **PARTIAL** | No intrabar data (Beta Decision 1); entry lags manual MMS by ≤1 H1 bar — conservative; revisit only if Sweep shows timing-attributable decay |
+| 4 | Entry on the *first reaction candle from the new interval*, marked on M5/M10 within H1 [[mms/01](../../references/mms/01-position-building.md), [mms/04](../../references/mms/04-interval-marking.md)] | v2: first M5/M10 wick touch against the last completed H1 bands arms; H1 executes the reaction. Legacy v1 keeps its two-H1 proxy. | **Y in v2 / PARTIAL in v1** | Native multiple-BarType ordering keeps marking causal; one marking TF is preregistered per run. |
 | 5 | TP = opposite band, simultaneously arming of the reverse setup [[mms/01](../../references/mms/01-position-building.md)] | `tp_band`, live (recomputed per bar) | **Y** | Live-band reading chosen in Beta (Decision 3); exit bar cannot arm the reversal (audit seam 2) — MMS flow would allow immediate re-setup, ours re-arms earliest next bar |
 | 6 | Initial SL = **2%** price move from base position [[mms/01](../../references/mms/01-position-building.md)] | `sl_pct=0.02` default, swept 1–3% | **Y** | Range spans TF variants; author's own EA uses 1.7% [[mms/06](../../references/mms/06-algotrading-semi-auto.md)] |
 | 7 | No trailing stops (parametrization showed worse results) [[mms/01](../../references/mms/01-position-building.md)] | No trail / BE / timeout | **Y** | — |
@@ -265,15 +265,44 @@ rescue to the sequential sizing layer
 
 ## Known limitations
 
+### Native v2 M5/M10 marking
+
+The legacy `MeanReversionBBStoch` class above is intentionally unchanged. The executable
+v2 path is the pure `MastermindStateMachine` wrapped by
+`NautilusMastermindStrategy`; it accepts `MastermindConfig.marking_timeframe` as `"5m"`,
+`"10m"` or `None`.
+
+When marking is enabled, each completed marking bar is delivered as a
+`MarkingBarClosed` domain event. Its wick is compared with Bollinger Bands calculated
+only from the last completed H1 execution bar. The first one-sided touch arms the setup;
+later touches in the same H1 interval do not refresh or replace it. At an equal close
+timestamp all M5/M10 events are processed before the H1 event, then H1 alone evaluates
+the reaction and emits execution intents. The state machine rejects missing, duplicate,
+out-of-order or wrong-interval marking bars, so the logical sequence is always:
+
+```
+all completed M5/M10 marking bars → one H1 execution bar
+```
+
+Nautilus 1.230.0 was exercised with two native `BarType` subscriptions; a regression test
+pins 12 M5 bars before the equal-close H1 bar. The M10 variant uses the same generic event
+contract and is produced offline from native Bybit M5 data because Bybit has no native M10
+kline.
+
+`marking_timeframe=None` preserves the H1-only two-bar proxy byte-for-byte and is retained
+as a **diagnostic fallback**, not as the primary Session-4 evidence variant. A missing
+marking dataset therefore degrades explicitly to a separately labelled diagnostic run; it
+must never silently change a preregistered M5/M10 experiment.
+
 - **`backtesting.py` native cannot express the deferred edge.** Pyramiding (scaling
   into positions) and sequential leverage reduction (x1 ↔ x0.1 across trades) are a
   state machine above single positions. If MR-Session 2+ demonstrates that
   pyramiding is required for viability, **engine migration (vectorbt /
   nautilus_trader) becomes a prerequisite for MVP go-live** — early warning, per
   Beta CHANGELOG.
-- **No intrabar data:** the M5/M10 interval-marking mechanics
-  [[mms/04](../../references/mms/04-interval-marking.md)] are proxied by two H1 (or
-  15m) bars; entries lag the manual methodology by up to one bar.
+- **Legacy-v1 intrabar limitation:** only the legacy `backtesting.py` implementation
+  still proxies M5/M10 marking with two H1 (or 15m) bars. Native v2 resolves this for
+  Session 4; it remains bar-based and does not claim tick/order-book fidelity.
 - **Unbounded hold time × funding:** no timeout; funding measured post-hoc via the
   ADR-011 overlay (raw vs post). The sign may favour us (contrarian MR receives
   funding more often than it pays), but the tail is untested — future ADR (together

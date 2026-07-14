@@ -28,6 +28,7 @@ class SignalContext:
     addon_opportunity_consumed: bool
     setup_side: Side | None
     reaction_bar: BarSnapshot | None
+    marking_enabled: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -157,7 +158,7 @@ def evaluate_bar(
                     next_memory.armed_side = None
                     next_memory.armed_bars_remaining = 0
                     next_memory.touch_bar_id = None
-        else:
+        elif not context.marking_enabled:
             touch_long = bar.low <= bar.bb_lower
             touch_short = bar.high >= bar.bb_upper
             if touch_long != touch_short:

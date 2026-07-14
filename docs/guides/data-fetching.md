@@ -63,6 +63,27 @@ The CLI entry points (`pyproject.toml [project.scripts]`, ADR-010):
 
 Both accept `--log-level {DEBUG,INFO,WARNING,ERROR}` (default `INFO`).
 
+### Bybit H1 mark-price evidence
+
+MR-Session 3 Beta Iteration 2 adds a separate OHLC-only price source for liquidation
+evidence. It is not an execution-price substitute and it is not mixed into the trade
+OHLCV files.
+
+```bash
+uv run algo-fetch BTCUSDT 1h --exchange bybit --market future \
+  --price-source mark --start 2020-03-25
+uv run algo-fetch ETHUSDT 1h --exchange bybit --market future \
+  --price-source mark --start 2021-03-15
+uv run algo-process bot_data/raw/bybit_BTC_USDT-mark-1h.csv
+uv run algo-process bot_data/raw/bybit_ETH_USDT-mark-1h.csv
+```
+
+The outputs are `bot_data/processed/bybit_BTCUSDT_mark_1h.csv` and
+`bybit_ETHUSDT_mark_1h.csv`, with `datetime,Open,High,Low,Close`. Mark-price mode is
+accepted only for Bybit futures. Processing performs a hard integrity check and never
+fills a gap: a missing bar may hide a liquidation crossing. For an exact experiment
+window, pass the same `--end` used for the corresponding trade-OHLCV series.
+
 ---
 
 ## Step 1 — Fetch raw klines

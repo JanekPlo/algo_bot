@@ -39,6 +39,7 @@ from algo_bot.strategies.mastermind.model import (
     CloseRequested,
     DomainEvent,
     DomainIntent,
+    MarkingBarClosed,
     MastermindConfig,
     OrderFilled,
     OrderLifecycle,
@@ -62,6 +63,7 @@ from algo_bot.strategies.mastermind.state_machine import MastermindStateMachine
 
 STRATEGY_ID = "MMS-PYO3-001"
 INSTRUMENT = "BTCUSDT-PERP.BINANCE"
+FIVE_MINUTES_NS = 300_000_000_000
 
 
 @dataclass(frozen=True)
@@ -457,6 +459,43 @@ def test_native_funding_is_drained_once_before_position_close() -> None:
     assert funding_events[0].setup_id == reconciled[0].setup_id
     assert closed[0].funding == Decimal("-1.00000000")
     assert result.final_net_quantity == 0
+
+
+def test_native_multi_tf_routes_all_m5_before_equal_close_h1() -> None:
+    """Nautilus 1.230.0 dostarcza M5 phase przed H1 przy wspólnym close."""
+
+    instrument, h1_type = _instrument_fixture()
+    m5_type = nt.BarType.from_str(f"{instrument.id}-5-MINUTE-LAST-EXTERNAL")
+    marking = _bars(
+        instrument,
+        m5_type,
+        [(100, 101, 99, 100)] * 12,
+        timestamps=[(index + 1) * FIVE_MINUTES_NS for index in range(12)],
+    )
+    execution = _bars(
+        instrument,
+        h1_type,
+        [(100, 101, 99, 100)],
+        timestamps=[HOUR_NS],
+    )
+    machine = _ScriptedMachine()
+    run_pyo3_mastermind_smoke(
+        machine=machine,
+        strategy_id=STRATEGY_ID,
+        instrument=instrument,
+        bar_type=h1_type,
+        data=execution,
+        feature_source=_features,
+        marking_bar_type=m5_type,
+        marking_data=marking,
+        marking_interval_ns=FIVE_MINUTES_NS,
+    )
+
+    routed = [event for event in machine.events if isinstance(event, (MarkingBarClosed, BarClosed))]
+    assert len(routed) == 13
+    assert all(isinstance(event, MarkingBarClosed) for event in routed[:12])
+    assert isinstance(routed[-1], BarClosed)
+    assert routed[-2].close_time_utc == routed[-1].close_time_utc
 
 
 def test_unresolved_funding_watermark_blocks_final_reconciliation() -> None:

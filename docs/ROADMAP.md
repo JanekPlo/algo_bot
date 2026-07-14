@@ -187,14 +187,22 @@ Faza 5: Production na VPS              → 1-2 tyg.
   offline z M5. Native `nautilus_trader.adapters.bybit` zweryfikowany (dostępny w 1.230.0,
   zarezerwowany dla backtest lane). ADR-014 §9 / ADR-011 / ADR-005 uzupełnione notami Bybit.
   Dane historyczne fetchowane operator-side na VPS (Bybit linear inception ~2020-03-25).
-  **Iteration 2 next:** mark-price/native fills, M5/M10 fidelity, doprecyzowanie zakresu
-  instrumentów (BTC + ETH osobno) — pozostałe 3 blockery przed Session 4.
-- **MR-Session 4 (full v2 sweep on nautilus) — BLOCKED / CONDITIONAL** — pełny zakres
-  zostanie prerejestrowany dopiero po: rozwiązaniu parytetu Binance Close-All w
-  backteście, dostarczeniu mark-price i kwalifikowalnego cost/fill profile,
-  rozstrzygnięciu fidelity M5/M10 oraz jednoznacznym zamrożeniu zakresu
-  (sześć instrumentów vs historyczne BTC/ETH × trzy grupy). Nie wolno uruchamiać
-  go bezwarunkowo na podstawie niekwalifikowalnego smoke testu.
+- **MR-Session 3 Beta Iteration 2 (native fills evidence + mark-price + M5/M10 fidelity) —
+  DONE 2026-07-15** — zaakceptowane `1a/2a/3R/4R/5c/6a/7R`. Dostarczone:
+  pełne H1 mark-price Bybit dla BTC/ETH na dokładnym overlapie OHLCV (zero gapów,
+  bez fillowania); isolated liquidation wg risk tieru, jako hard-stop i ujemny outcome;
+  ortogonalne `FillMethod`/`MarginMethod` w `BacktestResult` schema v2 z migracją P9
+  tylko in-memory; generic `MarkingBarClosed` M5/M10 porównujący pierwszy wick touch z
+  ostatnimi ukończonymi H1 Bands; natywne multiple `BarType` w wrapperze i porządek
+  all marking sub-bars → H1 execution. P9 pozostaje niezmienione i niekwalifikowalne.
+- **MR-Session 4 (full v2 sweep on nautilus) — READY / UNCONDITIONAL AFTER PREREGISTRATION** —
+  zakres zamrożony: **BTCUSDT i ETHUSDT osobno**, H1 execution, warianty marking
+  **M5 oraz M10**; H1-only wyłącznie jako podpisany diagnostic fallback. Przed odczytem
+  metryk trzeba zapisać prerejestrację, zamrozić pełne Bybit risk tiers i hashe danych,
+  a każdy wynik musi mieć `fill_method=nautilus_native_bar` oraz
+  `margin_method=mark_price_isolated`. Holdout nadal pozostaje zamknięty do tej
+  prerejestracji. Brak tick/order-book depth jest jawnym ograniczeniem barowego badania,
+  nie blockerem technicznym Session 4.
 - **MR-Session 5 (conditional WF → MC → Stress → ADR go/no-go)** — full-MMS-system
   verdict (analogue of the bghtrend Session-8 go/no-go), **gated** on the Session-4
   sweep clearing in-sample eligibility (don't run the expensive robustness layer on a

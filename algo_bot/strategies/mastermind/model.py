@@ -169,6 +169,7 @@ class MastermindConfig:
     addon_enabled: bool = True
     sequential_enabled: bool = True
     timeframe: str = "1h"
+    marking_timeframe: str | None = None
     bb_window: int = 20
     bb_num_std: Decimal = Decimal("2")
     arm_expiry_bars: int = 2
@@ -200,6 +201,8 @@ class MastermindConfig:
             raise TypeError("addon_trigger_policy must be AddonTriggerPolicy")
         if self.timeframe != "1h":
             raise ValueError("mms v2 Beta accepts only timeframe='1h'")
+        if self.marking_timeframe not in (None, "5m", "10m"):
+            raise ValueError("marking_timeframe musi być None, '5m' albo '10m'")
         if (
             isinstance(self.bb_window, bool)
             or not isinstance(self.bb_window, int)
@@ -259,6 +262,9 @@ class MastermindConfig:
             "sequential_enabled": self.sequential_enabled,
             "timeframe": self.timeframe,
         }
+        # Brak klucza zachowuje dokładny config hash zamrożonych runów P9.
+        if self.marking_timeframe is not None:
+            data["marking_timeframe"] = self.marking_timeframe
         raw = json.dumps(data, sort_keys=True, separators=(",", ":")).encode()
         return hashlib.sha256(raw).hexdigest()
 
@@ -331,6 +337,22 @@ class BarClosed(EventEnvelope):
             stoch_k=self.stoch_k,
             stoch_d=self.stoch_d,
         )
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class MarkingBarClosed(EventEnvelope):
+    """Finalny M5/M10 bar używany wyłącznie do uzbrojenia H1 execution."""
+
+    bar_id: str
+    timeframe: str
+    open_time_utc: datetime
+    close_time_utc: datetime
+    open: Decimal
+    high: Decimal
+    low: Decimal
+    close: Decimal
+    volume: Decimal
+    is_final: bool = True
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -465,6 +487,7 @@ class ReconciliationCompleted(EventEnvelope):
 type DomainEvent = (
     AccountEquityUpdated
     | BarClosed
+    | MarkingBarClosed
     | OrderSubmitted
     | OrderAccepted
     | OrderRejected
@@ -675,6 +698,8 @@ class SignalMemory:
     recent_bars: list[BarSnapshot] = field(default_factory=list)
     confirming_candle_checked: bool = False
     seen_trigger_ids: set[str] = field(default_factory=set)
+    last_marking_close_time_utc: datetime | None = None
+    marking_bars_in_phase: int = 0
 
 
 @dataclass(slots=True)

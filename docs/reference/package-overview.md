@@ -100,24 +100,26 @@ algo_bot/
 | `strategy_base.py` | **Bazowa klasa strategii legacy + `Signal`.** Definiuje `on_bar(df) -> Signal`; nie jest rozszerzana o wielonogowy automat v2. Patrz [ADR-003](../adr/003-strategybase-signal-api.md) i [ADR-014](../adr/014-engine-migration-nautilus.md). |
 | `strategy_loader.py` | `load_strategy(name, params)` — dynamiczny import oraz walidacja `StrategyBase`. |
 | `data_loader.py` | Loader i walidacja plików `bot_data`. |
-| `fetch_data.py` / `process_data.py` | CLI CCXT → raw → processed. |
+| `fetch_data.py` / `process_data.py` | CLI CCXT → raw → processed, including strict OHLC-only Bybit H1 mark-price files (`--price-source mark`, never gap-filled). |
 | `funding.py` | Pobieranie historycznych funding rates (`uv run algo-fetch-funding`). |
+| `microstructure.py` | Legacy slippage/funding overlay plus the independent causal mark-price, Bybit isolated-liquidation and risk-tier contract. |
 
 ### `algo_bot/engine/`
 
 | Plik | Rola |
 |---|---|
 | `backtester.py` | Przypięty runner `backtesting.py`; `run_backtest()` zachowuje tuple, a `run_backtest_result()` buduje rich source result. |
-| `backtest_result.py` | `BacktestResult` ze schema/version, engine/git/data/config hash, sześcioma ledgerami oraz fail-closed cost eligibility. |
+| `backtest_result.py` | `BacktestResult` schema v2 with engine/git/data/config hashes, six ledgers, orthogonal fill/margin evidence, liquidation events and read-only in-memory migration of schema-v1 P9 artifacts. |
 | `sweep.py` | Grid/random search; konfiguracje są walidowane przed samplingiem. |
 | `walkforward.py` | Rolling/anchored walk-forward i bramki MVP/WF. |
 | `nautilus_poc.py` | P3: close timestamps, causal fill scheduling, gap i OHLC ordering. |
 | `nautilus_oms_poc.py` | P4: wybór OMS-A NETTING + virtual legs, Close-All i incremental add-on stops. |
 | `nautilus_adapter.py` | P5 Tier-1: wąski `StrategyBase` → Nautilus Cython profil z zamrożoną equivalence. Nie hostuje MMS v2. |
-| `nautilus_mastermind.py` | P7: cienkie mapowanie PyO3 event↔domain intent, native costs, stable IDs, reconciliation i transport checkpoint. Profil pozostaje `SMOKE_ONLY / NOT_ELIGIBLE`. |
+| `nautilus_mastermind.py` | Thin PyO3 event↔domain-intent wrapper with native costs, stable IDs, reconciliation and multiple native H1 + M5/M10 `BarType` routing. P9 remains `SMOKE_ONLY`; Session-4 artifacts use schema-v2 evidence. |
 | `mms_beta_data.py` | P9: streaming warm-up+development, ścisła granica nietkniętego holdoutu, TA-Lib features i native funding updates. |
 | `mms_beta_benchmark.py` | P9: prerejestrowana macierz 2 zestawy × 6 wariantów, manifest, invariant ledger i opisowe kontrasty ablation. |
 | `exchanges/binance_adapter.py` | CCXT wrapper dla Binance Futures, używany przez fetch/live legacy. |
+| `exchanges/bybit_adapter.py` | Bybit v5 linear-perpetual adapter: One-Way orders/stops, public mark-price OHLCV and risk-limit retrieval. |
 
 ### `algo_bot/indicators/`
 

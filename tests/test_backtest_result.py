@@ -20,6 +20,8 @@ from algo_bot.engine.backtest_result import (
     CostProvenance,
     EligibilityAssessment,
     EligibilityStatus,
+    FillMethod,
+    MarginMethod,
     ResearchEligibilityError,
     ResultClass,
     SourceTreeState,
@@ -30,6 +32,7 @@ from algo_bot.engine.backtest_result import (
     legacy_adr011_cost_model,
 )
 from algo_bot.engine.backtester import run_backtest, run_backtest_result
+from algo_bot.microstructure import LiquidationEvent
 
 _EMPTY_HASH = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 
@@ -121,6 +124,7 @@ def _result(
     *,
     cost_model: CostModel | None = None,
     eligibility: EligibilityAssessment | None = None,
+    liquidation_events: tuple[LiquidationEvent, ...] = (),
 ) -> BacktestResult:
     equity, trades, orders, fills, positions, funding = _frames()
     resolved_cost_model = cost_model or _eligible_cost_model()
@@ -143,6 +147,10 @@ def _result(
         random_seed=20260713,
         cost_model=resolved_cost_model,
         eligibility=resolved_eligibility,
+        fill_method=FillMethod.NAUTILUS_NATIVE_BAR,
+        margin_method=MarginMethod.MARK_PRICE_ISOLATED,
+        mark_price_source="bybit:BTCUSDT:mark:1h:test-fixture",
+        liquidation_events=liquidation_events,
     )
 
 
@@ -170,6 +178,46 @@ def test_missing_native_funding_fails_closed_but_artifact_remains_diagnostic() -
     assert "FUNDING_MISSING" in result.eligibility.reasons
     with pytest.raises(ResearchEligibilityError, match="FUNDING_MISSING"):
         result.assert_research_eligible()
+
+
+def test_liquidation_is_eligible_negative_outcome_and_round_trips(tmp_path: Path) -> None:
+    event = LiquidationEvent(
+        position_id="position-1",
+        side="long",
+        observed_at=pd.Timestamp("2024-01-01T02:00:00Z"),
+        mark_price=36_000.0,
+        liquidation_price=36_380.25,
+        maintenance_margin_rate=0.005,
+        maintenance_margin_deduction=0.0,
+        source="bybit_BTCUSDT_mark_1h.csv",
+    )
+    result = _result(liquidation_events=(event,))
+    assert result.eligibility.status is EligibilityStatus.ELIGIBLE
+    result.save(tmp_path)
+    restored = BacktestResult.load(tmp_path)
+    assert restored.liquidation_events == (event,)
+    assert restored.fill_method is FillMethod.NAUTILUS_NATIVE_BAR
+    assert restored.margin_method is MarginMethod.MARK_PRICE_ISOLATED
+
+
+def test_schema_v1_load_migrates_in_memory_without_rewriting_artifact(tmp_path: Path) -> None:
+    result = _result()
+    result.save(tmp_path)
+    manifest_path = tmp_path / "manifest.json"
+    original = json.loads(manifest_path.read_text(encoding="utf-8"))
+    original["schema_version"] = "backtest_result/1"
+    for key in ("fill_method", "margin_method", "mark_price_source", "liquidation_events"):
+        original.pop(key)
+    legacy_text = json.dumps(original, sort_keys=True, separators=(",", ":"))
+    manifest_path.write_text(legacy_text, encoding="utf-8")
+
+    restored = BacktestResult.load(tmp_path)
+    assert restored.schema_version == BACKTEST_RESULT_SCHEMA_VERSION
+    assert restored.fill_method is FillMethod.CLOSE_NAIVE
+    assert restored.margin_method is MarginMethod.NONE
+    assert restored.eligibility.status is EligibilityStatus.NOT_ELIGIBLE
+    assert "FILL_METHOD_CLOSE_NAIVE" in restored.eligibility.reasons
+    assert manifest_path.read_text(encoding="utf-8") == legacy_text
 
 
 def test_native_does_not_automatically_mean_research_eligible() -> None:

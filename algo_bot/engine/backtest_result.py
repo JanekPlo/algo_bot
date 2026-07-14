@@ -32,7 +32,10 @@ import numpy as np
 import pandas as pd
 from pandas.api.types import is_datetime64_any_dtype, is_timedelta64_dtype
 
-BACKTEST_RESULT_SCHEMA_VERSION = "backtest_result/1"
+from algo_bot.microstructure import LiquidationEvent
+
+BACKTEST_RESULT_SCHEMA_VERSION = "backtest_result/2"
+LEGACY_BACKTEST_RESULT_SCHEMA_VERSION = "backtest_result/1"
 _HASH_LENGTH = 64
 _FRAME_NAMES = ("equity", "trades", "orders", "fills", "positions", "funding")
 
@@ -77,6 +80,21 @@ class EligibilityStatus(StrEnum):
 
     ELIGIBLE = "ELIGIBLE"
     NOT_ELIGIBLE = "NOT_ELIGIBLE"
+
+
+class FillMethod(StrEnum):
+    """Jak engine wyznaczył ceny zapisane w ledgerze fills."""
+
+    CLOSE_NAIVE = "close_naive"
+    CLOSE_PLUS_SLIPPAGE = "close_plus_slippage"
+    NAUTILUS_NATIVE_BAR = "nautilus_native_bar"
+
+
+class MarginMethod(StrEnum):
+    """Czy margin safety używa przyczynowej historii mark-price."""
+
+    NONE = "none"
+    MARK_PRICE_ISOLATED = "mark_price_isolated"
 
 
 @dataclass(frozen=True, slots=True)
@@ -384,6 +402,10 @@ class BacktestResult:
     random_seed: int
     cost_model: CostModel
     eligibility: EligibilityAssessment
+    fill_method: FillMethod = FillMethod.CLOSE_NAIVE
+    margin_method: MarginMethod = MarginMethod.NONE
+    mark_price_source: str | None = None
+    liquidation_events: tuple[LiquidationEvent, ...] = ()
 
     def __post_init__(self) -> None:
         self.validate()
@@ -404,6 +426,19 @@ class BacktestResult:
         _validate_sha256(self.config_hash, "config_hash")
         if self.random_seed < 0:
             raise BacktestResultError("random_seed must be non-negative")
+        if not isinstance(self.fill_method, FillMethod):
+            raise BacktestResultError("fill_method must be FillMethod")
+        if not isinstance(self.margin_method, MarginMethod):
+            raise BacktestResultError("margin_method must be MarginMethod")
+        if self.margin_method is MarginMethod.MARK_PRICE_ISOLATED:
+            if self.mark_price_source is None or not self.mark_price_source.strip():
+                raise BacktestResultError("mark_price_isolated requires mark_price_source")
+        elif self.mark_price_source is not None:
+            raise BacktestResultError("mark_price_source requires a mark-price margin method")
+        if not isinstance(self.liquidation_events, tuple) or not all(
+            isinstance(event, LiquidationEvent) for event in self.liquidation_events
+        ):
+            raise BacktestResultError("liquidation_events must be tuple[LiquidationEvent, ...]")
         for frame_name in _FRAME_NAMES:
             frame = getattr(self, frame_name)
             if not isinstance(frame, pd.DataFrame):
@@ -416,6 +451,7 @@ class BacktestResult:
         self.stats = normalized_stats
 
         required_reasons = set(self.cost_model.ineligibility_reasons())
+        required_reasons.update(self.evidence_ineligibility_reasons())
         actual_reasons = set(self.eligibility.reasons)
         if self.eligibility.status is EligibilityStatus.ELIGIBLE:
             if required_reasons or not self.cost_model.is_research_eligible:
@@ -433,6 +469,18 @@ class BacktestResult:
             and self.eligibility.result_class is not ResultClass.SMOKE_ONLY
         ):
             raise BacktestResultError("Approximate costing requires SMOKE_ONLY result class")
+
+    def evidence_ineligibility_reasons(self) -> tuple[str, ...]:
+        """Zwraca braki metodologii fills/margin, niezależnie od wyniku PnL."""
+
+        reasons: list[str] = []
+        if self.fill_method is FillMethod.CLOSE_NAIVE:
+            reasons.append("FILL_METHOD_CLOSE_NAIVE")
+        elif self.fill_method is FillMethod.CLOSE_PLUS_SLIPPAGE:
+            reasons.append("FILL_METHOD_CLOSE_PLUS_SLIPPAGE")
+        if self.margin_method is MarginMethod.NONE:
+            reasons.append("MARK_PRICE_MARGIN_NOT_MODELLED")
+        return tuple(reasons)
 
     def as_legacy_tuple(self) -> LegacyResultTuple:
         """Return the historical ``(stats, equity, trades)`` facade."""
@@ -475,6 +523,12 @@ class BacktestResult:
             "random_seed": self.random_seed,
             "cost_model": self.cost_model.to_dict(),
             "eligibility": self.eligibility.to_dict(),
+            "fill_method": self.fill_method.value,
+            "margin_method": self.margin_method.value,
+            "mark_price_source": self.mark_price_source,
+            "liquidation_events": normalize_json(
+                [event.to_dict() for event in self.liquidation_events]
+            ),
             "frames": frames,
         }
 
@@ -507,7 +561,11 @@ class BacktestResult:
         if not isinstance(raw_manifest, dict):
             raise ArtifactIntegrityError("BacktestResult manifest must be a JSON object")
         manifest = cast(dict[str, object], raw_manifest)
-        if manifest.get("schema_version") != BACKTEST_RESULT_SCHEMA_VERSION:
+        stored_schema = manifest.get("schema_version")
+        if stored_schema not in {
+            BACKTEST_RESULT_SCHEMA_VERSION,
+            LEGACY_BACKTEST_RESULT_SCHEMA_VERSION,
+        }:
             raise ArtifactIntegrityError(
                 f"Unsupported BacktestResult schema: {manifest.get('schema_version')!r}"
             )
@@ -536,8 +594,40 @@ class BacktestResult:
                 raise ArtifactIntegrityError(f"Cannot decode {name} frame: {exc}") from exc
 
         stats_raw = _required_mapping(manifest, "stats")
+        legacy = stored_schema == LEGACY_BACKTEST_RESULT_SCHEMA_VERSION
+        raw_liquidations = manifest.get("liquidation_events", [])
+        if not isinstance(raw_liquidations, list):
+            raise ArtifactIntegrityError("liquidation_events must be a list")
+        liquidation_events: list[LiquidationEvent] = []
+        for raw_event in raw_liquidations:
+            if not isinstance(raw_event, dict):
+                raise ArtifactIntegrityError("liquidation event must be an object")
+            try:
+                liquidation_events.append(LiquidationEvent.from_dict(raw_event))
+            except (KeyError, TypeError, ValueError) as exc:
+                raise ArtifactIntegrityError(f"Invalid liquidation event: {exc}") from exc
+
+        restored_cost_model = CostModel.from_dict(_required_mapping(manifest, "cost_model"))
+        restored_eligibility = EligibilityAssessment.from_dict(
+            _required_mapping(manifest, "eligibility")
+        )
+        if legacy:
+            restored_eligibility = assess_eligibility(
+                restored_cost_model,
+                extra_reasons=(
+                    *restored_eligibility.reasons,
+                    "FILL_METHOD_CLOSE_NAIVE",
+                    "MARK_PRICE_MARGIN_NOT_MODELLED",
+                ),
+                noneligible_class=(
+                    ResultClass.SMOKE_ONLY
+                    if restored_eligibility.result_class is ResultClass.RESEARCH
+                    else restored_eligibility.result_class
+                ),
+            )
+
         result = cls(
-            schema_version=_required_str(manifest, "schema_version"),
+            schema_version=BACKTEST_RESULT_SCHEMA_VERSION,
             engine=_required_str(manifest, "engine"),
             engine_version=_required_str(manifest, "engine_version"),
             strategy_version=_required_str(manifest, "strategy_version"),
@@ -552,10 +642,26 @@ class BacktestResult:
             data_hash=_required_str(manifest, "data_hash"),
             config_hash=_required_str(manifest, "config_hash"),
             random_seed=_required_int(manifest, "random_seed"),
-            cost_model=CostModel.from_dict(_required_mapping(manifest, "cost_model")),
-            eligibility=EligibilityAssessment.from_dict(_required_mapping(manifest, "eligibility")),
+            cost_model=restored_cost_model,
+            eligibility=restored_eligibility,
+            fill_method=(
+                FillMethod.CLOSE_NAIVE
+                if legacy
+                else FillMethod(_required_str(manifest, "fill_method"))
+            ),
+            margin_method=(
+                MarginMethod.NONE
+                if legacy
+                else MarginMethod(_required_str(manifest, "margin_method"))
+            ),
+            mark_price_source=(
+                None
+                if legacy or manifest.get("mark_price_source") is None
+                else str(manifest["mark_price_source"])
+            ),
+            liquidation_events=tuple(liquidation_events),
         )
-        if result.manifest() != normalize_json(raw_manifest):
+        if not legacy and result.manifest() != normalize_json(raw_manifest):
             raise ArtifactIntegrityError("Manifest metadata does not match restored result")
         return result
 

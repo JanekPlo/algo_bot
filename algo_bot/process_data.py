@@ -34,6 +34,7 @@ from typing import Any
 
 import pandas as pd
 
+from algo_bot.data_integrity import check_mark_price_integrity
 from algo_bot.log import get_logger, setup_logging
 
 logger = get_logger(__name__)
@@ -72,6 +73,8 @@ def parse_raw_name(raw_path: Path) -> tuple[str, str, str]:
     """
     stem = raw_path.stem  # np. 'bybit_BTC_USDT-5m' albo 'BTC_USDT-5m'
     name, tf = stem.rsplit("-", 1)
+    if name.endswith("-mark"):
+        name = name.removesuffix("-mark")
     parts = name.split("_")
     if parts and parts[0].lower() in KNOWN_EXCHANGES:
         exchange = parts[0].lower()
@@ -87,6 +90,12 @@ def parse_legacy_name(raw_path: Path) -> tuple[str, str]:
     """[compat] BTC_USDT-5m.csv -> ('BTCUSDT','5m'). Patrz parse_raw_name."""
     _exchange, symbol, tf = parse_raw_name(raw_path)
     return symbol, tf
+
+
+def is_mark_price_raw(raw_path: Path) -> bool:
+    """Rozpoznaje jawny suffix ``-mark-<TF>.csv`` w nazwie RAW."""
+
+    return "-mark-" in raw_path.stem
 
 
 def _ensure_ts_datetime(df: pd.DataFrame) -> pd.DataFrame:
@@ -145,9 +154,16 @@ def validate_and_fill(
     return df.sort_values("ts").reset_index(drop=True)
 
 
-def processed_filename(symbol_no_slash: str, timeframe: str, exchange: str = "binance") -> Path:
+def processed_filename(
+    symbol_no_slash: str,
+    timeframe: str,
+    exchange: str = "binance",
+    *,
+    mark_price: bool = False,
+) -> Path:
     PROC_DIR.mkdir(parents=True, exist_ok=True)
-    return PROC_DIR / f"{exchange.lower()}_{symbol_no_slash}_{timeframe}.csv"
+    marker = "_mark" if mark_price else ""
+    return PROC_DIR / f"{exchange.lower()}_{symbol_no_slash}{marker}_{timeframe}.csv"
 
 
 def compute_features(df: pd.DataFrame, feature_cfg: list[dict[str, Any]] | None) -> pd.DataFrame:
@@ -197,41 +213,68 @@ def process_file(
 
     inferred_exchange, symbol, timeframe = parse_raw_name(raw_path)
     exchange = (exchange or inferred_exchange).lower()
+    mark_price = is_mark_price_raw(raw_path)
     if timeframe not in TF_MS:
         raise ValueError(f"Unsupported timeframe in filename: {timeframe}")
+    if mark_price and exchange != "bybit":
+        raise ValueError("Mark-price pipeline jest obecnie zamrożony dla Bybit")
 
     df = pd.read_csv(raw_path)
     df = _ensure_ts_datetime(df)
 
-    # sanity OHLCV
-    needed = ["Open", "High", "Low", "Close", "Volume"]
+    # sanity OHLCV / mark-price OHLC
+    needed = ["Open", "High", "Low", "Close"]
+    if not mark_price:
+        needed.append("Volume")
     for c in needed:
         if c not in df.columns:
             raise ValueError(f"Missing column '{c}' in RAW {raw_path}")
 
-    # walidacja + fill braków
-    df = validate_and_fill(
-        df[["ts", "datetime", "Open", "High", "Low", "Close", "Volume"]],
-        timeframe,
-        max_missing_ratio=max_missing_ratio,
-    )
+    if mark_price:
+        # Brakującego mark-price nie wolno syntetyzować: High/Low luki mogło
+        # przekroczyć liquidation price. Integrity jest zatem twarde i no-fill.
+        mark_columns = ["ts", "datetime", "Open", "High", "Low", "Close"]
+        df = df.loc[:, mark_columns].sort_values("ts").drop_duplicates(subset=["ts"])
+        mark_indexed = df.set_index(pd.DatetimeIndex(df["datetime"])).drop(
+            columns=["ts", "datetime"]
+        )
+        report = check_mark_price_integrity(
+            mark_indexed,
+            timeframe,
+            symbol=symbol,
+            exchange=exchange,
+        )
+        if not report.ok:
+            raise ValueError(f"Mark-price integrity failed for {raw_path}")
+    else:
+        # Standard OHLCV zachowuje historyczną politykę fillowania małych luk.
+        df = validate_and_fill(
+            df[["ts", "datetime", "Open", "High", "Low", "Close", "Volume"]],
+            timeframe,
+            max_missing_ratio=max_missing_ratio,
+        )
 
     # Trzymaj kolumnę 'datetime' (UTC) w PROCESSED, żeby loader backtestera mógł ją sparsować
     df["datetime"] = pd.to_datetime(df["datetime"], utc=True)
     df = df.sort_values("datetime")
 
     # opcjonalne featury
-    df = compute_features(df, feature_cfg)
+    if not mark_price:
+        df = compute_features(df, feature_cfg)
 
-    out = processed_filename(symbol, timeframe, exchange)
+    out = processed_filename(symbol, timeframe, exchange, mark_price=mark_price)
     cols_order = [
         "datetime",
         "Open",
         "High",
         "Low",
         "Close",
-        "Volume",
-    ] + [c for c in df.columns if c not in ["datetime", "Open", "High", "Low", "Close", "Volume"]]
+    ]
+    if not mark_price:
+        cols_order.append("Volume")
+    cols_order += [
+        c for c in df.columns if c not in ["datetime", "Open", "High", "Low", "Close", "Volume"]
+    ]
     df[cols_order].to_csv(out, index=False)
     logger.info(
         "Wrote PROCESSED file",

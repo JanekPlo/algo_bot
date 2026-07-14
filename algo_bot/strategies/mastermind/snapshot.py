@@ -354,6 +354,12 @@ def _signal(signal: SignalMemory) -> dict[str, Any]:
         "recent_bars": [_bar(bar) for bar in signal.recent_bars],
         "confirming_candle_checked": signal.confirming_candle_checked,
         "seen_trigger_ids": sorted(signal.seen_trigger_ids),
+        "last_marking_close_time_utc": (
+            None
+            if signal.last_marking_close_time_utc is None
+            else _timestamp(signal.last_marking_close_time_utc)
+        ),
+        "marking_bars_in_phase": signal.marking_bars_in_phase,
     }
 
 
@@ -371,6 +377,15 @@ def _restore_signal(data: dict[str, Any]) -> SignalMemory:
             "confirming_candle_checked",
         ),
         seen_trigger_ids=set(cast(list[str], data["seen_trigger_ids"])),
+        last_marking_close_time_utc=(
+            None
+            if data.get("last_marking_close_time_utc") is None
+            else _restore_timestamp(data["last_marking_close_time_utc"])
+        ),
+        marking_bars_in_phase=_int(
+            data.get("marking_bars_in_phase", 0),
+            "marking_bars_in_phase",
+        ),
     )
 
 

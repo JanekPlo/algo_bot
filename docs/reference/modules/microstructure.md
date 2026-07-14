@@ -1,17 +1,27 @@
 # Reference — `algo_bot.microstructure`
 
-Deep reference for the microstructure cost layer (slippage + perpetual-futures funding). For the rationale and rejected alternatives, see [ADR-011](../../adr/011-microstructure-adjustments.md). For a one-page concept orientation (why these costs matter, why ~bps numbers), see [concepts/microstructure](../../concepts/microstructure.md).
+Deep reference for the execution-cost layer (slippage + perpetual-futures funding) and
+the independent mark-price margin-safety layer. For the original cost-overlay rationale
+and rejected alternatives, see [ADR-011](../../adr/011-microstructure-adjustments.md).
 
 ## Scope
 
-`algo_bot.microstructure` is a **pure, I/O-free post-processing layer** applied to the raw output of a single `run_backtest` engine call. It models two costs the `backtesting.py` engine does not:
+The module now contains two orthogonal contracts:
+
+1. the legacy, pure post-processing overlay applied to a `backtesting.py` result; and
+2. a causal Bybit mark-price context used to detect isolated-margin liquidation.
+
+The first contract models two costs the legacy engine does not:
 
 - **Slippage** — the gap between the idealised fill price the backtest assumes (bar Close/Open) and the realistic taker fill. Constant `slip_bps` per side, charged as a cash debit at entry and exit. Sits *on top of* the exchange commission (taker fee), which stays in the engine.
 - **Funding** — the 8-hour perpetual-futures carry cost. `Funding Amount = Notional × Funding Rate`; longs pay shorts when the rate is positive; charged per settlement, only for positions open at the settlement instant.
 
 Both are subtracted from the raw equity curve to produce `equity_adjusted`, and from per-trade PnL to produce `trades_pnl_adjusted`. The exchange **fee is part of "raw"** (it is the engine's `commission`); **slippage and funding are the "post" overlay**.
 
-The module does **not** read files or call the network. Loading historical funding (`data_loader.load_funding`) and fetching it (`algo-fetch-funding`, `algo_bot.funding`) live elsewhere; the orchestrator receives an already-resolved funding `Series` or `None`.
+The legacy orchestrator does **not** read files or call the network. Its funding input is
+already resolved. `load_mark_price_context` is the one explicit file-I/O boundary in this
+module; fetching and processing mark-price candles remain in `fetch_data` and
+`process_data`. No function in this module calls the network.
 
 ## Public API
 
@@ -20,6 +30,17 @@ from algo_bot.microstructure import (
     MicrostructureConfig,
     TradeCost,
     MicrostructureResult,
+    MaintenanceMarginTier,
+    MarkPriceBar,
+    MarkPriceContext,
+    LeveragedPosition,
+    LiquidationEvent,
+    load_mark_price_context,
+    mark_price_at,
+    maintenance_margin_tiers_from_bybit,
+    liquidation_price,
+    liquidation_check,
+    first_liquidation_event,
     slippage_cost,
     settlements_in_window,
     synthetic_funding_series,
@@ -80,6 +101,64 @@ Frozen dataclass — the orchestrator output.
 | `funding_flows_for_trade` | `(*, side, size, entry_time, exit_time, funding, mark) -> list[(ts, cost)]` | Per-settlement signed flows. |
 | `funding_cost_for_trade` | `(...) -> (total, n_settlements)` | Sum of flows. |
 | `apply_microstructure` | `(*, equity_raw, trades, ohlcv, funding, config) -> MicrostructureResult` | Orchestrator. Pure. |
+
+### Mark-price and isolated-margin API
+
+| Type / function | Contract |
+|---|---|
+| `MaintenanceMarginTier` | Frozen Bybit risk-limit tier: maximum position value, maintenance-margin rate and deduction. The complete schedule must be frozen with the experiment manifest. |
+| `MarkPriceBar` | One completed OHLC mark-price bar with explicit open/close timestamps. |
+| `MarkPriceContext` | Strictly validated, causal OHLC history plus venue, source, taker fee and risk tiers. `completed_bar_at(ts)` never returns the currently forming bar; `tier_for(value)` fails closed when no tier covers the position. |
+| `LeveragedPosition` | Engine-independent isolated linear-USDT position: side, quantity, entry, leverage and optional extra margin. |
+| `LiquidationEvent` | Serializable evidence containing the position, side, observed mark, liquidation threshold, risk-tier inputs, timestamp and source. |
+| `load_mark_price_context` | Loads `bot_data/processed/<exchange>_<symbol>_mark_<tf>.csv`, keeps OHLC only and performs strict integrity validation. |
+| `mark_price_at` | Convenience lookup returning the close of the last completed H1 mark-price bar. |
+| `maintenance_margin_tiers_from_bybit` | Converts public Bybit risk-limit rows to sorted frozen tiers. |
+| `liquidation_price` | Computes the current Bybit UTA isolated linear-USDT liquidation threshold, including maintenance-margin deduction, extra margin and estimated closing fee. |
+| `liquidation_check` | Compares one mark observation with the threshold and returns `False` or a `LiquidationEvent`. |
+| `first_liquidation_event` | Scans completed H1 mark bars over `(start, end]`; uses `Low` for a long and `High` for a short, and returns only the first crossing. |
+
+Fill evidence and margin evidence are deliberately independent. `BacktestResult` schema v2
+records `fill_method ∈ {close_naive, close_plus_slippage, nautilus_native_bar}` separately
+from `margin_method ∈ {none, mark_price_isolated}`. Research evidence requires
+`nautilus_native_bar` and `mark_price_isolated`; old P9 artifacts load as
+`close_naive`/`none` in memory and are never rewritten.
+
+| `BacktestResult` field | Meaning |
+|---|---|
+| `fill_method` | How prices in the fill ledger were produced. This is not inferred from the cost-model label. |
+| `margin_method` | Whether the run applied causal isolated-margin safety (`mark_price_isolated`) or no margin model (`none`). |
+| `mark_price_source` | Non-empty path/source identifier required by `mark_price_isolated`; forbidden when margin is `none`. |
+| `liquidation_events` | Immutable tuple of serialized `LiquidationEvent`s. Empty means no observed crossing, not that a mark-price model was present. |
+
+### Mark-price integrity and causality
+
+Bybit mark-price timestamps denote bar opens. A bar is available only after
+`open_time + timeframe`; this prevents use of an H1 close before that hour ends. Mark-price
+validation is stricter than trade-OHLCV validation: positive OHLC, valid OHLC relations,
+monotonic unique UTC timestamps, exact grid alignment, no future/incomplete bar and **zero
+gaps**. Missing mark bars are never forward-filled because the missing High/Low may contain
+a liquidation crossing.
+
+The local Iteration-2 evidence set was fetched directly from Bybit and clipped to the exact
+trade-OHLCV overlap:
+
+| File | Rows | First open (UTC) | Last open (UTC) |
+|---|---:|---|---|
+| `bybit_BTCUSDT_mark_1h.csv` | 55,256 | 2020-03-25 10:00 | 2026-07-14 17:00 |
+| `bybit_ETHUSDT_mark_1h.csv` | 46,746 | 2021-03-15 00:00 | 2026-07-14 17:00 |
+
+Both reports have zero gaps and the same row count/start/end as their corresponding local
+Bybit H1 trade series. These data files are intentionally gitignored; the fetch commands and
+strict validator are the reproducibility boundary.
+
+### Liquidation run semantics
+
+A crossing is a **hard stop for that run**: the caller records the first event, terminates
+further strategy execution and reports the economic outcome. It must not replace equity
+with an arbitrary zero. A liquidation is a negative result, but it does not invalidate the
+quality of otherwise native fill and mark-price evidence. Conversely, an incomplete mark
+series or missing risk tier fails before the run and cannot be labelled eligible.
 
 ## Funding mechanics (verified against Binance docs)
 

@@ -26,6 +26,7 @@ from algo_bot.strategies.mastermind.model import (
     FillEnvelope,
     FundingApplied,
     MachineState,
+    MarkingBarClosed,
     MastermindConfig,
     OrderAccepted,
     OrderCanceled,
@@ -213,6 +214,11 @@ class MastermindStateMachine:
         """Adapter-friendly alias for :meth:`apply`."""
 
         return self.apply(event)
+
+    def ingest_marking_bar(self, bar_m5_or_m10: MarkingBarClosed) -> TransitionResult:
+        """Wprowadza finalny M5/M10 marker przez ten sam event-sourced reducer."""
+
+        return self.apply(bar_m5_or_m10)
 
     def handle_without_snapshot(self, event: DomainEvent) -> TransitionResult:
         """Apply one event without serializing the full recovery snapshot.
@@ -621,6 +627,8 @@ class MastermindStateMachine:
     def _dispatch(self, event: DomainEvent, emitted: list[ExternalIntent]) -> None:
         if isinstance(event, AccountEquityUpdated):
             self._on_equity(event)
+        elif isinstance(event, MarkingBarClosed):
+            self._on_marking_bar(event)
         elif isinstance(event, BarClosed):
             self._on_bar(event, emitted)
         elif isinstance(event, OrderSubmitted):
@@ -649,6 +657,32 @@ class MastermindStateMachine:
     def _on_equity(self, event: AccountEquityUpdated) -> None:
         validate_decimal_event(event.equity, "equity", positive=True)
         self.state.latest_confirmed_equity = event.equity
+
+    def _on_marking_bar(self, event: MarkingBarClosed) -> None:
+        """Uzbraja first-touch względem BB ostatniej ukończonej H1."""
+
+        self._validate_marking_bar(event)
+        signal = self.state.signal
+        signal.last_marking_close_time_utc = event.close_time_utc
+        signal.marking_bars_in_phase += 1
+        setup = self.state.setup
+        flat_eligible = (
+            not self.state.recovery_mode
+            and setup is None
+            and self.state.position_build is PositionBuild.FLAT
+            and self.state.order_lifecycle is OrderLifecycle.NONE
+        )
+        if not flat_eligible or signal.armed_side is not None or not signal.recent_bars:
+            return
+        previous_h1 = signal.recent_bars[-1]
+        touch_long = event.low <= previous_h1.bb_lower
+        touch_short = event.high >= previous_h1.bb_upper
+        if touch_long == touch_short:
+            return
+        signal.armed_side = Side.LONG if touch_long else Side.SHORT
+        signal.armed_bars_remaining = self.config.arm_expiry_bars
+        signal.touch_bar_id = event.bar_id
+        self._increment("marking_first_touches")
 
     def _on_bar(self, event: BarClosed, emitted: list[ExternalIntent]) -> None:
         self._validate_bar(event)
@@ -684,10 +718,12 @@ class MastermindStateMachine:
                 ),
                 setup_side=None if setup is None else setup.side,
                 reaction_bar=None if setup is None else setup.reaction_bar,
+                marking_enabled=self.config.marking_timeframe is not None,
             ),
             event,
         )
         state.signal = result.memory
+        state.signal.marking_bars_in_phase = 0
         if result.base_reaction is not None:
             self._create_base_setup(event, result.base_reaction.side, emitted)
         if result.addon_trigger is not None:
@@ -2116,6 +2152,57 @@ class MastermindStateMachine:
             previous = self.state.signal.recent_bars[-1]
             if event.close_time_utc <= previous.close_time_utc:
                 raise ValueError("BarClosed events must be strictly chronological")
+        if (
+            self.config.marking_timeframe is not None
+            and self.state.signal.last_marking_close_time_utc != event.close_time_utc
+        ):
+            raise ValueError("H1 execution requires a complete preceding marking phase")
+        if self.config.marking_timeframe is not None:
+            expected_marking_bars = 12 if self.config.marking_timeframe == "5m" else 6
+            if self.state.signal.marking_bars_in_phase != expected_marking_bars:
+                raise ValueError("H1 execution requires every marking sub-bar")
+
+    def _validate_marking_bar(self, event: MarkingBarClosed) -> None:
+        """Waliduje finalny, chronologiczny M5/M10 bar bez importów engine."""
+
+        expected = self.config.marking_timeframe
+        if expected is None:
+            raise ValueError("state machine działa w H1-only fallback")
+        if event.timeframe != expected:
+            raise ValueError("marking bar timeframe differs from configuration")
+        if not event.is_final:
+            raise ValueError("only final marking bars are accepted")
+        validate_utc(event.open_time_utc, "open_time_utc")
+        validate_utc(event.close_time_utc, "close_time_utc")
+        minutes = 5 if expected == "5m" else 10
+        if event.close_time_utc - event.open_time_utc != (
+            timedelta(minutes=minutes) - timedelta(milliseconds=1)
+        ):
+            raise ValueError("MarkingBarClosed has an invalid interval")
+        if event.occurred_at_utc < event.close_time_utc:
+            raise ValueError("MarkingBarClosed cannot occur before its close timestamp")
+        for name in ("open", "high", "low", "close", "volume"):
+            validate_decimal_event(getattr(event, name), name)
+        if min(event.open, event.high, event.low, event.close) <= ZERO:
+            raise ValueError("marking OHLC must be positive")
+        if event.volume < ZERO:
+            raise ValueError("marking volume cannot be negative")
+        if event.low > min(event.open, event.close) or event.high < max(event.open, event.close):
+            raise ValueError("marking bar OHLC is inconsistent")
+        previous_marking_close = self.state.signal.last_marking_close_time_utc
+        if previous_marking_close is not None and event.close_time_utc <= previous_marking_close:
+            raise ValueError("marking bars must be strictly chronological")
+        if previous_marking_close is not None and event.open_time_utc != (
+            previous_marking_close + timedelta(milliseconds=1)
+        ):
+            raise ValueError("marking bars must form a gap-free phase")
+        if self.state.signal.recent_bars:
+            last_execution_close = self.state.signal.recent_bars[-1].close_time_utc
+            if (
+                self.state.signal.marking_bars_in_phase == 0
+                and event.open_time_utc != last_execution_close + timedelta(milliseconds=1)
+            ):
+                raise ValueError("marking phase must start after the last H1 execution close")
 
     def _validate_fill(self, event: FillEnvelope) -> None:
         for name in ("last_quantity", "cumulative_quantity", "price"):

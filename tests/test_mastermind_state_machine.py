@@ -22,6 +22,7 @@ from algo_bot.strategies.mastermind.model import (
     CloseReason,
     CloseRequested,
     FundingApplied,
+    MarkingBarClosed,
     MastermindConfig,
     OrderAccepted,
     OrderCanceled,
@@ -88,6 +89,7 @@ def config(
     instrument: str = "BTCUSDT-PERP.BINANCE",
     addon_enabled: bool = True,
     sequential_enabled: bool = True,
+    marking_timeframe: str | None = None,
 ) -> MastermindConfig:
     return MastermindConfig(
         strategy_id="mms-v2",
@@ -95,6 +97,7 @@ def config(
         addon_trigger_policy=policy,
         addon_enabled=addon_enabled,
         sequential_enabled=sequential_enabled,
+        marking_timeframe=marking_timeframe,
         quantity_step=D("0.001"),
         min_quantity=D("0.001"),
         min_notional=D("1"),
@@ -131,6 +134,34 @@ def bar_event(
         bb_lower=D(lower),
         stoch_k=None if k is None else D(k),
         stoch_d=None if d is None else D(d),
+    )
+
+
+def marking_bar_event(
+    machine: MastermindStateMachine,
+    events: EventFactory,
+    index: int,
+    *,
+    timeframe: str,
+    open_: str = "100",
+    high: str = "101",
+    low: str = "99",
+    close: str = "100",
+) -> MarkingBarClosed:
+    minutes = 5 if timeframe == "5m" else 10
+    open_time = START + timedelta(minutes=minutes * index)
+    close_time = open_time + timedelta(minutes=minutes) - timedelta(milliseconds=1)
+    return MarkingBarClosed(
+        **events.envelope(machine, f"marking-{timeframe}-{index}", occurred_at=close_time),
+        bar_id=f"{timeframe}-{index}",
+        timeframe=timeframe,
+        open_time_utc=open_time,
+        close_time_utc=close_time,
+        open=D(open_),
+        high=D(high),
+        low=D(low),
+        close=D(close),
+        volume=D("1"),
     )
 
 
@@ -204,6 +235,132 @@ def bootstrap_base(
         )
     )
     return machine, events, base
+
+
+@pytest.mark.parametrize(("marking_timeframe", "bars_per_h1"), [("5m", 12), ("10m", 6)])
+def test_marking_first_touch_arms_then_h1_reaction_executes(
+    marking_timeframe: str,
+    bars_per_h1: int,
+) -> None:
+    """M5/M10 first-touch używa poprzednich H1 BB i nie emituje entry samodzielnie."""
+
+    machine = MastermindStateMachine(config(marking_timeframe=marking_timeframe))
+    events = EventFactory()
+    machine.apply(
+        AccountEquityUpdated(
+            **events.envelope(machine, "marking-equity"),
+            equity=D("10000"),
+        )
+    )
+
+    # Pierwsze okno tylko seeduje przyczynowe BB H1; marker nie ma jeszcze referencji.
+    for index in range(bars_per_h1):
+        machine.ingest_marking_bar(
+            marking_bar_event(machine, events, index, timeframe=marking_timeframe)
+        )
+    machine.apply(
+        bar_event(
+            machine,
+            events,
+            0,
+            open_="100",
+            high="101",
+            low="99",
+            close="100",
+            upper="102",
+            lower="98",
+        )
+    )
+
+    # Pierwszy bar drugiego okna dotyka lower BB; późniejszy opposite touch nie
+    # nadpisuje first-touch. Żaden marking event nie tworzy order intentu.
+    first = machine.ingest_marking_bar(
+        marking_bar_event(
+            machine,
+            events,
+            bars_per_h1,
+            timeframe=marking_timeframe,
+            low="97",
+            close="99",
+        )
+    )
+    assert not any(isinstance(intent, SubmitBaseOrder) for intent in first.intents)
+    assert machine.state.signal.armed_side is Side.LONG
+    assert machine.state.signal.touch_bar_id == f"{marking_timeframe}-{bars_per_h1}"
+
+    for index in range(bars_per_h1 + 1, 2 * bars_per_h1):
+        machine.ingest_marking_bar(
+            marking_bar_event(
+                machine,
+                events,
+                index,
+                timeframe=marking_timeframe,
+                high="103" if index == bars_per_h1 + 1 else "101",
+            )
+        )
+    reaction = machine.apply(
+        bar_event(
+            machine,
+            events,
+            1,
+            open_="99",
+            high="102",
+            low="98",
+            close="101",
+        )
+    )
+    base = next(intent for intent in reaction.intents if isinstance(intent, SubmitBaseOrder))
+    assert base.side is Side.LONG
+    assert machine.state.counters["marking_first_touches"] == 1
+
+
+def test_marking_phase_rejects_missing_leading_subbar_before_h1() -> None:
+    """Sam finalny M5 nie wystarcza: H1 wymaga pełnych 12 kolejnych barów."""
+
+    machine = MastermindStateMachine(config(marking_timeframe="5m"))
+    events = EventFactory()
+    for index in range(1, 12):
+        machine.ingest_marking_bar(marking_bar_event(machine, events, index, timeframe="5m"))
+
+    with pytest.raises(ValueError, match="every marking sub-bar"):
+        machine.apply(
+            bar_event(
+                machine,
+                events,
+                0,
+                open_="100",
+                high="101",
+                low="99",
+                close="100",
+            )
+        )
+
+
+def test_marking_prefix_invariance_ignores_future_suffix() -> None:
+    """Stan po wspólnym prefiksie M5 nie zależy od późniejszych barów."""
+
+    left = MastermindStateMachine(config(marking_timeframe="5m"))
+    right = MastermindStateMachine(config(marking_timeframe="5m"))
+    left_events = EventFactory()
+    right_events = EventFactory()
+    for index in range(12):
+        left.ingest_marking_bar(marking_bar_event(left, left_events, index, timeframe="5m"))
+        right.ingest_marking_bar(marking_bar_event(right, right_events, index, timeframe="5m"))
+    left.apply(bar_event(left, left_events, 0, open_="100", high="101", low="99", close="100"))
+    right.apply(bar_event(right, right_events, 0, open_="100", high="101", low="99", close="100"))
+    for index in range(12, 18):
+        kwargs = {"low": "97", "close": "99"} if index == 12 else {}
+        left.ingest_marking_bar(
+            marking_bar_event(left, left_events, index, timeframe="5m", **kwargs)
+        )
+        right.ingest_marking_bar(
+            marking_bar_event(right, right_events, index, timeframe="5m", **kwargs)
+        )
+
+    assert left.snapshot_json() == right.snapshot_json()
+    left.ingest_marking_bar(marking_bar_event(left, left_events, 18, timeframe="5m", high="101"))
+    right.ingest_marking_bar(marking_bar_event(right, right_events, 18, timeframe="5m", high="110"))
+    assert left.state.signal.armed_side is right.state.signal.armed_side is Side.LONG
 
 
 def trigger_addon(
