@@ -195,17 +195,18 @@ Faza 5: Production na VPS              → 1-2 tyg.
   tylko in-memory; generic `MarkingBarClosed` M5/M10 porównujący pierwszy wick touch z
   ostatnimi ukończonymi H1 Bands; natywne multiple `BarType` w wrapperze i porządek
   all marking sub-bars → H1 execution. P9 pozostaje niezmienione i niekwalifikowalne.
-- **MR-Session 4 (full v2 sweep on nautilus) — RUNNER IMPLEMENTED / PREREGISTRATION
-  BLOCKED** — kandydat kontraktu obejmuje **BTCUSDT i ETHUSDT osobno**, H1 execution
+- **MR-Session 4 (full v2 sweep on nautilus) — PREREGISTRATION CORE FROZEN /
+  FINAL TAG+MANIFEST PENDING** — kontrakt obejmuje **BTCUSDT i ETHUSDT osobno**, H1 execution
   oraz marking **M5 i M10** (528 runów); H1-only pozostaje poza rodziną inferencyjną.
   Outcome-blind runner, native evidence, funding wyceniany po ukończonym H1 mark Close,
   causal mark-margin proxy, atomic artifacts, bounded retry/resume, canonical tag
-  provenance i draft prerejestracji są gotowe. Sweep nie został uruchomiony.
-  Freeze blokują brak `bybit_ETHUSDT_funding.csv`, brak zamrożonych paginowanych
-  instrument/risk-limit contracts oraz wynikający z nich brak core hash/clean commit/tag.
+  provenance i prerejestracja są gotowe. Sweep nie został uruchomiony. Funding ETH,
+  paginowane instrument/risk-limit contracts i dokładny VPS preflight są zamknięte;
+  manifest core zamrożono przed metric read jako `657e9101…c08e1a`. Pozostały wyłącznie
+  finalny clean commit/tag oraz `prepare`/`plan` provenance gates.
   Strategia nie ładuje reserved rows, ale wcześniejszy operator-side integrity audit
   dotknął pełnych plików; dokładne ujawnienie i przyszła polityka holdout są zapisane w
-  [draft prerejestracji](experiments/mr-session-4-preregistration.md).
+  [zamrożonej prerejestracji](experiments/mr-session-4-preregistration.md).
 - **MR-Session 5 (conditional WF → MC → Stress → ADR go/no-go)** — full-MMS-system
   verdict (analogue of the bghtrend Session-8 go/no-go), **gated** on the Session-4
   sweep clearing in-sample eligibility (don't run the expensive robustness layer on a

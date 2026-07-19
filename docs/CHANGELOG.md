@@ -17,6 +17,14 @@ Sekcje na każdą wersję:
 
 ## [Unreleased]
 
+### Changed (MR-Session 4 preregistration freeze, 2026-07-20)
+
+- Froze the pre-outcome 528-run manifest core on the intended VPS as
+  `657e910101933cdeab15209189a31b4087672b8c52018b5dc72f36dcd1c08e1a` after the
+  complete ETHUSDT funding restoration, frozen Bybit contract capture, runtime/data
+  preflight, and full quality gate. No Session-4 strategy run or metric was produced or
+  read; the clean commit/tag and prepared-manifest provenance gates remain mandatory.
+
 ### Added (MR-Session 4 runner draft — blocked before freeze, 2026-07-15)
 
 - Added the deterministic 528-run BTCUSDT/ETHUSDT × M5/M10 Session-4 contract,

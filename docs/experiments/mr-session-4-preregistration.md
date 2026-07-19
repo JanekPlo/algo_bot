@@ -1,41 +1,43 @@
-# MR-Session 4 full v2 in-sample sweep — preregistration draft
+# MR-Session 4 full v2 in-sample sweep — frozen preregistration
 
-> **Status:** **DRAFT / BLOCKED — NOT FROZEN**  
-> **Last updated:** 2026-07-15  
+> **Status:** **FROZEN BEFORE METRIC READ**
+> **Last updated:** 2026-07-20
 > **Scope:** BTCUSDT and ETHUSDT evaluated separately; H1 execution with M5 or
 > M10 marking; native Nautilus bar fills; causal mark-price isolated-margin
-> monitoring  
-> **Authorization:** this document does **not** authorize the 528-run sweep
+> monitoring
+> **Authorization:** execution is conditional on the remaining provenance and
+> launch gates in Section 14; no partial outcome inspection is authorized
 
-The inferential design below is fixed as the candidate contract, but the
-preregistration is not yet valid. Operators must not create or use a frozen
-manifest while any Session 4 blocker in
-[Section 14](#14-current-freeze-blockers) remains. The runner enforces every
-machine-checkable freeze condition; process evidence such as the completed
-quality gate remains an operator responsibility. No strategy metric has been
-produced, read, ranked, or used to revise this design.
+The inferential design below and its manifest core were frozen before any
+Session-4 strategy metric was produced or read. Operators may execute the
+matrix only from the exact clean tagged commit and prepared manifest described
+in [Section 14](#14-freeze-completion-record-and-remaining-launch-gates). The
+runner enforces every machine-checkable freeze condition; no strategy metric
+has been produced, read, ranked, or used to revise this design.
 
 ## 1. Freeze identifiers
 
-These identifiers are deliberately `PENDING`, rather than placeholders that
-could be mistaken for evidence:
+The manifest core is the pre-outcome anchor. Identifiers which necessarily
+depend on the later clean commit/tag are recorded by `prepare` in immutable
+manifest provenance and are intentionally not back-edited into this document.
 
 | Identifier | Current value |
 |---|---|
-| Preregistration SHA-256 | `PENDING — document is DRAFT` |
-| Contract-core SHA-256 | `PENDING — lock-core inputs are incomplete` |
-| Manifest-core SHA-256 | `PENDING — lock-core is blocked by missing inputs` |
-| Manifest-provenance SHA-256 | `PENDING — prepare runs only from the clean tagged commit` |
-| Git commit | `PENDING — final frozen commit does not exist` |
-| Git tag | `PENDING — final preregistration tag does not exist` |
-| `uv.lock` SHA-256 | `PENDING — captured by the final manifest` |
-| Development-data hashes | `PENDING — ETHUSDT funding is missing` |
-| Frozen Bybit-contract hash | `PENDING — contract artifact is missing` |
+| Preregistration SHA-256 | Recorded by `prepare` after the clean tagged commit |
+| Contract-core SHA-256 | `05bb05f9024967c74c0708bd0469a6c8660d8fe7b20142b9d075e9d68cdeb12f` |
+| Manifest-core SHA-256 | `657e910101933cdeab15209189a31b4087672b8c52018b5dc72f36dcd1c08e1a` |
+| Manifest-provenance SHA-256 | Recorded by `prepare`; not back-edited here |
+| Git commit | Recorded by `prepare` from the clean frozen tree |
+| Git tag | Recorded by `prepare`; exactly one canonical tag must point at the commit |
+| `uv.lock` SHA-256 | `6020bd7ed209fe8f50ef844e110900605de45aefbda5fe54b1ddd01212bba4eb` |
+| Development-data hashes | Bound inside the manifest core and expanded by `prepare` |
+| Frozen Bybit-contract hash | Bound inside the manifest core and expanded by `prepare` |
 
-<!-- mr-session-4-manifest-core-sha256: PENDING -->
+<!-- mr-session-4-manifest-core-sha256: 657e910101933cdeab15209189a31b4087672b8c52018b5dc72f36dcd1c08e1a -->
 
-The freeze procedure is defined in Section 13. A commit or tag without a valid
-manifest does not change this status.
+The freeze procedure is defined in Section 13. The frozen status does not by
+itself permit execution: the commit, canonical tag, prepared manifest, and
+final verification gates in Section 14 must also succeed.
 
 The runner deliberately uses two hashes, so there is no circular-hash problem:
 
@@ -696,10 +698,10 @@ after all blockers are resolved and the following order succeeds:
 ### 13.1 Exact operator command sequence
 
 The following paths and run IDs are the declared operator sequence. Commands
-which contact Bybit are data/contract preparation only and may be used to
-resolve blockers 1–2; they do not authorize a strategy run. Every subsequent
-command requires its preceding freeze step. The `run` commands are still
-forbidden while Section 14 remains blocked.
+which contact Bybit are data/contract preparation only and do not authorize a
+strategy run. Every subsequent command requires its preceding freeze step. The
+`run` commands remain forbidden until all remaining launch gates in Section 14
+are closed.
 
 ```bash
 uv run --locked algo-fetch-funding \
@@ -808,37 +810,39 @@ decision rules, retry semantics, or run count invalidates the preregistration.
 An operational retry is permitted only under Section 11 with identical bytes,
 run ID, config hash, data hash, and seed.
 
-## 14. Current freeze blockers
+## 14. Freeze completion record and remaining launch gates
 
-The following are observed blockers, not hypothetical risks:
+Completed before any Session-4 strategy run or metric read:
 
-1. **Missing ETHUSDT funding:**
-   `bot_data/processed/bybit_ETHUSDT_funding.csv` does not exist. The kickoff's
-   assumption that Bybit funding is complete for both symbols is therefore
-   contradicted by the current filesystem.
-2. **Missing frozen Bybit contracts:**
-   `config/experiments/mr-session-4-bybit-contracts.json` does not exist. The
-   mainnet instrument and complete paginated risk-limit schedule have not been
-   frozen, so the isolated-margin tier hash cannot be created.
-3. **Core lock is pending:** because blockers 1–2 remain, `lock-core` cannot
-   produce the development-data, contract, implementation, and manifest-core
-   hashes required for this document.
-4. **Final freeze commit and tag are pending:** the implementation and blocked
-   draft may be committed before the inputs are restored, but no commit yet
-   contains the frozen contracts, inserted core hash, final frozen document,
-   and required canonical preregistration tag. That tag must not be created for
-   a draft commit.
-5. **Manifest provenance is pending:** `prepare` must run only after the core
-   hash is written here and the exact document is committed/tagged. Therefore
-   preregistration SHA-256, clean tree/commit provenance, and provenance hash
-   are still pending.
-6. **Final verification is pending:** the completed source must pass the full
-   quality gate and the exact VPS runtime/data preflight before launch.
+1. **ETHUSDT funding restored and validated:** the development interval contains
+   exactly 4,656 eight-hour settlements from `2021-04-01 00:00Z` through
+   `2025-06-30 16:00Z`. Backward server-side pagination never requested a
+   reserved-tail page.
+2. **Bybit contracts frozen:** the public mainnet instrument responses and full
+   paginated risk-limit schedules for BTCUSDT and ETHUSDT were captured in
+   `config/experiments/mr-session-4-bybit-contracts.json` and passed offline
+   normalization/tamper validation.
+3. **Implementation quality gate passed:** the final core source passed Ruff,
+   format, mypy, and the full suite (`650 passed, 2 skipped`) under uv 0.11.28
+   and CPython 3.12.13.
+4. **Manifest core locked on the intended VPS:** `lock-core` validated all 528
+   specifications, both development-only data bundles, the frozen contracts,
+   runtime, profiles, sources, and `uv.lock`, producing the Section-1 core hash.
 
-Until blockers 1–6 are closed, the only permitted actions are runner/test work,
-data restoration and validation, contract capture, manifest preparation, and
-operational dry runs that do not expose strategy outcomes. The 528-run sweep
-must not start.
+Remaining launch gates, in strict order:
+
+1. Commit this exact frozen document and the frozen Bybit-contract artifact
+   without changing any core input; require a clean tree.
+2. Create exactly one canonical
+   `mr-session-4-preregistration-YYYY-MM-DD` tag on that commit.
+3. Run `prepare` on the same VPS/runtime/data, require the identical manifest
+   core hash, then run `plan` to verify the manifest and provenance.
+4. Confirm at least 60 GiB free and perform the four-run outcome-blind pilot
+   before resuming the full 528-run suite.
+
+Until gates 1–4 are closed, no Session-4 strategy run may start. During the
+pilot and partial suite, outcome-bearing artifacts remain closed as specified
+in Section 11.
 
 The reserved-data access disclosed in Section 3.1 is a non-blocking forward
 caveat for MR-Session 4: this experiment is strictly in-sample and does not use
