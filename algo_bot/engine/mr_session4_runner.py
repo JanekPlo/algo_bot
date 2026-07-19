@@ -82,6 +82,9 @@ ATTEMPT_STARTED_SCHEMA_VERSION = "mr_session4_attempt_started/1"
 RESULTS_INDEX_SCHEMA_VERSION = "mr_session4_results_index/1"
 SUITE_COMPLETE_SCHEMA_VERSION = "mr_session4_suite_complete/1"
 RUNNER_VERSION = "mr_session4_runner/1"
+EXPECTED_UV_VERSION = "0.11.28"
+EXPECTED_PYTHON_VERSION = "3.12.13"
+EXPECTED_PYTHON_IMPLEMENTATION = "CPython"
 MIN_FREE_GIB = 60.0
 DEFAULT_WORKERS = 2
 DEFAULT_MAX_ATTEMPTS = 2
@@ -93,6 +96,9 @@ _PREREGISTRATION_CORE_MARKER = re.compile(
 )
 _PREREGISTRATION_TAG = re.compile(
     r"^mr-session-4-preregistration-(?P<date>[0-9]{4}-[0-9]{2}-[0-9]{2})$"
+)
+_UV_VERSION_OUTPUT = re.compile(
+    r"^uv (?P<version>[0-9]+\.[0-9]+\.[0-9]+)(?: \([^()\r\n]+\))?(?:\r?\n)?$"
 )
 
 _OUTCOME_FIELDS = {
@@ -1902,9 +1908,20 @@ def _preregistration_tag_for_commit(repo_root: Path, git_commit: str) -> str:
 def _runtime_manifest_versions() -> dict[str, JsonValue]:
     """Zamraża aktywny interpreter, platformę i biblioteki wpływające na wynik."""
 
+    python_version = platform.python_version()
+    python_implementation = platform.python_implementation()
+    if python_version != EXPECTED_PYTHON_VERSION:
+        raise Session4ManifestError(
+            f"Python version drift: {python_version!r} != {EXPECTED_PYTHON_VERSION!r}"
+        )
+    if python_implementation != EXPECTED_PYTHON_IMPLEMENTATION:
+        raise Session4ManifestError(
+            "Python implementation drift: "
+            f"{python_implementation!r} != {EXPECTED_PYTHON_IMPLEMENTATION!r}"
+        )
     return {
-        "python": platform.python_version(),
-        "python_implementation": platform.python_implementation(),
+        "python": python_version,
+        "python_implementation": python_implementation,
         "python_compiler": platform.python_compiler(),
         "platform_system": platform.system(),
         "platform_release": platform.release(),
@@ -1924,10 +1941,15 @@ def _capture_uv_version() -> str:
         )
     except (OSError, subprocess.CalledProcessError) as exc:
         raise Session4ManifestError(f"cannot capture uv version: {exc}") from exc
-    parts = completed.stdout.strip().split()
-    if len(parts) != 2 or parts[0] != "uv":
+    if completed.stderr:
+        raise Session4ManifestError(f"unexpected uv --version stderr: {completed.stderr!r}")
+    match = _UV_VERSION_OUTPUT.fullmatch(completed.stdout)
+    if match is None:
         raise Session4ManifestError(f"unexpected uv --version output: {completed.stdout!r}")
-    return parts[1]
+    version = match.group("version")
+    if version != EXPECTED_UV_VERSION:
+        raise Session4ManifestError(f"uv version drift: {version!r} != {EXPECTED_UV_VERSION!r}")
+    return version
 
 
 def _atomic_write_json(

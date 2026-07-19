@@ -44,6 +44,10 @@ Sekcje na każdą wersję:
   the newest 200 settlements from a multi-page range; duplicate, overlapping, stalled,
   boundary-escaping, or incomplete pages now fail closed without touching reserved-tail
   settlements.
+- Session-4 runtime capture now accepts the official pinned uv output with its platform
+  suffix (for example `uv 0.11.28 (x86_64-unknown-linux-gnu)`), canonicalizes it to the
+  exact `0.11.28` version, and explicitly rejects uv, Python, or implementation drift from
+  uv 0.11.28 and CPython 3.12.13.
 - Research-mode Nautilus event retention now keeps the state machine and observer fully
   informed while omitting high-volume marker snapshots, and no longer claims unproved
   server-side `closePosition` parity.

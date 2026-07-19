@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import subprocess
 from pathlib import Path
 
 import pandas as pd
@@ -24,6 +25,7 @@ from algo_bot.engine.mr_session4_contract import PerformanceAssessment, build_ru
 from algo_bot.engine.mr_session4_execution import Session4RunArtifact
 from algo_bot.engine.mr_session4_runner import (
     Session4ArtifactError,
+    Session4ManifestError,
     Session4RunnerError,
     _assert_outcome_blind_progress,
     _atomic_write_json,
@@ -35,6 +37,114 @@ from algo_bot.engine.mr_session4_runner import (
 )
 
 ZERO_HASH = "0" * 64
+
+
+def _stub_uv_version(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    stdout: str,
+    stderr: str = "",
+) -> None:
+    def fake_run(
+        command: tuple[str, str],
+        *,
+        check: bool,
+        capture_output: bool,
+        text: bool,
+    ) -> subprocess.CompletedProcess[str]:
+        assert command == ("uv", "--version")
+        assert check is True
+        assert capture_output is True
+        assert text is True
+        return subprocess.CompletedProcess(command, 0, stdout=stdout, stderr=stderr)
+
+    monkeypatch.setattr(session4_runner.subprocess, "run", fake_run)
+
+
+@pytest.mark.parametrize(
+    "stdout",
+    (
+        "uv 0.11.28\n",
+        "uv 0.11.28 (x86_64-unknown-linux-gnu)\n",
+    ),
+)
+def test_capture_uv_version_accepts_pinned_official_outputs(
+    stdout: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _stub_uv_version(monkeypatch, stdout=stdout)
+
+    assert session4_runner._capture_uv_version() == "0.11.28"
+
+
+@pytest.mark.parametrize(
+    "stdout",
+    (
+        "uv 0.11.27\n",
+        "uv 0.11.28 extra\n",
+        "uv 0.11.28\nuv 0.11.28\n",
+        "uv 0.11.28 ()\n",
+        "uv 0.11.28 ((x86_64-unknown-linux-gnu))\n",
+        "uv 0.11.28 (x86_64-unknown-linux-gnu) spoof\n",
+    ),
+)
+def test_capture_uv_version_rejects_wrong_or_spoofed_output(
+    stdout: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _stub_uv_version(monkeypatch, stdout=stdout)
+
+    with pytest.raises(Session4ManifestError):
+        session4_runner._capture_uv_version()
+
+
+def test_capture_uv_version_rejects_stderr(monkeypatch: pytest.MonkeyPatch) -> None:
+    _stub_uv_version(
+        monkeypatch,
+        stdout="uv 0.11.28 (x86_64-unknown-linux-gnu)\n",
+        stderr="unexpected diagnostic\n",
+    )
+
+    with pytest.raises(Session4ManifestError):
+        session4_runner._capture_uv_version()
+
+
+def test_capture_uv_version_wraps_subprocess_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_run(*_args: object, **_kwargs: object) -> None:
+        raise subprocess.CalledProcessError(1, ("uv", "--version"))
+
+    monkeypatch.setattr(session4_runner.subprocess, "run", fail_run)
+
+    with pytest.raises(Session4ManifestError, match="cannot capture uv version"):
+        session4_runner._capture_uv_version()
+
+
+@pytest.mark.parametrize(
+    ("python_version", "python_implementation"),
+    (
+        ("3.12.12", "CPython"),
+        ("3.13.0", "CPython"),
+        ("3.12.13", "PyPy"),
+    ),
+)
+def test_runtime_manifest_rejects_unpinned_python_runtime(
+    python_version: str,
+    python_implementation: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(session4_runner.platform, "python_version", lambda: python_version)
+    monkeypatch.setattr(
+        session4_runner.platform,
+        "python_implementation",
+        lambda: python_implementation,
+    )
+    monkeypatch.setattr(session4_runner, "_capture_uv_version", lambda: "0.11.28")
+    monkeypatch.setattr(session4_runner, "runtime_versions", dict)
+
+    with pytest.raises(Session4ManifestError):
+        session4_runner._runtime_manifest_versions()
 
 
 def _eligible_cost_model() -> CostModel:
