@@ -39,9 +39,11 @@ Sekcje na każdą wersję:
 
 - `scripts/vps-sync.sh up --dry-run` no longer creates the remote destination directory;
   it performs only the requested non-mutating rsync preview.
-- Bybit funding retrieval now sends the requested development cutoff as the server-side
-  V5 `endTime`, preventing pagination from first fetching reserved-tail settlements and
-  discarding them only after download.
+- Bybit funding retrieval now paginates backward with a decreasing server-side V5
+  `endTime`. This fixes the earlier forward-`since` loop which could silently save only
+  the newest 200 settlements from a multi-page range; duplicate, overlapping, stalled,
+  boundary-escaping, or incomplete pages now fail closed without touching reserved-tail
+  settlements.
 - Research-mode Nautilus event retention now keeps the state machine and observer fully
   informed while omitting high-volume marker snapshots, and no longer claims unproved
   server-side `closePosition` parity.

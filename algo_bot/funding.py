@@ -86,18 +86,38 @@ def _fetch_funding_binance(ex: ccxt.Exchange, symbol: str, since: int, end_ms: i
 
 
 def _fetch_funding_bybit(ex: ccxt.Exchange, symbol: str, since: int, end_ms: int) -> list[dict]:
-    """Loop po Bybit v5 ograniczony na serwerze do jawnego ``endTime``."""
+    """Pobiera malejące strony Bybit v5 w zakresie ograniczonym przez ``endTime``."""
     market = _bybit_market_symbol(symbol)  # 'BTC/USDT' → 'BTC/USDT:USDT'
     rows: list[dict] = []
-    while since < end_ms:
+    seen_timestamps: set[int] = set()
+    cursor_end = end_ms
+
+    # Bybit zwraca najwyżej 200 najnowszych rekordów do endTime. Dlatego
+    # paginujemy wstecz po najstarszym timestampie strony; przesuwanie `since`
+    # do przodu zachowałoby wyłącznie ostatnią stronę wieloletniego zakresu.
+    while since <= cursor_end:
         data = ex.fetch_funding_rate_history(
             market,
             since=since,
             limit=_LIMIT_BYBIT,
-            params={"endTime": end_ms},
+            params={"endTime": cursor_end},
         )
         if not data:
+            if rows:
+                raise RuntimeError(
+                    "Bybit funding history is incomplete before the requested start boundary"
+                )
             break
+
+        page_timestamps = [int(item["timestamp"]) for item in data]
+        if any(ts < since or ts > cursor_end for ts in page_timestamps):
+            raise RuntimeError("Bybit funding page escaped the requested server-side time boundary")
+        if len(set(page_timestamps)) != len(page_timestamps):
+            raise RuntimeError("Bybit funding page contains duplicate settlement timestamps")
+        overlap = seen_timestamps.intersection(page_timestamps)
+        if overlap:
+            raise RuntimeError("Bybit funding pagination returned an overlapping settlement page")
+
         for d in data:
             ts = int(d["timestamp"])
             rows.append(
@@ -106,12 +126,18 @@ def _fetch_funding_bybit(ex: ccxt.Exchange, symbol: str, since: int, end_ms: int
                     "funding_rate": float(d["fundingRate"]),
                 }
             )
-        last = max(int(item["timestamp"]) for item in data)
-        if last <= since:
+        seen_timestamps.update(page_timestamps)
+
+        oldest = min(page_timestamps)
+        if oldest <= since:
             break
-        since = last + 1
+        next_cursor_end = oldest - 1
+        if next_cursor_end >= cursor_end:
+            raise RuntimeError("Bybit funding pagination cursor did not move backwards")
+        cursor_end = next_cursor_end
         time.sleep(ex.rateLimit / 1000)
-    return rows
+
+    return sorted(rows, key=lambda row: row["datetime"])
 
 
 def fetch_funding(
