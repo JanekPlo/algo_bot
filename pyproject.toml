@@ -94,6 +94,7 @@ algo-fetch-funding = "algo_bot.funding:main"  # ADR-011 (Decyzja 6)
 algo-process       = "algo_bot.process_data:main"
 algo-sweep         = "algo_bot.engine.sweep:main"
 algo-walkforward   = "algo_bot.engine.walkforward:main"  # ADR-009 (Decyzja F)
+algo-mr-session4   = "algo_bot.engine.mr_session4_runner:main"
 
 # === Hatchling =================================================================
 [tool.hatch.build.targets.wheel]
@@ -181,6 +182,11 @@ module = [
     "algo_bot.engine.backtest_result",  # MR-Session Beta P8 versioned result artifact
     "algo_bot.engine.mms_beta_data",  # MR-Session Beta P9 development-only data boundary
     "algo_bot.engine.mms_beta_benchmark",  # MR-Session Beta P9 frozen ablation runner
+    "algo_bot.engine.mr_session4_bybit",  # MR-Session 4 frozen Bybit public contracts
+    "algo_bot.engine.mr_session4_contract",  # MR-Session 4 deterministic 528-run contract
+    "algo_bot.engine.mr_session4_data",  # MR-Session 4 development-only multi-symbol data
+    "algo_bot.engine.mr_session4_execution",  # MR-Session 4 native research execution
+    "algo_bot.engine.mr_session4_runner",  # MR-Session 4 resumable orchestration
     "algo_bot.engine.exchanges.bybit_adapter",  # ADR-015 Bybit v5 CCXT wrapper
     "algo_bot.live.live_bybit",  # ADR-015 Bybit live runner (testnet-first)
 ]

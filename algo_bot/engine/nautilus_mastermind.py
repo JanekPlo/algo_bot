@@ -1,17 +1,18 @@
-"""PyO3 smoke backend for the pure Mastermind v2 state machine.
+"""PyO3 backend for the pure Mastermind v2 state machine.
 
-This module is intentionally a *non-eligible* integration fixture.  NautilusTrader
-1.230.0's Rust/PyO3 backtest engine settles perpetual funding, but its simulated
-exchange does not implement Binance's server-side ``closePosition=true`` semantics.
-The adapter therefore uses only native reduce-only orders and decomposes a logical
+NautilusTrader 1.230.0's Rust/PyO3 backtest engine settles perpetual funding, but its
+simulated exchange does not implement server-side ``closePosition=true`` semantics.
+The adapter therefore uses native reduce-only orders and decomposes a logical
 whole-position stop/target into deterministic per-fill children.  No custom matcher is
-implemented here.
+implemented here, and neither metadata profile claims server-side close-position
+parity.
 
 Strategic market orders are delayed by the wrapper to the next final H1 bar while the
 engine itself runs at zero latency.  This preserves the preregistered conservative
 next-close timing without delaying protective orders created from fill callbacks by an
-entire H1 event.  The resulting profile is useful for integration and lifecycle smoke
-tests only; every artifact is marked ``SMOKE_ONLY`` and ``NOT_ELIGIBLE``.
+entire H1 event.  Existing callers receive the non-eligible smoke profile.  A research
+caller must opt in explicitly; its final evidence and performance decisions remain
+outside this transport adapter.
 """
 
 from __future__ import annotations
@@ -65,6 +66,8 @@ from algo_bot.strategies.mastermind.model import (
 
 PYO3_SMOKE_EXECUTION_PROFILE = "PYO3_WRAPPER_NEXT_CLOSE_ZERO_LATENCY_SMOKE_V1"
 PYO3_SMOKE_POSITION_MODEL = "PYO3_NETTING_DECOMPOSED_CLOSEALL_SMOKE_V1"
+PYO3_RESEARCH_EXECUTION_PROFILE = "PYO3_BYBIT_NATIVE_BAR_RESEARCH_V1"
+PYO3_RESEARCH_POSITION_MODEL = "PYO3_NETTING_REDUCE_ONLY_BYBIT_V1"
 PYO3_RECOVERY_SCHEMA_VERSION = "pyo3_mastermind_recovery/1"
 EVIDENCE_TIER = "SMOKE_ONLY"
 ELIGIBILITY = "NOT_ELIGIBLE"
@@ -158,6 +161,7 @@ BarFeatureSource = Callable[[Any], BarFeatures]
 BeforeBarDomainEvents = Callable[[Any], Iterable[DomainEvent]]
 DeliverDomainBar = Callable[[Any], bool]
 TransitionObserver = Callable[[DomainEvent], None]
+RetainDomainEvent = Callable[[DomainEvent], bool]
 
 
 @dataclass(frozen=True, slots=True)
@@ -297,6 +301,39 @@ class Pyo3SmokeMetadata:
 
 
 @dataclass(frozen=True, slots=True)
+class Pyo3ResearchMetadata:
+    """Jawne provenance ścieżki badawczej używanej dopiero przez Session 4.
+
+    ``close_position_parity`` pozostaje fałszywe: profil korzysta z natywnych zleceń
+    reduce-only, ale silnik nie dowodzi semantyki server-side ``closePosition``.
+    """
+
+    evidence_tier: str = field(default="RESEARCH", init=False)
+    eligibility: str = field(default="EVIDENCE_GATE_PENDING", init=False)
+    execution_profile: str = field(default=PYO3_RESEARCH_EXECUTION_PROFILE, init=False)
+    position_model: str = field(default=PYO3_RESEARCH_POSITION_MODEL, init=False)
+    engine: str = field(
+        default="nautilus_trader.core.nautilus_pyo3.BacktestEngine",
+        init=False,
+    )
+    close_position_parity: bool = field(default=False, init=False)
+    custom_matching_engine: bool = field(default=False, init=False)
+
+    def as_dict(self) -> dict[str, str | bool]:
+        """Zwróć zamrożone provenance gotowe do serializacji JSON."""
+
+        return {
+            "evidence_tier": self.evidence_tier,
+            "eligibility": self.eligibility,
+            "execution_profile": self.execution_profile,
+            "position_model": self.position_model,
+            "engine": self.engine,
+            "close_position_parity": self.close_position_parity,
+            "custom_matching_engine": self.custom_matching_engine,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class CacheReports:
     """Reports built directly from PyO3 cache objects, never Cython reporters."""
 
@@ -310,7 +347,7 @@ class CacheReports:
 class Pyo3SmokeRun:
     """Small P7 artifact, deliberately separate from the richer P8 result type."""
 
-    metadata: Pyo3SmokeMetadata
+    metadata: Pyo3SmokeMetadata | Pyo3ResearchMetadata
     native_result: object
     reports: CacheReports
     domain_events: tuple[DomainEvent, ...]
@@ -394,6 +431,7 @@ class NautilusMastermindStrategy(Pyo3Strategy):
         slippage_per_unit: Decimal = ZERO,
         serialize_transition_snapshots: bool = True,
         transition_observer: TransitionObserver | None = None,
+        retain_domain_event: RetainDomainEvent | None = None,
     ) -> None:
         if interval_ns <= 0:
             raise ValueError("interval_ns must be positive")
@@ -453,6 +491,7 @@ class NautilusMastermindStrategy(Pyo3Strategy):
         self._slippage_per_unit = slippage_per_unit
         self._serialize_transition_snapshots = serialize_transition_snapshots
         self._transition_observer = transition_observer
+        self._retain_domain_event = retain_domain_event
         self._offline_transition_error: str | None = None
         self._instrument: Any | None = None
         self._sequence = max(
@@ -1251,7 +1290,8 @@ class NautilusMastermindStrategy(Pyo3Strategy):
     def _apply_domain_event(self, event: DomainEvent) -> None:
         if self._offline_transition_error is not None:
             return
-        self.domain_events.append(event)
+        if self._retain_domain_event is None or self._retain_domain_event(event):
+            self.domain_events.append(event)
         if self._serialize_transition_snapshots:
             result = self._machine.handle(event)
         else:
@@ -2269,6 +2309,7 @@ def run_pyo3_mastermind_smoke(
     marking_data: Sequence[Any] = (),
     marking_interval_ns: int | None = None,
     starting_balance: Decimal = Decimal("100000"),
+    default_leverage: Decimal = Decimal(1),
     fill_model: Any | None = None,
     reconcile_on_start: bool = False,
     known_client_order_ids: Iterable[str] = (),
@@ -2280,8 +2321,15 @@ def run_pyo3_mastermind_smoke(
     slippage_per_unit: Decimal = ZERO,
     serialize_transition_snapshots: bool = True,
     transition_observer: TransitionObserver | None = None,
+    retain_domain_event: RetainDomainEvent | None = None,
+    run_metadata: Pyo3SmokeMetadata | Pyo3ResearchMetadata | None = None,
 ) -> Pyo3SmokeRun:
-    """Run the frozen PyO3 smoke profile and return cache-derived evidence."""
+    """Uruchom adapter PyO3 i zwróć evidence odtworzone z cache silnika.
+
+    Dotychczasowi callerzy otrzymują zamrożone smoke provenance. Session 4 musi
+    przekazać :class:`Pyo3ResearchMetadata`; końcowa decyzja evidence nadal
+    należy do ``BacktestResult`` i nie wynika z samego argumentu metadata.
+    """
 
     if not data:
         raise ValueError("data must not be empty")
@@ -2291,8 +2339,10 @@ def run_pyo3_mastermind_smoke(
         raise ValueError("marking_data requires marking_bar_type")
     if marking_bar_type is not None and not marking_data:
         raise ValueError("configured marking_bar_type requires marking_data")
-    if starting_balance <= ZERO or not starting_balance.is_finite():
+    if not starting_balance.is_finite() or starting_balance <= ZERO:
         raise ValueError("starting_balance must be finite and positive")
+    if not default_leverage.is_finite() or default_leverage <= ZERO:
+        raise ValueError("default_leverage must be finite and positive")
     settlement_currency = instrument.settlement_currency
     engine = nt.BacktestEngine(
         nt.BacktestEngineConfig(
@@ -2307,7 +2357,7 @@ def run_pyo3_mastermind_smoke(
         account_type=nt.AccountType.MARGIN,
         starting_balances=[nt.Money.from_str(f"{starting_balance} {settlement_currency.code}")],
         base_currency=settlement_currency,
-        default_leverage=Decimal(1),
+        default_leverage=default_leverage,
         fill_model=fill_model
         or nt.DefaultFillModel(
             prob_fill_on_limit=1.0,
@@ -2341,6 +2391,7 @@ def run_pyo3_mastermind_smoke(
         slippage_per_unit=slippage_per_unit,
         serialize_transition_snapshots=serialize_transition_snapshots,
         transition_observer=transition_observer,
+        retain_domain_event=retain_domain_event,
     )
     engine.add_strategy(strategy)
     try:
@@ -2353,7 +2404,7 @@ def run_pyo3_mastermind_smoke(
         reports = build_cache_reports(engine.cache, instrument.id.venue)
         final_net = Decimal(str(engine.portfolio.net_position(instrument.id)))
         return Pyo3SmokeRun(
-            metadata=Pyo3SmokeMetadata(),
+            metadata=run_metadata or Pyo3SmokeMetadata(),
             native_result=native_result,
             reports=reports,
             domain_events=tuple(strategy.domain_events),

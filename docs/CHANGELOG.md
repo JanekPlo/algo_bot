@@ -17,6 +17,35 @@ Sekcje na każdą wersję:
 
 ## [Unreleased]
 
+### Added (MR-Session 4 runner draft — blocked before freeze, 2026-07-15)
+
+- Added the deterministic 528-run BTCUSDT/ETHUSDT × M5/M10 Session-4 contract,
+  development-only streaming data boundary, frozen paginated Bybit contract capture,
+  native Nautilus execution/evidence assembly, and an outcome-blind two-worker runner.
+- Added atomic per-run staging/deep verification/rename, bounded two-attempt retry,
+  crash-safe resume and quarantine, manifest core/provenance hashes, and a fail-closed
+  preregistration draft. Manifest preparation now binds exactly one canonical
+  preregistration tag to the frozen commit and supports the same in-repository custom
+  Bybit-contract path as `lock-core`. No Session-4 strategy run or metric reveal is
+  authorized yet.
+- Added H1-versus-M5-derived-H1 divergence provenance with a frozen 25-bps price bound,
+  NumPy/Pandas/runtime fingerprints, funding-interval contract validation, and a literal
+  30-check invariant ledger.
+- Added causal native funding valuation from source-precision completed H1 mark closes,
+  including one pre-development mark bar for the boundary settlement, a PyO3 LAST/mark
+  characterization, and an independent signed-quantity × mark × rate amount oracle.
+
+### Fixed (research operations, 2026-07-15)
+
+- `scripts/vps-sync.sh up --dry-run` no longer creates the remote destination directory;
+  it performs only the requested non-mutating rsync preview.
+- Bybit funding retrieval now sends the requested development cutoff as the server-side
+  V5 `endTime`, preventing pagination from first fetching reserved-tail settlements and
+  discarding them only after download.
+- Research-mode Nautilus event retention now keeps the state machine and observer fully
+  informed while omitting high-volume marker snapshots, and no longer claims unproved
+  server-side `closePosition` parity.
+
 ### Added (Phase 2 MR-Session 3 Beta Iteration 2 — evidence and M5/M10 fidelity, 2026-07-15)
 
 - **Native Bybit mark-price pipeline:** `algo-fetch --price-source mark` routes through the
@@ -45,8 +74,9 @@ Sekcje na każdą wersję:
 
 - Accepted architecture `1a/2a/3R/4R/5c/6a/7R`. MR-Session 4 is now unconditional after
   preregistration, with BTCUSDT and ETHUSDT evaluated separately, H1 execution and M5/M10
-  marking variants. The H1-only profile is diagnostic. Holdout remains unread until the
-  new preregistration; P9 remains immutable `SMOKE_ONLY / NOT_ELIGIBLE` evidence.
+  marking variants. The H1-only profile is diagnostic. No Session-4 strategy has loaded
+  reserved rows; later operator-side full-file integrity access is explicitly disclosed in
+  the Session-4 draft. P9 remains immutable `SMOKE_ONLY / NOT_ELIGIBLE` evidence.
 
 ### Added (Phase 2 MR-Session 3 Beta Iteration 1 — Exchange migration Binance→Bybit, 2026-07-14)
 - **ADR-015 — venue migration to Bybit.** Forward-only work moves to Bybit v5 linear USDT

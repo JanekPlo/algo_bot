@@ -584,12 +584,12 @@ def test_bybit_risk_tiers_parse_empty_first_deduction() -> None:
         [
             {
                 "riskLimitValue": "2000000",
-                "maintenanceMargin": "0.005",
+                "maintenanceMargin": "0.5",
                 "mmDeduction": "",
             },
             {
                 "riskLimitValue": "2600000",
-                "maintenanceMargin": "0.0056",
+                "maintenanceMargin": "0.56",
                 "mmDeduction": "1200",
             },
         ]

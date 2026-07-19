@@ -17,6 +17,8 @@ from algo_bot.engine.nautilus_mastermind import (
     ELIGIBILITY,
     EVIDENCE_TIER,
     HOUR_NS,
+    PYO3_RESEARCH_EXECUTION_PROFILE,
+    PYO3_RESEARCH_POSITION_MODEL,
     PYO3_SMOKE_EXECUTION_PROFILE,
     PYO3_SMOKE_POSITION_MODEL,
     BarFeatures,
@@ -25,6 +27,7 @@ from algo_bot.engine.nautilus_mastermind import (
     Pyo3RecoveryCoverageGroup,
     Pyo3RecoveryExposureFill,
     Pyo3RecoveryOrderBinding,
+    Pyo3ResearchMetadata,
     Pyo3SmokeMetadata,
     Pyo3SmokeProfileError,
     run_pyo3_mastermind_smoke,
@@ -39,6 +42,7 @@ from algo_bot.strategies.mastermind.model import (
     CloseRequested,
     DomainEvent,
     DomainIntent,
+    FundingApplied,
     MarkingBarClosed,
     MastermindConfig,
     OrderFilled,
@@ -459,6 +463,82 @@ def test_native_funding_is_drained_once_before_position_close() -> None:
     assert funding_events[0].setup_id == reconciled[0].setup_id
     assert closed[0].funding == Decimal("-1.00000000")
     assert result.final_net_quantity == 0
+
+
+def test_native_funding_uses_completed_mark_price_update_not_last_trade() -> None:
+    instrument, bar_type = _instrument_fixture()
+    machine = _ScriptedMachine(
+        take_profit=False,
+        close_on_bar=3,
+        base_stop=Decimal(50),
+    )
+    bars = _bars(
+        instrument,
+        bar_type,
+        [(100, 100, 100, 100)] * 4,
+        timestamps=[HOUR_NS, 2 * HOUR_NS, 9 * HOUR_NS, 10 * HOUR_NS],
+    )
+    mark = nt.MarkPriceUpdate(
+        instrument.id,
+        nt.Price.from_str("200.00"),
+        8 * HOUR_NS - 1_000_000,
+        8 * HOUR_NS - 1_000_000,
+    )
+    funding = nt.FundingRateUpdate(
+        instrument.id,
+        Decimal("0.01"),
+        8 * HOUR_NS - 1,
+        8 * HOUR_NS - 1,
+        interval=28_800,
+        next_funding_ns=8 * HOUR_NS,
+    )
+
+    result = run_pyo3_mastermind_smoke(
+        machine=machine,
+        strategy_id=STRATEGY_ID,
+        instrument=instrument,
+        bar_type=bar_type,
+        data=[mark, funding, *bars],
+        feature_source=_features,
+    )
+
+    funding_events = [event for event in result.domain_events if isinstance(event, FundingApplied)]
+    assert len(funding_events) == 1
+    assert funding_events[0].amount == Decimal("-2.00000000")
+
+
+def test_same_timestamp_mark_update_does_not_replace_last_price_equity() -> None:
+    instrument, bar_type = _instrument_fixture()
+    machine = _ScriptedMachine(take_profit=False, base_stop=Decimal(50))
+    bars = _bars(
+        instrument,
+        bar_type,
+        [
+            (100, 100, 100, 100),
+            (100, 100, 100, 100),
+            (110, 110, 110, 110),
+            (110, 110, 110, 110),
+        ],
+    )
+    mark = nt.MarkPriceUpdate(
+        instrument.id,
+        nt.Price.from_str("200.00"),
+        3 * HOUR_NS,
+        3 * HOUR_NS,
+    )
+
+    result = run_pyo3_mastermind_smoke(
+        machine=machine,
+        strategy_id=STRATEGY_ID,
+        instrument=instrument,
+        bar_type=bar_type,
+        data=[mark, *bars],
+        feature_source=_features,
+    )
+
+    equity = [event for event in result.domain_events if isinstance(event, AccountEquityUpdated)]
+    at_third_close = next(event for event in equity if event.occurred_at_utc.hour == 3)
+    assert at_third_close.equity == Decimal("100010.00000000")
 
 
 def test_native_multi_tf_routes_all_m5_before_equal_close_h1() -> None:
@@ -1926,6 +2006,73 @@ def test_every_run_is_unambiguously_smoke_only_and_cache_reported() -> None:
     assert not result.reports.account_events.empty
 
 
+def test_research_metadata_is_explicit_and_does_not_claim_close_position_parity() -> None:
+    metadata = Pyo3ResearchMetadata()
+    result = _run(
+        _ScriptedMachine(take_profit=False),
+        [(100, 101, 99, 100)] * 2,
+        run_metadata=metadata,
+    )
+
+    assert result.metadata is metadata
+    assert metadata.as_dict() == {
+        "evidence_tier": "RESEARCH",
+        "eligibility": "EVIDENCE_GATE_PENDING",
+        "execution_profile": PYO3_RESEARCH_EXECUTION_PROFILE,
+        "position_model": PYO3_RESEARCH_POSITION_MODEL,
+        "engine": "nautilus_trader.core.nautilus_pyo3.BacktestEngine",
+        "close_position_parity": False,
+        "custom_matching_engine": False,
+    }
+
+
+def test_domain_retention_filter_does_not_skip_machine_or_observer() -> None:
+    machine = _ScriptedMachine(take_profit=False)
+    observed: list[DomainEvent] = []
+    result = _run(
+        machine,
+        [(100, 101, 99, 100)] * 2,
+        transition_observer=observed.append,
+        retain_domain_event=lambda event: not isinstance(event, BarClosed),
+    )
+
+    assert observed == machine.events
+    assert any(isinstance(event, BarClosed) for event in observed)
+    assert result.domain_events
+    assert not any(isinstance(event, BarClosed) for event in result.domain_events)
+
+
+def test_default_leverage_is_forwarded_to_native_margin_account() -> None:
+    leverage_one = _run(
+        _ScriptedMachine(take_profit=False),
+        [(100, 101, 99, 100)] * 2,
+        default_leverage=Decimal(1),
+    )
+    leverage_two = _run(
+        _ScriptedMachine(take_profit=False),
+        [(100, 101, 99, 100)] * 2,
+        default_leverage=Decimal(2),
+    )
+
+    locked_one = Decimal(leverage_one.reports.account_events.iloc[-1]["balances"][0]["locked"])
+    locked_two = Decimal(leverage_two.reports.account_events.iloc[-1]["balances"][0]["locked"])
+    assert locked_one == Decimal("2.50000000")
+    assert locked_two == Decimal("1.25000000")
+
+
+@pytest.mark.parametrize(
+    "default_leverage",
+    [Decimal(0), Decimal(-1), Decimal("NaN"), Decimal("Infinity")],
+)
+def test_default_leverage_must_be_finite_and_positive(default_leverage: Decimal) -> None:
+    with pytest.raises(ValueError, match="default_leverage must be finite and positive"):
+        _run(
+            _ScriptedMachine(take_profit=False),
+            [(100, 101, 99, 100)] * 2,
+            default_leverage=default_leverage,
+        )
+
+
 def _run(
     machine: Any,
     prices: list[tuple[int, ...]],
@@ -1938,6 +2085,10 @@ def _run(
     before_bar_domain_events: Callable[[Any], Iterable[DomainEvent]] | None = None,
     deliver_domain_bar: Callable[[Any], bool] | None = None,
     slippage_per_unit: Decimal = Decimal(0),
+    default_leverage: Decimal = Decimal(1),
+    transition_observer: Callable[[DomainEvent], None] | None = None,
+    retain_domain_event: Callable[[DomainEvent], bool] | None = None,
+    run_metadata: Pyo3SmokeMetadata | Pyo3ResearchMetadata | None = None,
 ):
     instrument, bar_type = _instrument_fixture()
     return run_pyo3_mastermind_smoke(
@@ -1955,6 +2106,10 @@ def _run(
         before_bar_domain_events=before_bar_domain_events,
         deliver_domain_bar=deliver_domain_bar,
         slippage_per_unit=slippage_per_unit,
+        default_leverage=default_leverage,
+        transition_observer=transition_observer,
+        retain_domain_event=retain_domain_event,
+        run_metadata=run_metadata,
     )
 
 

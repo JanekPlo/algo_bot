@@ -85,8 +85,14 @@ case "$DIRECTION" in
             echo "BLAD: brak lokalnego ${LOCAL_SRC} — najpierw algo-fetch/algo-process." >&2
             exit 1
         fi
-        # Upewnij sie ze katalog docelowy istnieje na VPS.
-        ssh "$VPS_HOST" "mkdir -p ${VPS_REPO}/bot_data/processed"
+        # Zwykly rsync --dry-run nie zmienia plikow, ale ponizsze mkdir byloby
+        # osobna, realna mutacja. W trybie podgladu nie wykonuj zadnego polecenia
+        # SSH; katalog docelowy musi juz istniec, aby rsync mogl go porownac.
+        if [[ -z "$DRY_RUN" ]]; then
+            ssh "$VPS_HOST" "mkdir -p ${VPS_REPO}/bot_data/processed"
+        else
+            echo "==> [DRY-RUN] pomijam zdalne mkdir -p ${VPS_REPO}/bot_data/processed"
+        fi
         run_rsync "$LOCAL_SRC" "$REMOTE_DST"
         ;;
     down)

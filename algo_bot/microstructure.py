@@ -57,6 +57,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Literal, cast
 
@@ -70,6 +71,16 @@ logger = get_logger(__name__)
 
 # Konwersja bps → fraction (1 bp = 0.01% = 1e-4).
 _BPS: float = 1e4
+
+# Publiczne V5 ``/v5/market/risk-limit`` zwraca ``maintenanceMargin`` w
+# punktach procentowych: surowe "0.5" oznacza 0.5%, a nie ułamek 0.5.
+# Profil jest też zapisywany w zamrożonym kontrakcie Session 4, aby jednostka
+# nie mogła zmienić się po cichu między capture i odtworzeniem offline.
+BYBIT_V5_MAINTENANCE_MARGIN_UNIT = "percentage_points"
+BYBIT_V5_MAINTENANCE_MARGIN_NORMALIZATION_PROFILE = (
+    "bybit_v5_maintenance_margin_percentage_points_to_fraction/1"
+)
+_PERCENTAGE_POINTS_PER_UNIT = Decimal("100")
 
 
 # ============================================================================
@@ -163,7 +174,11 @@ class MaintenanceMarginTier:
 
     ``max_position_value=None`` oznacza ostatni, nieograniczony próg. Stawka i
     deduction pochodzą z publicznego ``/v5/market/risk-limit`` i powinny być
-    zamrożone wraz z manifestem eksperymentu.
+    zamrożone wraz z manifestem eksperymentu. ``maintenance_margin_rate`` ma
+    zawsze postać ułamka (np. ``0.005`` = 0.5%); konwersja z punktów
+    procentowych odpowiedzi V5 odbywa się dokładnie raz w
+    :func:`maintenance_margin_tiers_from_bybit`. Konstruktor tieru i formuła
+    likwidacji nie wykonują ponownego skalowania.
     """
 
     max_position_value: float | None
@@ -415,20 +430,31 @@ def load_mark_price_context(
 def maintenance_margin_tiers_from_bybit(
     rows: Sequence[Mapping[str, object]],
 ) -> tuple[MaintenanceMarginTier, ...]:
-    """Normalizuje publiczną odpowiedź Bybit risk-limit do zamrożonych tierów."""
+    """Normalizuje publiczną odpowiedź Bybit risk-limit do zamrożonych tierów.
+
+    Pole V5 ``maintenanceMargin`` jest liczbą punktów procentowych. Dlatego
+    surowe ``"0.5"`` jest tutaj dzielone przez 100 i dopiero ułamek ``0.005``
+    trafia do :class:`MaintenanceMarginTier` oraz obliczeń likwidacji.
+    """
 
     tiers: list[MaintenanceMarginTier] = []
     for row in rows:
         try:
             limit = float(str(row["riskLimitValue"]))
-            rate = float(str(row["maintenanceMargin"]))
+            raw_rate_percentage_points = Decimal(str(row["maintenanceMargin"]))
+            if (
+                not raw_rate_percentage_points.is_finite()
+                or not Decimal("0") < raw_rate_percentage_points < _PERCENTAGE_POINTS_PER_UNIT
+            ):
+                raise ValueError("maintenanceMargin musi należeć do (0, 100)")
+            rate = float(raw_rate_percentage_points / _PERCENTAGE_POINTS_PER_UNIT)
             raw_deduction = row.get("mmDeduction")
             deduction = (
                 0.0
                 if raw_deduction is None or str(raw_deduction).strip() == ""
                 else float(str(raw_deduction))
             )
-        except (KeyError, TypeError, ValueError) as exc:
+        except (InvalidOperation, KeyError, TypeError, ValueError) as exc:
             raise ValueError(f"Nieprawidłowy Bybit risk tier: {row!r}") from exc
         tiers.append(MaintenanceMarginTier(limit, rate, deduction))
     tiers.sort(

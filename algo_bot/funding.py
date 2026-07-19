@@ -86,11 +86,16 @@ def _fetch_funding_binance(ex: ccxt.Exchange, symbol: str, since: int, end_ms: i
 
 
 def _fetch_funding_bybit(ex: ccxt.Exchange, symbol: str, since: int, end_ms: int) -> list[dict]:
-    """Loop po unified ``fetch_funding_rate_history`` (Bybit v5 linear USDT perp)."""
+    """Loop po Bybit v5 ograniczony na serwerze do jawnego ``endTime``."""
     market = _bybit_market_symbol(symbol)  # 'BTC/USDT' → 'BTC/USDT:USDT'
     rows: list[dict] = []
     while since < end_ms:
-        data = ex.fetch_funding_rate_history(market, since=since, limit=_LIMIT_BYBIT)
+        data = ex.fetch_funding_rate_history(
+            market,
+            since=since,
+            limit=_LIMIT_BYBIT,
+            params={"endTime": end_ms},
+        )
         if not data:
             break
         for d in data:
@@ -101,7 +106,7 @@ def _fetch_funding_bybit(ex: ccxt.Exchange, symbol: str, since: int, end_ms: int
                     "funding_rate": float(d["fundingRate"]),
                 }
             )
-        last = int(data[-1]["timestamp"])
+        last = max(int(item["timestamp"]) for item in data)
         if last <= since:
             break
         since = last + 1
@@ -187,8 +192,8 @@ def main() -> None:
         description="algo-fetch-funding — USDT perp funding history Binance/Bybit (ADR-011/015)"
     )
     ap.add_argument("--symbol", required=True, help="np. BTC/USDT")
-    ap.add_argument("--start", required=True, help="YYYY-MM-DD (UTC)")
-    ap.add_argument("--end", default=None, help="YYYY-MM-DD (UTC); brak → teraz")
+    ap.add_argument("--start", required=True, help="ISO date/datetime (UTC)")
+    ap.add_argument("--end", default=None, help="ISO date/datetime (UTC); brak → teraz")
     ap.add_argument(
         "--exchange",
         default="binance",

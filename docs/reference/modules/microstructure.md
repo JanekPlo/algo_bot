@@ -106,17 +106,24 @@ Frozen dataclass — the orchestrator output.
 
 | Type / function | Contract |
 |---|---|
-| `MaintenanceMarginTier` | Frozen Bybit risk-limit tier: maximum position value, maintenance-margin rate and deduction. The complete schedule must be frozen with the experiment manifest. |
+| `MaintenanceMarginTier` | Frozen Bybit risk-limit tier: maximum position value, fractional maintenance-margin rate and deduction. The complete schedule must be frozen with the experiment manifest. |
 | `MarkPriceBar` | One completed OHLC mark-price bar with explicit open/close timestamps. |
 | `MarkPriceContext` | Strictly validated, causal OHLC history plus venue, source, taker fee and risk tiers. `completed_bar_at(ts)` never returns the currently forming bar; `tier_for(value)` fails closed when no tier covers the position. |
 | `LeveragedPosition` | Engine-independent isolated linear-USDT position: side, quantity, entry, leverage and optional extra margin. |
 | `LiquidationEvent` | Serializable evidence containing the position, side, observed mark, liquidation threshold, risk-tier inputs, timestamp and source. |
 | `load_mark_price_context` | Loads `bot_data/processed/<exchange>_<symbol>_mark_<tf>.csv`, keeps OHLC only and performs strict integrity validation. |
 | `mark_price_at` | Convenience lookup returning the close of the last completed H1 mark-price bar. |
-| `maintenance_margin_tiers_from_bybit` | Converts public Bybit risk-limit rows to sorted frozen tiers. |
+| `maintenance_margin_tiers_from_bybit` | Converts public Bybit risk-limit rows to sorted frozen tiers. V5 `maintenanceMargin` is expressed in percentage points (`"0.5"` = 0.5%), so this boundary divides it by 100 exactly once before constructing a tier (`0.005`). |
 | `liquidation_price` | Computes the current Bybit UTA isolated linear-USDT liquidation threshold, including maintenance-margin deduction, extra margin and estimated closing fee. |
 | `liquidation_check` | Compares one mark observation with the threshold and returns `False` or a `LiquidationEvent`. |
 | `first_liquidation_event` | Scans completed H1 mark bars over `(start, end]`; uses `Low` for a long and `High` for a short, and returns only the first crossing. |
+
+The frozen Session-4 Bybit contract records the normalization profile, input
+unit (`percentage_points`), output unit (`fraction`) and divisor (`100`). Raw
+API pages remain unchanged beside the normalized tier schedule. Offline loading
+re-derives the fractional values from those raw pages and compares them with the
+stored schedule, while `MaintenanceMarginTier` and the liquidation formula do
+not scale the rate again.
 
 Fill evidence and margin evidence are deliberately independent. `BacktestResult` schema v2
 records `fill_method ∈ {close_naive, close_plus_slippage, nautilus_native_bar}` separately
