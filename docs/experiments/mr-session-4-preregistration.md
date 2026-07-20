@@ -1,6 +1,6 @@
 # MR-Session 4 full v2 in-sample sweep — frozen preregistration
 
-> **Status:** **FROZEN BEFORE METRIC READ — REVISION 2**
+> **Status:** **REVISION 3 DRAFT — REVISION-2 PILOT IMPLEMENTATION DEFECT, NO METRIC READ**
 > **Last updated:** 2026-07-20
 > **Scope:** BTCUSDT and ETHUSDT evaluated separately; H1 execution with M5 or
 > M10 marking; native Nautilus bar fills; causal mark-price isolated-margin
@@ -25,7 +25,7 @@ manifest provenance and are intentionally not back-edited into this document.
 |---|---|
 | Preregistration SHA-256 | Recorded by `prepare` after the clean tagged commit |
 | Contract-core SHA-256 | `05bb05f9024967c74c0708bd0469a6c8660d8fe7b20142b9d075e9d68cdeb12f` |
-| Manifest-core SHA-256 | `0bb1ff7b44e9e21be0bbd3ee4f282c9944053c54016004a8e2db8203d4ef2841` |
+| Manifest-core SHA-256 | Pending Revision-3 lock after the native replay correction |
 | Manifest-provenance SHA-256 | Recorded by `prepare`; not back-edited here |
 | Git commit | Recorded by `prepare` from the clean frozen tree |
 | Git tag | Recorded by `prepare`; exactly one canonical tag must point at the commit |
@@ -33,7 +33,7 @@ manifest provenance and are intentionally not back-edited into this document.
 | Development-data hashes | Bound inside the manifest core and expanded by `prepare` |
 | Frozen Bybit-contract hash | Bound inside the manifest core and expanded by `prepare` |
 
-<!-- mr-session-4-manifest-core-sha256: 0bb1ff7b44e9e21be0bbd3ee4f282c9944053c54016004a8e2db8203d4ef2841 -->
+<!-- mr-session-4-manifest-core-sha256: PENDING -->
 
 The freeze procedure is defined in Section 13. The frozen status does not by
 itself permit execution: the commit, canonical tag, prepared manifest, and
@@ -270,7 +270,7 @@ post-outcome expansion would be a different experiment.
 ## 6. Native execution and cost evidence
 
 The intended execution profile is
-`NAUTILUS_BYBIT_NATIVE_BAR_MMS_FULL_STACK_V1` on
+`NAUTILUS_BYBIT_NATIVE_BAR_MMS_FULL_STACK_V2` on
 `nautilus_trader.core.nautilus_pyo3.BacktestEngine` 1.230.0.
 
 Mechanically:
@@ -284,6 +284,11 @@ Mechanically:
 4. Logical whole-position exits are represented by deterministic native
    reduce-only children in a NETTING account.
 5. Engine/cache reports are reconciled to the domain fill and PnL ledgers.
+6. Native `BacktestResult.iterations` must equal every supplied M5/M10, H1,
+   mark-price, and funding input, and independently counted successfully
+   completed M5/M10 and H1 strategy callbacks must exactly cover both bar
+   streams. A callback error is an incomplete replay and fails before any
+   artifact or metric even if Nautilus consumes later inputs after the error.
 
 Required cost evidence:
 
@@ -306,7 +311,7 @@ The exact funding-price profiles are
 `ONE_PREDEVELOPMENT_H1_FOR_FIRST_FUNDING_MARK_V1` and
 `COMPLETED_H1_MARK_CLOSE_PRESERVE_SOURCE_PRECISION_FUNDING_BASIS_V1`; the full
 cost profile is
-`BYBIT_FIXED_FEE_HISTORICAL_MARK_FUNDING_ONE_TICK_NATIVE_BAR_V3`. For every
+`BYBIT_FIXED_FEE_HISTORICAL_MARK_FUNDING_ONE_TICK_NATIVE_BAR_V4`. For every
 expected settlement, an independent oracle requires:
 
 ```text
@@ -315,11 +320,12 @@ expected_funding_amount = -signed_quantity × completed_H1_mark_close × funding
 
 The independent oracle replays signed position quantity from source
 `PositionChanged` events, resets it to zero on `PositionClosed`, and rounds
-half-up to `0.00000001 USDT`. A positive quantity is long, so a positive rate
-produces a negative payment. Invariant 22 compares the oracle with native
-funding amounts settlement by settlement in addition to reconciling ledger
-totals. Missing position/rate/mark evidence or any amount mismatch is an
-invariant failure.
+midpoint-to-even to `0.00000001 USDT`, matching the pinned native
+`Money::from_decimal` currency quantization. A positive quantity is long, so a
+positive rate produces a negative payment. Invariant 22 compares the oracle
+with native funding amounts settlement by settlement in addition to
+reconciling ledger totals. Missing position/rate/mark evidence or any amount
+mismatch is an invariant failure.
 
 There is no post-hoc ADR-011 overlay and no silent synthetic funding fallback.
 The accepted absence of order-book/trade replay limits capacity and execution
@@ -362,7 +368,7 @@ fraction (`0.005`); the raw pages and the unit/divisor provenance remain in the
 contract artifact.
 
 The margin profile is
-`CAUSAL_H1_MARK_SETUP_EQUITY_EFFECTIVE_LEVERAGE_PROXY_V2`:
+`CAUSAL_H1_MARK_SETUP_EQUITY_EFFECTIVE_LEVERAGE_PROXY_V3`:
 
 ```text
 gross_entry_notional = actual_open_quantity × actual_average_entry_price
@@ -379,6 +385,12 @@ Consequences:
   initial margin; the remaining wallet is not silently treated as extra margin;
 - the native venue default leverage is `2`, while the independent liquidation
   evidence uses the effective-leverage formula above.
+
+For a fully collateralized long, the raw proxy formula can produce a
+liquidation threshold at or below zero. Because every valid mark price is
+strictly positive, such a threshold is mathematically unreachable and produces
+no liquidation event. Non-finite thresholds and every invalid input still fail
+closed; positive thresholds retain the exact crossing rule below.
 
 This liquidation price is a deterministic evidence proxy, not an exact Bybit
 isolated-margin ledger. It freezes setup-start equity, derives leverage from
@@ -727,7 +739,7 @@ committing the exact frozen tree, and confirming that the tree is clean, create
 one tag and prepare the manifest:
 
 ```bash
-PREREG_TAG="mr-session-4-preregistration-$(date -u +%F)-r2"
+PREREG_TAG="mr-session-4-preregistration-$(date -u +%F)-r3"
 git tag "$PREREG_TAG"
 git tag --points-at HEAD --list 'mr-session-4-preregistration-*'
 
@@ -814,6 +826,25 @@ the pinned native `Money::from_decimal` semantics, bumps the cost profile, and
 requires a new core hash, commit, manifest, and `-r2` tag. Revision-1 artifacts
 are invalid implementation evidence and may not be resumed into this suite.
 
+The revision-2 outcome-blind pilot also stopped before any strategy metric was
+opened. A fully collateralized long produced a mathematically unreachable
+non-positive liquidation threshold; `liquidation_check` incorrectly raised,
+and Nautilus `shutdown_on_error` returned a partial replay. The local
+pre-metric reproduction ended after 67 of 37,248 expected H1 callbacks; the
+funding interval checker then surfaced the orphaned open setup. Revision 3
+treats only a finite non-positive long threshold as no possible positive-mark
+crossing and independently requires native iteration coverage of the complete
+supplied stream. Revision-2 artifacts are invalid implementation evidence and
+may not be resumed.
+
+The subsequent full Revision-3 pre-metric diagnostic completed all 37,248 H1
+mark callbacks and closed every setup, then stopped at the independent funding
+amount ledger. Its oracle rounded exact `0.00000001 USDT` midpoints half-up,
+while the pinned native `Money::from_decimal` uses midpoint-to-even for funding
+adjustments as it does for commissions. Revision 3 aligns both cost oracles to
+the same exact native currency-quantum rule and bumps the cost profile to V4.
+No strategy metric was computed or opened.
+
 After the first strategy metric is readable, changing dates, data, parameter
 sets, variants, marking timeframes, cost/margin/execution profiles, thresholds,
 decision rules, retry semantics, or run count invalidates the preregistration.
@@ -822,7 +853,7 @@ run ID, config hash, data hash, and seed.
 
 ## 14. Freeze completion record and remaining launch gates
 
-Completed before any Session-4 strategy run or metric read:
+Completed without reading any Session-4 strategy metric:
 
 1. **ETHUSDT funding restored and validated:** the development interval contains
    exactly 4,656 eight-hour settlements from `2021-04-01 00:00Z` through
@@ -847,22 +878,29 @@ Completed before any Session-4 strategy run or metric read:
    not authorize another strategy run.
 6. **Revision-2 manifest core was locked on the intended VPS:** the corrected
    source and cost profile passed the same 528-run data, contract, runtime,
-   source, and lockfile preflight, producing the Section-1 core hash.
+   source, and lockfile preflight, producing
+   `0bb1ff7b44e9e21be0bbd3ee4f282c9944053c54016004a8e2db8203d4ef2841`.
+   Its tagged manifest and plan verified, but its outcome-blind pilot exposed
+   the incomplete native replay defect documented above.
+7. **Revision-3 final quality gate passed:** after the full pre-metric
+   diagnostic and funding midpoint correction, Ruff lint and format checks,
+   mypy, and the complete test suite passed with 656 tests passed and 2
+   live-network tests skipped. Regression coverage includes the unreachable
+   long threshold, partial native callbacks, crash checkpoint rejection,
+   staged UUID parsing, and native/oracle funding midpoints.
 
 Remaining launch gates, in strict order:
 
-1. Commit this exact frozen document and the frozen Bybit-contract artifact
-   without changing any core input; require a clean tree.
-2. Create exactly one canonical
-   `mr-session-4-preregistration-YYYY-MM-DD-r2` tag on that commit.
-3. On the same VPS, archive the Revision-1 manifest and run directory without
-   opening outcome-bearing files. From the clean tagged Revision-2 commit, run
-   `prepare`, require the identical manifest core hash, then run `plan` to
-   verify the new manifest and provenance.
+1. Run `lock-core` on the intended VPS from the exact Revision-3 candidate.
+2. Write the new core hash here, commit the exact frozen tree, and create the
+   canonical `mr-session-4-preregistration-YYYY-MM-DD-r3` tag.
+3. Archive the Revision-2 manifest and run directory without opening
+   outcome-bearing files. From the clean tagged Revision-3 commit, run
+   `prepare`, require the identical core hash, then run `plan`.
 4. Confirm at least 60 GiB free and perform a fresh four-run outcome-blind pilot
-   before starting the full 528-run suite. Revision-1 output may not be resumed.
+   before starting the full 528-run suite. Earlier output may not be resumed.
 
-Until gates 1–4 are closed, no Session-4 strategy run may start. During the
+Until gates 1–4 are closed, no further Session-4 strategy run may start. During the
 pilot and partial suite, outcome-bearing artifacts remain closed as specified
 in Section 11.
 

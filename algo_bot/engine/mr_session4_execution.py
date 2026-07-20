@@ -9,7 +9,7 @@ from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from decimal import ROUND_HALF_EVEN, ROUND_HALF_UP, Decimal, InvalidOperation
+from decimal import ROUND_HALF_EVEN, Decimal, InvalidOperation
 from typing import Any, Literal, cast
 
 import pandas as pd
@@ -70,10 +70,10 @@ from algo_bot.strategies.mastermind.model import (
 from algo_bot.strategies.mastermind.state_machine import MastermindStateMachine
 
 EXECUTION_SCHEMA_VERSION = "mr_session4_execution/2"
-EXECUTION_PROFILE_ID = "NAUTILUS_BYBIT_NATIVE_BAR_MMS_FULL_STACK_V1"
-MARGIN_PROFILE_ID = "CAUSAL_H1_MARK_SETUP_EQUITY_EFFECTIVE_LEVERAGE_PROXY_V2"
+EXECUTION_PROFILE_ID = "NAUTILUS_BYBIT_NATIVE_BAR_MMS_FULL_STACK_V2"
+MARGIN_PROFILE_ID = "CAUSAL_H1_MARK_SETUP_EQUITY_EFFECTIVE_LEVERAGE_PROXY_V3"
 METRIC_PROFILE_ID = "NATIVE_NET_H1_8760_FRACTION_UNITS_V1"
-COST_PROFILE_ID = "BYBIT_FIXED_FEE_HISTORICAL_MARK_FUNDING_ONE_TICK_NATIVE_BAR_V3"
+COST_PROFILE_ID = "BYBIT_FIXED_FEE_HISTORICAL_MARK_FUNDING_ONE_TICK_NATIVE_BAR_V4"
 LIQUIDATION_ACCOUNTING_PROFILE_ID = "DETECT_FAIL_TECHNICAL_FLATTEN_NO_LP_SETTLEMENT_V1"
 STARTING_BALANCE = Decimal("10000")
 DEFAULT_NATIVE_LEVERAGE = Decimal("2")
@@ -1257,7 +1257,7 @@ def _expected_funding_amounts(
         mark_close = _decimal_text(mark_row["Close"], "mark Close")
         expected = (-signed_quantity * mark_close * rate).quantize(
             USDT_FUNDING_QUANTUM,
-            rounding=ROUND_HALF_UP,
+            rounding=ROUND_HALF_EVEN,
         )
         result.append((settlement_ns, expected))
     return result

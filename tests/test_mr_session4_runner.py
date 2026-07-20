@@ -880,6 +880,16 @@ def test_save_rename_crash_recovers_valid_stage_without_reexecution(
     assert not list((tmp_path / "runs" / ".partial").iterdir())
 
 
+def test_staged_parser_does_not_confuse_uuid_component_starting_with_a() -> None:
+    spec = build_run_matrix()[0]
+    candidate = Path(f"{spec.run_id}.a001.12345.a1234567890abcdef")
+
+    assert session4_runner._parse_staged_candidate(candidate, {spec.run_id: spec}) == (
+        spec.run_id,
+        1,
+    )
+
+
 def test_final_verified_artifact_repairs_lost_complete_queue_message(tmp_path: Path) -> None:
     artifact = _artifact()
     _save_run_atomically(

@@ -507,6 +507,37 @@ def test_native_funding_uses_completed_mark_price_update_not_last_trade() -> Non
     assert funding_events[0].amount == Decimal("-2.00000000")
 
 
+def test_native_funding_money_rounds_exact_midpoint_to_even() -> None:
+    instrument, bar_type = _instrument_fixture()
+    machine = _ScriptedMachine(take_profit=False, close_on_bar=3, base_stop=Decimal(50))
+    bars = _bars(
+        instrument,
+        bar_type,
+        [(100, 100, 100, 100)] * 4,
+        timestamps=[HOUR_NS, 2 * HOUR_NS, 9 * HOUR_NS, 10 * HOUR_NS],
+    )
+    funding = nt.FundingRateUpdate(
+        instrument.id,
+        Decimal("0.00000000025"),
+        3 * HOUR_NS,
+        3 * HOUR_NS,
+        interval=28_800,
+        next_funding_ns=8 * HOUR_NS,
+    )
+
+    result = run_pyo3_mastermind_smoke(
+        machine=machine,
+        strategy_id=STRATEGY_ID,
+        instrument=instrument,
+        bar_type=bar_type,
+        data=[*bars, funding],
+        feature_source=_features,
+    )
+
+    funding_events = [event for event in result.domain_events if isinstance(event, FundingApplied)]
+    assert funding_events[0].amount == Decimal("-0.00000002")
+
+
 def test_same_timestamp_mark_update_does_not_replace_last_price_equity() -> None:
     instrument, bar_type = _instrument_fixture()
     machine = _ScriptedMachine(take_profit=False, base_stop=Decimal(50))
@@ -1034,30 +1065,30 @@ def test_prepared_submit_crash_replays_same_id_after_absent_query() -> None:
             prepared.append((snapshot, checkpoint))
             raise RuntimeError("simulated crash after PREPARED persistence")
 
-    crashed = run_pyo3_mastermind_smoke(
-        machine=machine,
-        strategy_id=STRATEGY_ID,
-        instrument=instrument,
-        bar_type=bar_type,
-        data=_bars(
-            instrument,
-            bar_type,
-            [
-                (100, 101, 97, 99),
-                (99, 100, 99, 100),
-                (100, 101, 99, 100),
-            ],
-        ),
-        feature_source=lambda _bar: BarFeatures(
-            bb_upper=Decimal(102),
-            bb_lower=Decimal(98),
-        ),
-        starting_balance=Decimal(100),
-        persist_recovery_transition=crash_after_prepare,
-    )
+    with pytest.raises(Pyo3SmokeProfileError, match="native replay incomplete"):
+        run_pyo3_mastermind_smoke(
+            machine=machine,
+            strategy_id=STRATEGY_ID,
+            instrument=instrument,
+            bar_type=bar_type,
+            data=_bars(
+                instrument,
+                bar_type,
+                [
+                    (100, 101, 97, 99),
+                    (99, 100, 99, 100),
+                    (100, 101, 99, 100),
+                ],
+            ),
+            feature_source=lambda _bar: BarFeatures(
+                bb_upper=Decimal(102),
+                bb_lower=Decimal(98),
+            ),
+            starting_balance=Decimal(100),
+            persist_recovery_transition=crash_after_prepare,
+        )
 
     snapshot, checkpoint = prepared[0]
-    assert crashed.reports.orders.empty
     assert len(checkpoint.submitted_client_order_ids) == 1
     prepared_id = checkpoint.submitted_client_order_ids[0]
     assert {binding.actual_client_order_id for binding in checkpoint.bindings} == {prepared_id}
@@ -1792,6 +1823,25 @@ def test_cutoff_hook_closes_next_bar_without_delivering_post_cutoff_bars() -> No
     assert feature_calls == [HOUR_NS, 2 * HOUR_NS]
     assert closed[-1].close_reason is CloseReason.MANUAL
     assert result.final_net_quantity == 0
+
+
+def test_native_callback_error_cannot_return_a_partial_replay_as_success() -> None:
+    callbacks = 0
+
+    def explode_on_second_bar(_bar: Any) -> tuple[DomainEvent, ...]:
+        nonlocal callbacks
+        callbacks += 1
+        if callbacks == 2:
+            raise ValueError("synthetic callback failure")
+        return ()
+
+    with pytest.raises(Pyo3SmokeProfileError, match="native replay incomplete"):
+        _run(
+            _ScriptedMachine(take_profit=False, base_stop=Decimal(50)),
+            [(100, 101, 99, 100)] * 4,
+            before_bar_domain_events=explode_on_second_bar,
+        )
+    assert callbacks >= 2
 
 
 def test_transition_snapshot_is_persisted_before_native_submission() -> None:

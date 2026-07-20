@@ -66,7 +66,7 @@ from algo_bot.strategies.mastermind.model import (
 
 PYO3_SMOKE_EXECUTION_PROFILE = "PYO3_WRAPPER_NEXT_CLOSE_ZERO_LATENCY_SMOKE_V1"
 PYO3_SMOKE_POSITION_MODEL = "PYO3_NETTING_DECOMPOSED_CLOSEALL_SMOKE_V1"
-PYO3_RESEARCH_EXECUTION_PROFILE = "PYO3_BYBIT_NATIVE_BAR_RESEARCH_V1"
+PYO3_RESEARCH_EXECUTION_PROFILE = "PYO3_BYBIT_NATIVE_BAR_RESEARCH_V2"
 PYO3_RESEARCH_POSITION_MODEL = "PYO3_NETTING_REDUCE_ONLY_BYBIT_V1"
 PYO3_RECOVERY_SCHEMA_VERSION = "pyo3_mastermind_recovery/1"
 EVIDENCE_TIER = "SMOKE_ONLY"
@@ -528,6 +528,8 @@ class NautilusMastermindStrategy(Pyo3Strategy):
         self._active_setup_id: str | None = None
         self._last_delivered_bar_close_ns: int | None = None
         self._last_published_equity_close_ns: int | None = None
+        self._completed_primary_bar_callbacks = 0
+        self._completed_marking_bar_callbacks = 0
         self._recovery_view = _feature_recovery_view(machine)
         self._recovery_outbox: tuple[DomainIntent, ...] = ()
         self._recovering_startup = False
@@ -547,6 +549,18 @@ class NautilusMastermindStrategy(Pyo3Strategy):
         """Return the first fail-closed error from the no-snapshot offline path."""
 
         return self._offline_transition_error
+
+    @property
+    def completed_primary_bar_callbacks(self) -> int:
+        """Return primary callbacks which reached the end without an exception."""
+
+        return self._completed_primary_bar_callbacks
+
+    @property
+    def completed_marking_bar_callbacks(self) -> int:
+        """Return marking callbacks which reached the end without an exception."""
+
+        return self._completed_marking_bar_callbacks
 
     def recovery_checkpoint(self) -> Pyo3RecoveryCheckpoint:
         """Capture all adapter-local state required for a fail-closed restart."""
@@ -929,9 +943,15 @@ class NautilusMastermindStrategy(Pyo3Strategy):
 
         if self._marking_bar_type is not None and bar.bar_type == self._marking_bar_type:
             self._ingest_marking_bar(bar)
+            self._completed_marking_bar_callbacks += 1
             return
         if bar.bar_type != self._bar_type:
             return
+        self._ingest_primary_bar(bar)
+        self._completed_primary_bar_callbacks += 1
+
+    def _ingest_primary_bar(self, bar: Any) -> None:
+        """Process one primary bar; caller records completion only on success."""
 
         self._drain_funding_adjustments()
         self._drain_deferred_reconciliation()
@@ -2401,6 +2421,24 @@ def run_pyo3_mastermind_smoke(
                 f"offline domain transition failed: {strategy.offline_transition_error}"
             )
         native_result = cast(object, engine.get_result())
+        expected_iterations = len(marking_data) + len(data)
+        observed_iterations = int(getattr(native_result, "iterations", -1))
+        expected_primary_callbacks = sum(
+            getattr(item, "bar_type", None) == bar_type for item in data
+        )
+        callback_coverage = (
+            strategy.completed_primary_bar_callbacks == expected_primary_callbacks
+            and strategy.completed_marking_bar_callbacks == len(marking_data)
+        )
+        if observed_iterations != expected_iterations or not callback_coverage:
+            raise Pyo3SmokeProfileError(
+                "native replay incomplete: "
+                f"iterations={observed_iterations}/{expected_iterations}, "
+                "primary_callbacks="
+                f"{strategy.completed_primary_bar_callbacks}/{expected_primary_callbacks}, "
+                "marking_callbacks="
+                f"{strategy.completed_marking_bar_callbacks}/{len(marking_data)}"
+            )
         reports = build_cache_reports(engine.cache, instrument.id.venue)
         final_net = Decimal(str(engine.portfolio.net_position(instrument.id)))
         return Pyo3SmokeRun(

@@ -232,16 +232,18 @@ def test_funding_oracle_requires_every_settlement_inside_setup_interval() -> Non
 
 
 @pytest.mark.parametrize(
-    ("signed_quantity", "rate", "expected"),
+    ("signed_quantity", "rate", "mark_close", "expected"),
     [
-        (Decimal("2"), Decimal("0.001"), Decimal("-0.24690000")),
-        (Decimal("-2"), Decimal("0.001"), Decimal("0.24690000")),
-        (Decimal("2"), Decimal("-0.001"), Decimal("0.24690000")),
+        (Decimal("2"), Decimal("0.001"), 123.45, Decimal("-0.24690000")),
+        (Decimal("-2"), Decimal("0.001"), 123.45, Decimal("0.24690000")),
+        (Decimal("2"), Decimal("-0.001"), 123.45, Decimal("0.24690000")),
+        (Decimal("1"), Decimal("0.00000000025"), 100.0, Decimal("-0.00000002")),
     ],
 )
 def test_funding_amount_oracle_uses_signed_quantity_rate_and_completed_mark(
     signed_quantity: Decimal,
     rate: Decimal,
+    mark_close: float,
     expected: Decimal,
 ) -> None:
     opened = datetime(2025, 1, 1, 1, tzinfo=UTC)
@@ -281,7 +283,7 @@ def test_funding_amount_oracle_uses_signed_quantity_rate_and_completed_mark(
         ),
         mark_context=SimpleNamespace(
             bars=pd.DataFrame(
-                {"Close": [123.45]},
+                {"Close": [mark_close]},
                 index=pd.DatetimeIndex([mark_open], name="datetime"),
             )
         ),

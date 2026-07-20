@@ -544,6 +544,20 @@ def test_bybit_isolated_liquidation_reference_and_crossing() -> None:
     assert event.liquidation_price == pytest.approx(36_380.25, abs=0.01)
 
 
+def test_fully_collateralized_long_has_no_positive_liquidation_crossing() -> None:
+    position = LeveragedPosition(
+        position_id="one-x-long",
+        side="long",
+        quantity=1.0,
+        entry_price=100.0,
+        leverage=1.0,
+    )
+
+    with pytest.raises(ValueError, match="liquidation price musi być dodatni"):
+        liquidation_price(position, 0.005)
+    assert liquidation_check(position, 0.01, 0.005) is False
+
+
 def test_mark_price_context_is_causal_and_emits_first_h1_range_crossing() -> None:
     index = pd.date_range("2024-01-01", periods=3, freq="1h", tz="UTC")
     bars = pd.DataFrame(

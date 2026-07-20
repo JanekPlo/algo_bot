@@ -19,6 +19,22 @@ Sekcje na każdą wersję:
 
 ### Fixed (MR-Session 4 outcome-blind pilot, 2026-07-20)
 
+- The Revision-2 pilot stopped before metric inspection. Its local pre-metric
+  reproduction ended after 67 of 37,248 expected H1 callbacks: a fully collateralized
+  long produced a finite liquidation threshold at or below zero. This is unreachable
+  by a valid positive mark, but the checker raised and Nautilus returned a partial run
+  after `shutdown_on_error`. The crossing checker now returns no event only for this
+  finite long edge, while the native wrapper independently requires exact full-stream
+  iteration and successfully completed bar-callback coverage. Margin, execution,
+  native-research, and runner profiles are bumped for Revision 3.
+- Staged-run recovery now parses the attempt suffix relative to the exact known run ID.
+  The previous rightmost-`.a` split could misclassify a valid crash-recovery directory
+  when its random UUID component began with `a`.
+- The full Revision-3 pre-metric diagnostic completed every H1 callback and setup
+  lifecycle, then exposed the same midpoint mismatch in the funding amount oracle.
+  Funding now uses the pinned native `Money::from_decimal` midpoint-to-even currency
+  quantization, with independent native and oracle midpoint regressions; the cost
+  profile is bumped to V4. No strategy metric was computed or opened.
 - The Revision-1 pilot stopped before metric inspection on a one-quantum commission
   mismatch. The independent checker used half-up rounding, while the pinned Nautilus
   `MakerTakerFeeModel` finishes through `Money::from_decimal` with midpoint-to-even
@@ -33,7 +49,8 @@ Sekcje na każdą wersję:
 - Froze the corrective Revision-2 528-run manifest core on the intended VPS as
   `0bb1ff7b44e9e21be0bbd3ee4f282c9944053c54016004a8e2db8203d4ef2841` after the
   midpoint-to-even commission-oracle correction and repeated quality gate. No
-  strategy metric was opened; final Revision-2 tag and provenance remain gated.
+  strategy metric was opened. Its final tag/provenance verified, but the later pilot
+  invalidated the implementation as documented above.
 - Froze the pre-outcome 528-run manifest core on the intended VPS as
   `657e910101933cdeab15209189a31b4087672b8c52018b5dc72f36dcd1c08e1a` after the
   complete ETHUSDT funding restoration, frozen Bybit contract capture, runtime/data

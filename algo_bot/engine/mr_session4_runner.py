@@ -81,7 +81,7 @@ FAILURE_SCHEMA_VERSION = "mr_session4_attempt_failure/1"
 ATTEMPT_STARTED_SCHEMA_VERSION = "mr_session4_attempt_started/1"
 RESULTS_INDEX_SCHEMA_VERSION = "mr_session4_results_index/1"
 SUITE_COMPLETE_SCHEMA_VERSION = "mr_session4_suite_complete/1"
-RUNNER_VERSION = "mr_session4_runner/2"
+RUNNER_VERSION = "mr_session4_runner/3"
 EXPECTED_UV_VERSION = "0.11.28"
 EXPECTED_PYTHON_VERSION = "3.12.13"
 EXPECTED_PYTHON_IMPLEMENTATION = "CPython"
@@ -1289,16 +1289,18 @@ def _parse_staged_candidate(
     by_id: Mapping[str, Any],
 ) -> tuple[str, int] | None:
     name = candidate.name
-    if ".a" not in name:
-        return None
-    run_id, suffix = name.rsplit(".a", maxsplit=1)
-    attempt_text = suffix.split(".", maxsplit=1)[0]
-    if run_id not in by_id or not attempt_text.isdigit():
-        return None
-    attempt = int(attempt_text)
-    if attempt < 1:
-        return None
-    return run_id, attempt
+    for run_id in by_id:
+        prefix = f"{run_id}.a"
+        if not name.startswith(prefix):
+            continue
+        attempt_text = name[len(prefix) :].split(".", maxsplit=1)[0]
+        if not attempt_text.isdigit():
+            return None
+        attempt = int(attempt_text)
+        if attempt < 1:
+            return None
+        return run_id, attempt
+    return None
 
 
 def _quarantine_staged_candidate(candidate: Path, quarantine_root: Path) -> Path:

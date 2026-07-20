@@ -492,6 +492,26 @@ def liquidation_price(
     o szacowaną opłatę zamknięcia.
     """
 
+    price = _liquidation_price_value(
+        position,
+        maintenance_margin_rate,
+        maintenance_margin_deduction=maintenance_margin_deduction,
+        taker_fee_rate=taker_fee_rate,
+    )
+    if price <= 0 or not np.isfinite(price):
+        raise ValueError("Wyliczony liquidation price musi być dodatni i skończony")
+    return float(price)
+
+
+def _liquidation_price_value(
+    position: LeveragedPosition,
+    maintenance_margin_rate: float,
+    *,
+    maintenance_margin_deduction: float,
+    taker_fee_rate: float,
+) -> float:
+    """Zwraca surowy próg; nieosiągalny próg long może być niedodatni."""
+
     if not 0 < maintenance_margin_rate < 1:
         raise ValueError("maintenance_margin_rate musi należeć do (0, 1)")
     if maintenance_margin_deduction < 0:
@@ -518,10 +538,7 @@ def liquidation_price(
             + maintenance_margin_deduction
         )
         denominator = quantity * (1 + maintenance_margin_rate)
-    price = numerator / denominator
-    if price <= 0 or not np.isfinite(price):
-        raise ValueError("Wyliczony liquidation price musi być dodatni i skończony")
-    return float(price)
+    return float(numerator / denominator)
 
 
 def liquidation_check(
@@ -538,12 +555,21 @@ def liquidation_check(
 
     if mark_price <= 0 or not np.isfinite(mark_price):
         raise ValueError("mark_price musi być dodatni i skończony")
-    threshold = liquidation_price(
+    threshold = _liquidation_price_value(
         position,
         maintenance_margin_rate,
         maintenance_margin_deduction=maintenance_margin_deduction,
         taker_fee_rate=taker_fee_rate,
     )
+    if not np.isfinite(threshold):
+        raise ValueError("Wyliczony liquidation price musi być skończony")
+    if threshold <= 0:
+        if position.side == "long":
+            # Przy pełnym pokryciu notionalu kapitałem uproszczony isolated
+            # model może dać LP <= 0. Dodatni mark nie może przeciąć takiego
+            # progu, więc jest to bezpieczny brak eventu, nie błąd danych.
+            return False
+        raise ValueError("Wyliczony liquidation price musi być dodatni")
     crossed = mark_price <= threshold if position.side == "long" else mark_price >= threshold
     if not crossed:
         return False
