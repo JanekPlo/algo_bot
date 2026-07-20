@@ -30,6 +30,10 @@ Sekcje na każdą wersję:
 
 ### Changed (MR-Session 4 preregistration freeze, 2026-07-20)
 
+- Froze the corrective Revision-2 528-run manifest core on the intended VPS as
+  `0bb1ff7b44e9e21be0bbd3ee4f282c9944053c54016004a8e2db8203d4ef2841` after the
+  midpoint-to-even commission-oracle correction and repeated quality gate. No
+  strategy metric was opened; final Revision-2 tag and provenance remain gated.
 - Froze the pre-outcome 528-run manifest core on the intended VPS as
   `657e910101933cdeab15209189a31b4087672b8c52018b5dc72f36dcd1c08e1a` after the
   complete ETHUSDT funding restoration, frozen Bybit contract capture, runtime/data
