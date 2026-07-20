@@ -30,6 +30,7 @@ from algo_bot.engine.nautilus_mastermind import (
     Pyo3ResearchMetadata,
     Pyo3SmokeMetadata,
     Pyo3SmokeProfileError,
+    _native_signed_position_quantity,
     run_pyo3_mastermind_smoke,
 )
 from algo_bot.strategies.mastermind.model import (
@@ -223,6 +224,48 @@ class _ScriptedMachine:
             quantity=self.base_quantity,
             close_reason=CloseReason.TP,
         )
+
+
+@pytest.mark.parametrize(
+    ("signed_qty", "quantity", "expected"),
+    [
+        (1.9999999999999996, "2.00", Decimal("2.00")),
+        (-1.9999999999999996, "2.00", Decimal("-2.00")),
+        (0.0, "0.00", Decimal(0)),
+    ],
+)
+def test_native_signed_position_quantity_uses_fixed_point_magnitude(
+    signed_qty: float,
+    quantity: str,
+    expected: Decimal,
+) -> None:
+    position = SimpleNamespace(
+        signed_qty=signed_qty,
+        quantity=nt.Quantity.from_str(quantity),
+    )
+
+    assert _native_signed_position_quantity(position) == expected
+
+
+@pytest.mark.parametrize(
+    ("signed_qty", "quantity"),
+    [
+        (float("nan"), "2.00"),
+        (0.0, "2.00"),
+        (1.0, "0.00"),
+    ],
+)
+def test_native_signed_position_quantity_rejects_inconsistent_evidence(
+    signed_qty: float,
+    quantity: str,
+) -> None:
+    position = SimpleNamespace(
+        signed_qty=signed_qty,
+        quantity=nt.Quantity.from_str(quantity),
+    )
+
+    with pytest.raises(Pyo3SmokeProfileError, match=r"native .*quantity"):
+        _native_signed_position_quantity(position)
 
 
 def test_next_close_scheduler_installs_protection_at_fill_close() -> None:

@@ -17,8 +17,16 @@ Sekcje na każdą wersję:
 
 ## [Unreleased]
 
-### Fixed (MR-Session 4 outcome-blind pilot, 2026-07-20)
+### Fixed (MR-Session 4 outcome-blind pilots, 2026-07-20–21)
 
+- The Revision-3 four-run pilot stopped before metric inspection on the ETH/M10
+  funding amount invariant. Nautilus funded an exact fixed-point `2.00 ETH`
+  position, while its lifecycle event exposed accumulated `signed_qty` as the
+  `f64` value `1.9999999999999996` and the adapter treated that float as exact
+  domain evidence. Position changes and reconciliation now take magnitude from
+  native fixed-point `Quantity`, use `signed_qty` only for sign, and fail closed
+  on inconsistent evidence. Native-research, execution, runner, and cost
+  profiles are bumped for Revision 4; no strategy metric was computed or opened.
 - The Revision-2 pilot stopped before metric inspection. Its local pre-metric
   reproduction ended after 67 of 37,248 expected H1 callbacks: a fully collateralized
   long produced a finite liquidation threshold at or below zero. This is unreachable

@@ -1,17 +1,19 @@
 # MR-Session 4 full v2 in-sample sweep — frozen preregistration
 
-> **Status:** **FROZEN BEFORE METRIC READ — REVISION 3**
-> **Last updated:** 2026-07-20
+> **Status:** **DRAFT / BLOCKED — REVISION 4 CORE NOT YET LOCKED**
+> **Last updated:** 2026-07-21
 > **Scope:** BTCUSDT and ETHUSDT evaluated separately; H1 execution with M5 or
 > M10 marking; native Nautilus bar fills; causal mark-price isolated-margin
 > monitoring
 > **Authorization:** execution is conditional on the remaining provenance and
 > launch gates in Section 14; no partial outcome inspection is authorized
 
-The inferential design below and its manifest core were frozen before any
-Session-4 strategy metric was produced or read. Operators may execute the
-matrix only from the exact clean tagged commit and prepared manifest described
-in [Section 14](#14-freeze-completion-record-and-remaining-launch-gates). The
+The inferential design below was frozen before any Session-4 strategy metric
+was produced or read. The Revision-3 manifest core is now superseded by an
+outcome-blind implementation correction, and the Revision-4 core remains
+pending. Operators may execute the matrix only from the exact clean tagged
+commit and prepared manifest described in
+[Section 14](#14-freeze-completion-record-and-remaining-launch-gates). The
 runner enforces every machine-checkable freeze condition; no strategy metric
 has been produced, read, ranked, or used to revise this design.
 
@@ -25,7 +27,7 @@ manifest provenance and are intentionally not back-edited into this document.
 |---|---|
 | Preregistration SHA-256 | Recorded by `prepare` after the clean tagged commit |
 | Contract-core SHA-256 | `05bb05f9024967c74c0708bd0469a6c8660d8fe7b20142b9d075e9d68cdeb12f` |
-| Manifest-core SHA-256 | `977327508b7b53b416757f81a6d750abc6386a78aeebe7f4e49e7f12b989ba58` |
+| Manifest-core SHA-256 | `PENDING` |
 | Manifest-provenance SHA-256 | Recorded by `prepare`; not back-edited here |
 | Git commit | Recorded by `prepare` from the clean frozen tree |
 | Git tag | Recorded by `prepare`; exactly one canonical tag must point at the commit |
@@ -33,7 +35,7 @@ manifest provenance and are intentionally not back-edited into this document.
 | Development-data hashes | Bound inside the manifest core and expanded by `prepare` |
 | Frozen Bybit-contract hash | Bound inside the manifest core and expanded by `prepare` |
 
-<!-- mr-session-4-manifest-core-sha256: 977327508b7b53b416757f81a6d750abc6386a78aeebe7f4e49e7f12b989ba58 -->
+<!-- mr-session-4-manifest-core-sha256: PENDING -->
 
 The freeze procedure is defined in Section 13. The frozen status does not by
 itself permit execution: the commit, canonical tag, prepared manifest, and
@@ -270,7 +272,7 @@ post-outcome expansion would be a different experiment.
 ## 6. Native execution and cost evidence
 
 The intended execution profile is
-`NAUTILUS_BYBIT_NATIVE_BAR_MMS_FULL_STACK_V2` on
+`NAUTILUS_BYBIT_NATIVE_BAR_MMS_FULL_STACK_V3` on
 `nautilus_trader.core.nautilus_pyo3.BacktestEngine` 1.230.0.
 
 Mechanically:
@@ -311,7 +313,7 @@ The exact funding-price profiles are
 `ONE_PREDEVELOPMENT_H1_FOR_FIRST_FUNDING_MARK_V1` and
 `COMPLETED_H1_MARK_CLOSE_PRESERVE_SOURCE_PRECISION_FUNDING_BASIS_V1`; the full
 cost profile is
-`BYBIT_FIXED_FEE_HISTORICAL_MARK_FUNDING_ONE_TICK_NATIVE_BAR_V4`. For every
+`BYBIT_FIXED_FEE_HISTORICAL_MARK_FUNDING_ONE_TICK_NATIVE_BAR_V5`. For every
 expected settlement, an independent oracle requires:
 
 ```text
@@ -319,7 +321,10 @@ expected_funding_amount = -signed_quantity × completed_H1_mark_close × funding
 ```
 
 The independent oracle replays signed position quantity from source
-`PositionChanged` events, resets it to zero on `PositionClosed`, and rounds
+`PositionChanged` events. The adapter constructs that value from the exact
+fixed-point native `Position.quantity` magnitude and uses native `signed_qty`
+only for its sign; the accumulated `f64` value is never accepted as the
+magnitude. The oracle resets quantity to zero on `PositionClosed` and rounds
 midpoint-to-even to `0.00000001 USDT`, matching the pinned native
 `Money::from_decimal` currency quantization. A positive quantity is long, so a
 positive rate produces a negative payment. Invariant 22 compares the oracle
@@ -739,7 +744,7 @@ committing the exact frozen tree, and confirming that the tree is clean, create
 one tag and prepare the manifest:
 
 ```bash
-PREREG_TAG="mr-session-4-preregistration-$(date -u +%F)-r3"
+PREREG_TAG="mr-session-4-preregistration-$(date -u +%F)-r4"
 git tag "$PREREG_TAG"
 git tag --points-at HEAD --list 'mr-session-4-preregistration-*'
 
@@ -845,6 +850,18 @@ adjustments as it does for commissions. Revision 3 aligns both cost oracles to
 the same exact native currency-quantum rule and bumps the cost profile to V4.
 No strategy metric was computed or opened.
 
+The Revision-3 four-run outcome-blind pilot then stopped before any metric was
+computed or opened. For the ETH/M10 anchor, Nautilus held an exact fixed-point
+`2.00 ETH` position and applied `-0.22128854 USDT` at the 2023-09-27 00:00 UTC
+settlement. Its PyO3 lifecycle event also exposed the accumulated quantity as
+the `f64` value `1.9999999999999996`; the adapter converted that float directly
+to `Decimal`, so the independent oracle required `-0.22128853 USDT`. Revision 4
+uses the event's exact native `Quantity` magnitude and only the float's sign,
+applies the same rule during reconciliation, rejects inconsistent native
+quantity evidence, and bumps the native research, execution, runner, and cost
+profiles. Revision-3 artifacts are invalid implementation evidence and may not
+be resumed.
+
 After the first strategy metric is readable, changing dates, data, parameter
 sets, variants, marking timeframes, cost/margin/execution profiles, thresholds,
 decision rules, retry semantics, or run count invalidates the preregistration.
@@ -892,18 +909,29 @@ Completed without reading any Session-4 strategy metric:
    specifications, development-only data bundles, frozen contracts, runtime,
    scientific profiles, runner sources, and `uv.lock` produced
    `977327508b7b53b416757f81a6d750abc6386a78aeebe7f4e49e7f12b989ba58`.
+9. **Revision-3 provenance and plan verified, then its pilot failed closed:**
+   the clean commit and `-r3` tag prepared the identical core on the VPS. The
+   outcome-blind four-run pilot stopped on the exact-position-quantity defect
+   documented above, before any strategy metric was computed or opened.
+10. **Revision-4 local quality gate passed:** Ruff lint and format checks,
+    mypy, and the complete test suite passed with 663 tests passed and 2
+    live-network tests skipped. Regression coverage includes the exact pilot
+    float artifact, negative and flat quantities, inconsistent native evidence,
+    and the observed `-0.22128854 USDT` funding amount.
 
 Remaining launch gates, in strict order:
 
-1. Commit this exact frozen tree and create the
-   canonical `mr-session-4-preregistration-YYYY-MM-DD-r3` tag.
-2. Archive the Revision-2 manifest and run directory without opening
-   outcome-bearing files. From the clean tagged Revision-3 commit, run
-   `prepare`, require the identical core hash, then run `plan`.
-3. Confirm at least 60 GiB free and perform a fresh four-run outcome-blind pilot
+1. On the intended VPS, run Revision-4 `lock-core`, write its new hash into
+   Section 1, and change the status to `FROZEN BEFORE METRIC READ — REVISION 4`.
+2. Commit that exact frozen tree and create the canonical
+   `mr-session-4-preregistration-YYYY-MM-DD-r4` tag.
+3. Archive the Revision-3 manifest and run directory without opening
+   outcome-bearing files. From the clean tagged Revision-4 commit, run
+   `prepare`, require the identical new core hash, then run `plan`.
+4. Confirm at least 60 GiB free and perform a fresh four-run outcome-blind pilot
    before starting the full 528-run suite. Earlier output may not be resumed.
 
-Until gates 1–3 are closed, no further Session-4 strategy run may start. During the
+Until gates 1–4 are closed, no further Session-4 strategy run may start. During the
 pilot and partial suite, outcome-bearing artifacts remain closed as specified
 in Section 11.
 

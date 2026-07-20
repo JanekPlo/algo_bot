@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -66,7 +67,7 @@ from algo_bot.strategies.mastermind.model import (
 
 PYO3_SMOKE_EXECUTION_PROFILE = "PYO3_WRAPPER_NEXT_CLOSE_ZERO_LATENCY_SMOKE_V1"
 PYO3_SMOKE_POSITION_MODEL = "PYO3_NETTING_DECOMPOSED_CLOSEALL_SMOKE_V1"
-PYO3_RESEARCH_EXECUTION_PROFILE = "PYO3_BYBIT_NATIVE_BAR_RESEARCH_V2"
+PYO3_RESEARCH_EXECUTION_PROFILE = "PYO3_BYBIT_NATIVE_BAR_RESEARCH_V3"
 PYO3_RESEARCH_POSITION_MODEL = "PYO3_NETTING_REDUCE_ONLY_BYBIT_V1"
 PYO3_RECOVERY_SCHEMA_VERSION = "pyo3_mastermind_recovery/1"
 EVIDENCE_TIER = "SMOKE_ONLY"
@@ -2009,7 +2010,7 @@ class NautilusMastermindStrategy(Pyo3Strategy):
         try:
             positions = tuple(self.cache.positions_open(instrument_id=self._instrument_id))
             signed_quantity = sum(
-                (Decimal(str(position.signed_qty)) for position in positions),
+                (_native_signed_position_quantity(position) for position in positions),
                 start=ZERO,
             )
             average_price: Decimal | None = None
@@ -2251,7 +2252,7 @@ class NautilusMastermindStrategy(Pyo3Strategy):
                     setup_id=setup_id,
                     inherit_active_setup=False,
                 ),
-                signed_quantity=Decimal(str(event.signed_qty)),
+                signed_quantity=_native_signed_position_quantity(event),
                 average_price=None if average is None else Decimal(str(average)),
             )
         )
@@ -2512,6 +2513,32 @@ def _native_position_fingerprint(event: object) -> str:
     values = [type(event).__name__]
     values.extend(str(getattr(event, attribute, None)) for attribute in attributes)
     return _stable_token("|".join(values))
+
+
+def _native_signed_position_quantity(position: object) -> Decimal:
+    """Return the exact fixed-point magnitude with the native position sign.
+
+    Nautilus exposes ``signed_qty`` as an accumulated ``f64`` but carries the
+    current absolute quantity as a fixed-point ``Quantity``. The float can be
+    ``1.9999999999999996`` for an exact ``2.00`` position, which is not valid
+    quantity evidence for strict cost reconciliation.
+    """
+
+    try:
+        native = cast(Any, position)
+        signed_float = float(native.signed_qty)
+        quantity = cast(Decimal, native.quantity.as_decimal())
+    except (AttributeError, TypeError, ValueError) as exc:
+        raise Pyo3SmokeProfileError("native position lacks exact quantity evidence") from exc
+    if not math.isfinite(signed_float) or not quantity.is_finite() or quantity < ZERO:
+        raise Pyo3SmokeProfileError("native position quantity evidence is invalid")
+    if quantity == ZERO:
+        if signed_float != 0.0:
+            raise Pyo3SmokeProfileError("native flat position has non-zero signed quantity")
+        return ZERO
+    if signed_float == 0.0:
+        raise Pyo3SmokeProfileError("native open position has zero signed quantity")
+    return quantity if signed_float > 0.0 else -quantity
 
 
 def _datetime_from_ns(value: int) -> datetime:

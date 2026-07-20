@@ -195,8 +195,8 @@ Faza 5: Production na VPS              → 1-2 tyg.
   tylko in-memory; generic `MarkingBarClosed` M5/M10 porównujący pierwszy wick touch z
   ostatnimi ukończonymi H1 Bands; natywne multiple `BarType` w wrapperze i porządek
   all marking sub-bars → H1 execution. P9 pozostaje niezmienione i niekwalifikowalne.
-- **MR-Session 4 (full v2 sweep on nautilus) — REVISION 3 CORE FROZEN /
-  FINAL TAG+MANIFEST PENDING** — kontrakt obejmuje **BTCUSDT i ETHUSDT osobno**, H1 execution
+- **MR-Session 4 (full v2 sweep on nautilus) — REVISION 4 CORRECTION /
+  CORE REFREEZE PENDING** — kontrakt obejmuje **BTCUSDT i ETHUSDT osobno**, H1 execution
   oraz marking **M5 i M10** (528 runów); H1-only pozostaje poza rodziną inferencyjną.
   Outcome-blind runner, native evidence, funding wyceniany po ukończonym H1 mark Close,
   causal mark-margin proxy, atomic artifacts, bounded retry/resume, canonical tag
@@ -208,10 +208,13 @@ Faza 5: Production na VPS              → 1-2 tyg.
   wyłącznie audytowo. Pilot Revision 2 ujawnił przed metric read, że niedodatni
   long LP zatrzymywał natywny callback, a częściowy replay nie był od razu odrzucany.
   Pełna diagnostyka Revision 3 przeszła cały lifecycle i ujawniła jeszcze
-  outcome-blind funding midpoint mismatch; po jego korekcie finalny quality
-  gate przeszedł, a nowy core `97732750…89ba58` został zamrożony na docelowym
-  VPS-ie. Pozostał tag `-r3`, `prepare`/`plan` oraz świeży czterorunowy pilot
-  przed pełnym sweepem.
+  outcome-blind funding midpoint mismatch; po jego korekcie core
+  `97732750…89ba58` został zamrożony na docelowym VPS-ie. Pilot Revision 3
+  ujawnił następnie, że adapter przepuszczał akumulowany `signed_qty: f64`
+  (`1.9999999999999996`) zamiast dokładnego natywnego `Quantity` (`2.00`), co
+  dawało różnicę jednego kwantu w niezależnym audycie funding. Revision 4
+  kanonizuje dokładną wielkość pozycji u źródła; potrzebuje nowego quality gate,
+  core, tagu `-r4`, manifestu i świeżego pilota przed pełnym sweepem.
   Strategia nie ładuje reserved rows, ale wcześniejszy operator-side integrity audit
   dotknął pełnych plików; dokładne ujawnienie i przyszła polityka holdout są zapisane w
   [zamrożonej prerejestracji](experiments/mr-session-4-preregistration.md).

@@ -238,6 +238,7 @@ def test_funding_oracle_requires_every_settlement_inside_setup_interval() -> Non
         (Decimal("-2"), Decimal("0.001"), 123.45, Decimal("0.24690000")),
         (Decimal("2"), Decimal("-0.001"), 123.45, Decimal("0.24690000")),
         (Decimal("1"), Decimal("0.00000000025"), 100.0, Decimal("-0.00000002")),
+        (Decimal("2.00"), Decimal("0.00006945"), 1593.15, Decimal("-0.22128854")),
     ],
 )
 def test_funding_amount_oracle_uses_signed_quantity_rate_and_completed_mark(
