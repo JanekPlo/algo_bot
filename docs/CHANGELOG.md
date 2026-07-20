@@ -46,6 +46,11 @@ Sekcje na każdą wersję:
 
 ### Changed (MR-Session 4 preregistration freeze, 2026-07-20)
 
+- Froze the Revision-3 528-run manifest core on the intended VPS as
+  `977327508b7b53b416757f81a6d750abc6386a78aeebe7f4e49e7f12b989ba58` after
+  the outcome-blind liquidation, native replay coverage, staged recovery, and
+  funding midpoint corrections plus the repeated full quality gate. No strategy
+  metric was computed or opened; final tag and manifest provenance remain gated.
 - Froze the corrective Revision-2 528-run manifest core on the intended VPS as
   `0bb1ff7b44e9e21be0bbd3ee4f282c9944053c54016004a8e2db8203d4ef2841` after the
   midpoint-to-even commission-oracle correction and repeated quality gate. No

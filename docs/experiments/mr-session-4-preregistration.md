@@ -1,6 +1,6 @@
 # MR-Session 4 full v2 in-sample sweep — frozen preregistration
 
-> **Status:** **REVISION 3 DRAFT — REVISION-2 PILOT IMPLEMENTATION DEFECT, NO METRIC READ**
+> **Status:** **FROZEN BEFORE METRIC READ — REVISION 3**
 > **Last updated:** 2026-07-20
 > **Scope:** BTCUSDT and ETHUSDT evaluated separately; H1 execution with M5 or
 > M10 marking; native Nautilus bar fills; causal mark-price isolated-margin
@@ -25,7 +25,7 @@ manifest provenance and are intentionally not back-edited into this document.
 |---|---|
 | Preregistration SHA-256 | Recorded by `prepare` after the clean tagged commit |
 | Contract-core SHA-256 | `05bb05f9024967c74c0708bd0469a6c8660d8fe7b20142b9d075e9d68cdeb12f` |
-| Manifest-core SHA-256 | Pending Revision-3 lock after the native replay correction |
+| Manifest-core SHA-256 | `977327508b7b53b416757f81a6d750abc6386a78aeebe7f4e49e7f12b989ba58` |
 | Manifest-provenance SHA-256 | Recorded by `prepare`; not back-edited here |
 | Git commit | Recorded by `prepare` from the clean frozen tree |
 | Git tag | Recorded by `prepare`; exactly one canonical tag must point at the commit |
@@ -33,7 +33,7 @@ manifest provenance and are intentionally not back-edited into this document.
 | Development-data hashes | Bound inside the manifest core and expanded by `prepare` |
 | Frozen Bybit-contract hash | Bound inside the manifest core and expanded by `prepare` |
 
-<!-- mr-session-4-manifest-core-sha256: PENDING -->
+<!-- mr-session-4-manifest-core-sha256: 977327508b7b53b416757f81a6d750abc6386a78aeebe7f4e49e7f12b989ba58 -->
 
 The freeze procedure is defined in Section 13. The frozen status does not by
 itself permit execution: the commit, canonical tag, prepared manifest, and
@@ -888,19 +888,22 @@ Completed without reading any Session-4 strategy metric:
    live-network tests skipped. Regression coverage includes the unreachable
    long threshold, partial native callbacks, crash checkpoint rejection,
    staged UUID parsing, and native/oracle funding midpoints.
+8. **Revision-3 manifest core was locked on the intended VPS:** all 528
+   specifications, development-only data bundles, frozen contracts, runtime,
+   scientific profiles, runner sources, and `uv.lock` produced
+   `977327508b7b53b416757f81a6d750abc6386a78aeebe7f4e49e7f12b989ba58`.
 
 Remaining launch gates, in strict order:
 
-1. Run `lock-core` on the intended VPS from the exact Revision-3 candidate.
-2. Write the new core hash here, commit the exact frozen tree, and create the
+1. Commit this exact frozen tree and create the
    canonical `mr-session-4-preregistration-YYYY-MM-DD-r3` tag.
-3. Archive the Revision-2 manifest and run directory without opening
+2. Archive the Revision-2 manifest and run directory without opening
    outcome-bearing files. From the clean tagged Revision-3 commit, run
    `prepare`, require the identical core hash, then run `plan`.
-4. Confirm at least 60 GiB free and perform a fresh four-run outcome-blind pilot
+3. Confirm at least 60 GiB free and perform a fresh four-run outcome-blind pilot
    before starting the full 528-run suite. Earlier output may not be resumed.
 
-Until gates 1–4 are closed, no further Session-4 strategy run may start. During the
+Until gates 1–3 are closed, no further Session-4 strategy run may start. During the
 pilot and partial suite, outcome-bearing artifacts remain closed as specified
 in Section 11.
 
