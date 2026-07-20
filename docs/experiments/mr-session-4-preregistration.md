@@ -1,6 +1,6 @@
 # MR-Session 4 full v2 in-sample sweep — frozen preregistration
 
-> **Status:** **DRAFT / BLOCKED — REVISION 4 CORE NOT YET LOCKED**
+> **Status:** **FROZEN BEFORE METRIC READ — REVISION 4**
 > **Last updated:** 2026-07-21
 > **Scope:** BTCUSDT and ETHUSDT evaluated separately; H1 execution with M5 or
 > M10 marking; native Nautilus bar fills; causal mark-price isolated-margin
@@ -9,9 +9,9 @@
 > launch gates in Section 14; no partial outcome inspection is authorized
 
 The inferential design below was frozen before any Session-4 strategy metric
-was produced or read. The Revision-3 manifest core is now superseded by an
-outcome-blind implementation correction, and the Revision-4 core remains
-pending. Operators may execute the matrix only from the exact clean tagged
+was produced or read. The Revision-3 manifest core is now superseded by the
+outcome-blind Revision-4 implementation correction and newly frozen core.
+Operators may execute the matrix only from the exact clean tagged
 commit and prepared manifest described in
 [Section 14](#14-freeze-completion-record-and-remaining-launch-gates). The
 runner enforces every machine-checkable freeze condition; no strategy metric
@@ -27,7 +27,7 @@ manifest provenance and are intentionally not back-edited into this document.
 |---|---|
 | Preregistration SHA-256 | Recorded by `prepare` after the clean tagged commit |
 | Contract-core SHA-256 | `05bb05f9024967c74c0708bd0469a6c8660d8fe7b20142b9d075e9d68cdeb12f` |
-| Manifest-core SHA-256 | `PENDING` |
+| Manifest-core SHA-256 | `4e8bea0ab732ab5f7f56741e238f74af5c26e596ecebda9085596423946a9f5c` |
 | Manifest-provenance SHA-256 | Recorded by `prepare`; not back-edited here |
 | Git commit | Recorded by `prepare` from the clean frozen tree |
 | Git tag | Recorded by `prepare`; exactly one canonical tag must point at the commit |
@@ -35,7 +35,7 @@ manifest provenance and are intentionally not back-edited into this document.
 | Development-data hashes | Bound inside the manifest core and expanded by `prepare` |
 | Frozen Bybit-contract hash | Bound inside the manifest core and expanded by `prepare` |
 
-<!-- mr-session-4-manifest-core-sha256: PENDING -->
+<!-- mr-session-4-manifest-core-sha256: 4e8bea0ab732ab5f7f56741e238f74af5c26e596ecebda9085596423946a9f5c -->
 
 The freeze procedure is defined in Section 13. The frozen status does not by
 itself permit execution: the commit, canonical tag, prepared manifest, and
@@ -918,20 +918,22 @@ Completed without reading any Session-4 strategy metric:
     live-network tests skipped. Regression coverage includes the exact pilot
     float artifact, negative and flat quantities, inconsistent native evidence,
     and the observed `-0.22128854 USDT` funding amount.
+11. **Revision-4 manifest core was locked on the intended VPS:** all 528
+    specifications, development-only data bundles, frozen contracts, runtime,
+    corrected profiles, runner sources, and `uv.lock` produced
+    `4e8bea0ab732ab5f7f56741e238f74af5c26e596ecebda9085596423946a9f5c`.
 
 Remaining launch gates, in strict order:
 
-1. On the intended VPS, run Revision-4 `lock-core`, write its new hash into
-   Section 1, and change the status to `FROZEN BEFORE METRIC READ — REVISION 4`.
-2. Commit that exact frozen tree and create the canonical
+1. Commit this exact frozen tree and create the canonical
    `mr-session-4-preregistration-YYYY-MM-DD-r4` tag.
-3. Archive the Revision-3 manifest and run directory without opening
+2. Archive the Revision-3 manifest and run directory without opening
    outcome-bearing files. From the clean tagged Revision-4 commit, run
    `prepare`, require the identical new core hash, then run `plan`.
-4. Confirm at least 60 GiB free and perform a fresh four-run outcome-blind pilot
+3. Confirm at least 60 GiB free and perform a fresh four-run outcome-blind pilot
    before starting the full 528-run suite. Earlier output may not be resumed.
 
-Until gates 1–4 are closed, no further Session-4 strategy run may start. During the
+Until gates 1–3 are closed, no further Session-4 strategy run may start. During the
 pilot and partial suite, outcome-bearing artifacts remain closed as specified
 in Section 11.
 

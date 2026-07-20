@@ -195,8 +195,8 @@ Faza 5: Production na VPS              → 1-2 tyg.
   tylko in-memory; generic `MarkingBarClosed` M5/M10 porównujący pierwszy wick touch z
   ostatnimi ukończonymi H1 Bands; natywne multiple `BarType` w wrapperze i porządek
   all marking sub-bars → H1 execution. P9 pozostaje niezmienione i niekwalifikowalne.
-- **MR-Session 4 (full v2 sweep on nautilus) — REVISION 4 CORRECTION /
-  CORE REFREEZE PENDING** — kontrakt obejmuje **BTCUSDT i ETHUSDT osobno**, H1 execution
+- **MR-Session 4 (full v2 sweep on nautilus) — REVISION 4 CORE FROZEN /
+  FINAL TAG+MANIFEST PENDING** — kontrakt obejmuje **BTCUSDT i ETHUSDT osobno**, H1 execution
   oraz marking **M5 i M10** (528 runów); H1-only pozostaje poza rodziną inferencyjną.
   Outcome-blind runner, native evidence, funding wyceniany po ukończonym H1 mark Close,
   causal mark-margin proxy, atomic artifacts, bounded retry/resume, canonical tag
@@ -213,8 +213,9 @@ Faza 5: Production na VPS              → 1-2 tyg.
   ujawnił następnie, że adapter przepuszczał akumulowany `signed_qty: f64`
   (`1.9999999999999996`) zamiast dokładnego natywnego `Quantity` (`2.00`), co
   dawało różnicę jednego kwantu w niezależnym audycie funding. Revision 4
-  kanonizuje dokładną wielkość pozycji u źródła; potrzebuje nowego quality gate,
-  core, tagu `-r4`, manifestu i świeżego pilota przed pełnym sweepem.
+  kanonizuje dokładną wielkość pozycji u źródła; quality gate przeszedł, a core
+  `4e8bea0a…46a9f5c` został zamrożony na docelowym VPS-ie. Pozostały finalny
+  commit/tag `-r4`, manifest i świeży pilot przed pełnym sweepem.
   Strategia nie ładuje reserved rows, ale wcześniejszy operator-side integrity audit
   dotknął pełnych plików; dokładne ujawnienie i przyszła polityka holdout są zapisane w
   [zamrożonej prerejestracji](experiments/mr-session-4-preregistration.md).

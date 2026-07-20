@@ -52,8 +52,13 @@ Sekcje na każdą wersję:
   is reopened outcome-blind for Revision 2; canonical tags now permit a same-day `-rN`
   suffix (`N >= 2`) so the original tag can remain as an audit record.
 
-### Changed (MR-Session 4 preregistration freeze, 2026-07-20)
+### Changed (MR-Session 4 preregistration freeze, 2026-07-20–21)
 
+- Froze the Revision-4 528-run manifest core on the intended VPS as
+  `4e8bea0ab732ab5f7f56741e238f74af5c26e596ecebda9085596423946a9f5c` after
+  replacing accumulated `f64` position magnitude with exact native `Quantity`
+  evidence and repeating the full local quality gate. No strategy metric was
+  computed or opened; final tag and manifest provenance remain gated.
 - Froze the Revision-3 528-run manifest core on the intended VPS as
   `977327508b7b53b416757f81a6d750abc6386a78aeebe7f4e49e7f12b989ba58` after
   the outcome-blind liquidation, native replay coverage, staged recovery, and
