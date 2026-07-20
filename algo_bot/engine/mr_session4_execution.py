@@ -9,7 +9,7 @@ from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
+from decimal import ROUND_HALF_EVEN, ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any, Literal, cast
 
 import pandas as pd
@@ -73,7 +73,7 @@ EXECUTION_SCHEMA_VERSION = "mr_session4_execution/2"
 EXECUTION_PROFILE_ID = "NAUTILUS_BYBIT_NATIVE_BAR_MMS_FULL_STACK_V1"
 MARGIN_PROFILE_ID = "CAUSAL_H1_MARK_SETUP_EQUITY_EFFECTIVE_LEVERAGE_PROXY_V2"
 METRIC_PROFILE_ID = "NATIVE_NET_H1_8760_FRACTION_UNITS_V1"
-COST_PROFILE_ID = "BYBIT_FIXED_FEE_HISTORICAL_MARK_FUNDING_ONE_TICK_NATIVE_BAR_V2"
+COST_PROFILE_ID = "BYBIT_FIXED_FEE_HISTORICAL_MARK_FUNDING_ONE_TICK_NATIVE_BAR_V3"
 LIQUIDATION_ACCOUNTING_PROFILE_ID = "DETECT_FAIL_TECHNICAL_FLATTEN_NO_LP_SETTLEMENT_V1"
 STARTING_BALANCE = Decimal("10000")
 DEFAULT_NATIVE_LEVERAGE = Decimal("2")
@@ -1347,9 +1347,18 @@ def _reconcile_native_fills(
             raise Session4InvariantError(
                 f"invalid native liquidity_side for {event.execution_id}: {liquidity_side!r}"
             )
-        expected_commission = (event.last_quantity * event.price * fee_rate).quantize(
+        # Nautilus 1.230.0's MakerTakerFeeModel converts the exact Decimal
+        # commission through Money::from_decimal. Money rounds to the quote
+        # currency precision with midpoint-to-even semantics. Keep this oracle
+        # strict and reproduce that rule exactly; a one-quantum tolerance would
+        # also admit genuinely incorrect commissions.
+        notional = (event.last_quantity * event.price).quantize(
             USDT_COMMISSION_QUANTUM,
-            rounding=ROUND_HALF_UP,
+            rounding=ROUND_HALF_EVEN,
+        )
+        expected_commission = (notional * fee_rate).quantize(
+            USDT_COMMISSION_QUANTUM,
+            rounding=ROUND_HALF_EVEN,
         )
         if commission_amount != expected_commission:
             raise Session4InvariantError(

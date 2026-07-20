@@ -155,6 +155,44 @@ def test_native_fill_reconciliation_uses_frozen_maker_rate() -> None:
     )
 
 
+def test_native_fill_reconciliation_matches_nautilus_half_even_money_rounding() -> None:
+    fill = replace(
+        _domain_fill(),
+        last_quantity=Decimal("5.15"),
+        cumulative_quantity=Decimal("5.15"),
+        price=Decimal("2008.53"),
+        commission=Decimal("5.68916122"),
+    )
+    native = pd.DataFrame.from_records(
+        [
+            {
+                "trade_id": "trade-1",
+                "last_qty": "5.15",
+                "last_px": "2008.53",
+                "commission": "5.68916122 USDT",
+                "liquidity_side": "TAKER",
+            }
+        ]
+    )
+
+    _reconcile_native_fills(
+        (fill,),
+        native,
+        maker_fee=Decimal("0.0002"),
+        taker_fee=Decimal("0.00055"),
+    )
+
+    half_up_fill = replace(fill, commission=Decimal("5.68916123"))
+    native.loc[0, "commission"] = "5.68916123 USDT"
+    with pytest.raises(Session4InvariantError, match="commission algebra mismatch"):
+        _reconcile_native_fills(
+            (half_up_fill,),
+            native,
+            maker_fee=Decimal("0.0002"),
+            taker_fee=Decimal("0.00055"),
+        )
+
+
 def test_duplicate_domain_trade_id_is_never_silently_deduplicated() -> None:
     fill = _domain_fill()
     with pytest.raises(Session4InvariantError, match="duplicate domain execution ID"):

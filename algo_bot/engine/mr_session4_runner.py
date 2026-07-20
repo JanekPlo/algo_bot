@@ -81,7 +81,7 @@ FAILURE_SCHEMA_VERSION = "mr_session4_attempt_failure/1"
 ATTEMPT_STARTED_SCHEMA_VERSION = "mr_session4_attempt_started/1"
 RESULTS_INDEX_SCHEMA_VERSION = "mr_session4_results_index/1"
 SUITE_COMPLETE_SCHEMA_VERSION = "mr_session4_suite_complete/1"
-RUNNER_VERSION = "mr_session4_runner/1"
+RUNNER_VERSION = "mr_session4_runner/2"
 EXPECTED_UV_VERSION = "0.11.28"
 EXPECTED_PYTHON_VERSION = "3.12.13"
 EXPECTED_PYTHON_IMPLEMENTATION = "CPython"
@@ -95,7 +95,8 @@ _PREREGISTRATION_CORE_MARKER = re.compile(
     flags=re.MULTILINE,
 )
 _PREREGISTRATION_TAG = re.compile(
-    r"^mr-session-4-preregistration-(?P<date>[0-9]{4}-[0-9]{2}-[0-9]{2})$"
+    r"^mr-session-4-preregistration-(?P<date>[0-9]{4}-[0-9]{2}-[0-9]{2})"
+    r"(?:-r(?P<revision>[2-9][0-9]*))?$"
 )
 _UV_VERSION_OUTPUT = re.compile(
     r"^uv (?P<version>[0-9]+\.[0-9]+\.[0-9]+)(?: \([^()\r\n]+\))?(?:\r?\n)?$"
@@ -1890,13 +1891,14 @@ def _preregistration_tag_for_commit(repo_root: Path, git_commit: str) -> str:
     tags = tuple(line.strip() for line in completed.stdout.splitlines() if line.strip())
     if len(tags) != 1:
         raise Session4ManifestError(
-            "frozen commit must have exactly one mr-session-4-preregistration-YYYY-MM-DD tag"
+            "frozen commit must have exactly one canonical MR-Session 4 preregistration tag"
         )
     tag = tags[0]
     match = _PREREGISTRATION_TAG.fullmatch(tag)
     if match is None:
         raise Session4ManifestError(
-            "preregistration tag must match mr-session-4-preregistration-YYYY-MM-DD"
+            "preregistration tag must match "
+            "mr-session-4-preregistration-YYYY-MM-DD[-rN], with N >= 2"
         )
     try:
         datetime.strptime(match.group("date"), "%Y-%m-%d")

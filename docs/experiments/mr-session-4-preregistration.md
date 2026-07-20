@@ -1,6 +1,6 @@
 # MR-Session 4 full v2 in-sample sweep — frozen preregistration
 
-> **Status:** **FROZEN BEFORE METRIC READ**
+> **Status:** **REVISION 2 DRAFT — PILOT IMPLEMENTATION DEFECT, NO METRIC READ**
 > **Last updated:** 2026-07-20
 > **Scope:** BTCUSDT and ETHUSDT evaluated separately; H1 execution with M5 or
 > M10 marking; native Nautilus bar fills; causal mark-price isolated-margin
@@ -25,7 +25,7 @@ manifest provenance and are intentionally not back-edited into this document.
 |---|---|
 | Preregistration SHA-256 | Recorded by `prepare` after the clean tagged commit |
 | Contract-core SHA-256 | `05bb05f9024967c74c0708bd0469a6c8660d8fe7b20142b9d075e9d68cdeb12f` |
-| Manifest-core SHA-256 | `657e910101933cdeab15209189a31b4087672b8c52018b5dc72f36dcd1c08e1a` |
+| Manifest-core SHA-256 | Pending Revision-2 lock after the commission-oracle correction |
 | Manifest-provenance SHA-256 | Recorded by `prepare`; not back-edited here |
 | Git commit | Recorded by `prepare` from the clean frozen tree |
 | Git tag | Recorded by `prepare`; exactly one canonical tag must point at the commit |
@@ -33,7 +33,7 @@ manifest provenance and are intentionally not back-edited into this document.
 | Development-data hashes | Bound inside the manifest core and expanded by `prepare` |
 | Frozen Bybit-contract hash | Bound inside the manifest core and expanded by `prepare` |
 
-<!-- mr-session-4-manifest-core-sha256: 657e910101933cdeab15209189a31b4087672b8c52018b5dc72f36dcd1c08e1a -->
+<!-- mr-session-4-manifest-core-sha256: PENDING -->
 
 The freeze procedure is defined in Section 13. The frozen status does not by
 itself permit execution: the commit, canonical tag, prepared manifest, and
@@ -289,7 +289,7 @@ Required cost evidence:
 
 | Component | Frozen model | Provenance and limitation |
 |---|---|---|
-| Commission | Bybit maker `0.0002`, taker `0.00055` | Engine-applied modeled schedule; not a reconstruction of historical VIP tiers |
+| Commission | Bybit maker `0.0002`, taker `0.00055` | Engine-applied modeled schedule; native `Money::from_decimal` midpoint-to-even rounding at `0.00000001 USDT`; not a reconstruction of historical VIP tiers |
 | Funding | Historical Bybit rates × completed H1 mark Close | Native `MarkPriceUpdate` preserves source precision; one pre-development H1 covers the first boundary; missing, duplicate, or amount-mismatched settlements fail the run |
 | Slippage | One adverse instrument price tick on every fill | Native bar model with probability 1; no order-book depth or empirical impact |
 | Execution | Native Nautilus bar matcher | Bar OHLC, not tick/L2 replay; adaptive intrabar ordering remains a model assumption |
@@ -306,7 +306,7 @@ The exact funding-price profiles are
 `ONE_PREDEVELOPMENT_H1_FOR_FIRST_FUNDING_MARK_V1` and
 `COMPLETED_H1_MARK_CLOSE_PRESERVE_SOURCE_PRECISION_FUNDING_BASIS_V1`; the full
 cost profile is
-`BYBIT_FIXED_FEE_HISTORICAL_MARK_FUNDING_ONE_TICK_NATIVE_BAR_V2`. For every
+`BYBIT_FIXED_FEE_HISTORICAL_MARK_FUNDING_ONE_TICK_NATIVE_BAR_V3`. For every
 expected settlement, an independent oracle requires:
 
 ```text
@@ -684,11 +684,13 @@ after all blockers are resolved and the following order succeeds:
    `FROZEN BEFORE METRIC READ`, and make no change to any core input.
 6. Commit the runner, tests, frozen document, contract artifact, and required
    provenance metadata. Require a clean tree, then create the
-   `mr-session-4-preregistration-YYYY-MM-DD` tag on that commit.
+   `mr-session-4-preregistration-YYYY-MM-DD[-rN]` tag on that commit. The
+   unsuffixed form is revision 1; same-day corrective freezes use `-r2`, `-r3`,
+   and so on.
 7. From that same clean tagged commit, run `algo-mr-session4 prepare`. It must
    recompute the identical core hash and write a separate provenance object
    containing the clean tree/commit, final preregistration SHA-256, and exactly
-   one canonical `mr-session-4-preregistration-YYYY-MM-DD` tag which points at
+   one canonical `mr-session-4-preregistration-YYYY-MM-DD[-rN]` tag which points at
    that commit. Its `provenance_hash` is stored in the manifest, not inserted
    back into this document.
 8. Verify the manifest, core hash, provenance hash, runtime, contracts, and both
@@ -725,7 +727,7 @@ committing the exact frozen tree, and confirming that the tree is clean, create
 one tag and prepare the manifest:
 
 ```bash
-PREREG_TAG="mr-session-4-preregistration-$(date -u +%F)"
+PREREG_TAG="mr-session-4-preregistration-$(date -u +%F)-r2"
 git tag "$PREREG_TAG"
 git tag --points-at HEAD --list 'mr-session-4-preregistration-*'
 
@@ -804,6 +806,14 @@ If the core hash recomputed by `prepare` differs from the hash written here,
 freeze fails. Return to `lock-core` and create a new frozen commit/tag; never
 edit a core input in place under an existing preregistration tag.
 
+The revision-1 outcome-blind pilot stopped on a commission-oracle defect before
+any strategy metric was opened: Nautilus rounded an exact midpoint to even
+(`5.689161225 → 5.68916122 USDT`), while the independent checker incorrectly
+required half-up (`5.68916123`). Revision 2 changes only that checker to match
+the pinned native `Money::from_decimal` semantics, bumps the cost profile, and
+requires a new core hash, commit, manifest, and `-r2` tag. Revision-1 artifacts
+are invalid implementation evidence and may not be resumed into this suite.
+
 After the first strategy metric is readable, changing dates, data, parameter
 sets, variants, marking timeframes, cost/margin/execution profiles, thresholds,
 decision rules, retry semantics, or run count invalidates the preregistration.
@@ -822,19 +832,26 @@ Completed before any Session-4 strategy run or metric read:
    paginated risk-limit schedules for BTCUSDT and ETHUSDT were captured in
    `config/experiments/mr-session-4-bybit-contracts.json` and passed offline
    normalization/tamper validation.
-3. **Implementation quality gate passed:** the final core source passed Ruff,
-   format, mypy, and the full suite (`650 passed, 2 skipped`) under uv 0.11.28
-   and CPython 3.12.13.
-4. **Manifest core locked on the intended VPS:** `lock-core` validated all 528
-   specifications, both development-only data bundles, the frozen contracts,
-   runtime, profiles, sources, and `uv.lock`, producing the Section-1 core hash.
+3. **Revision-1 implementation quality gate passed:** the then-final core source
+   passed Ruff, format, mypy, and the full suite (`650 passed, 2 skipped`) under
+   uv 0.11.28 and CPython 3.12.13. The outcome-blind pilot subsequently exposed
+   the commission rounding defect documented above.
+4. **Revision-2 implementation quality gate passed:** the corrected core source
+   passed Ruff, format, mypy, and the full suite (`651 passed, 2 skipped`) under
+   uv 0.11.28 and CPython 3.12.13. One transient first-pass failure in the
+   existing atomic-save recovery test did not reproduce in the full rerun or in
+   ten consecutive isolated reruns.
+5. **Revision-1 manifest core was locked on the intended VPS:** it validated all
+   528 specifications, both development-only data bundles, frozen contracts,
+   runtime, profiles, sources, and `uv.lock`. That core is superseded and may
+   not authorize another strategy run; the Revision-2 core lock remains pending.
 
 Remaining launch gates, in strict order:
 
 1. Commit this exact frozen document and the frozen Bybit-contract artifact
    without changing any core input; require a clean tree.
 2. Create exactly one canonical
-   `mr-session-4-preregistration-YYYY-MM-DD` tag on that commit.
+   `mr-session-4-preregistration-YYYY-MM-DD-r2` tag on that commit.
 3. Run `prepare` on the same VPS/runtime/data, require the identical manifest
    core hash, then run `plan` to verify the manifest and provenance.
 4. Confirm at least 60 GiB free and perform the four-run outcome-blind pilot

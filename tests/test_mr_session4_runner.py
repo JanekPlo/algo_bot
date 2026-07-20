@@ -694,6 +694,12 @@ def test_preregistration_tag_is_unique_canonical_and_bound_to_commit(
         )
     ]
 
+    output = "mr-session-4-preregistration-2026-07-15-r2\n"
+    assert (
+        session4_runner._preregistration_tag_for_commit(tmp_path, "revised-commit")
+        == "mr-session-4-preregistration-2026-07-15-r2"
+    )
+
     for invalid, error in (
         ("", "exactly one"),
         (
@@ -701,6 +707,7 @@ def test_preregistration_tag_is_unique_canonical_and_bound_to_commit(
             "exactly one",
         ),
         ("mr-session-4-preregistration-final\n", "must match"),
+        ("mr-session-4-preregistration-2026-07-15-r1\n", "must match"),
         ("mr-session-4-preregistration-2026-02-30\n", "invalid date"),
     ):
         output = invalid

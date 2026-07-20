@@ -17,13 +17,25 @@ Sekcje na każdą wersję:
 
 ## [Unreleased]
 
+### Fixed (MR-Session 4 outcome-blind pilot, 2026-07-20)
+
+- The Revision-1 pilot stopped before metric inspection on a one-quantum commission
+  mismatch. The independent checker used half-up rounding, while the pinned Nautilus
+  `MakerTakerFeeModel` finishes through `Money::from_decimal` with midpoint-to-even
+  rounding. The checker now mirrors the native `0.00000001 USDT` rule exactly (without
+  a tolerance), has a real midpoint regression, and bumps the cost/runner profiles.
+- Revision 1 remains immutable and invalid for economic inference. The preregistration
+  is reopened outcome-blind for Revision 2; canonical tags now permit a same-day `-rN`
+  suffix (`N >= 2`) so the original tag can remain as an audit record.
+
 ### Changed (MR-Session 4 preregistration freeze, 2026-07-20)
 
 - Froze the pre-outcome 528-run manifest core on the intended VPS as
   `657e910101933cdeab15209189a31b4087672b8c52018b5dc72f36dcd1c08e1a` after the
   complete ETHUSDT funding restoration, frozen Bybit contract capture, runtime/data
   preflight, and full quality gate. No Session-4 strategy run or metric was produced or
-  read; the clean commit/tag and prepared-manifest provenance gates remain mandatory.
+  read. The later outcome-blind pilot invalidated this Revision-1 implementation as
+  documented above; its tag and artifacts remain audit records, not resumable evidence.
 
 ### Added (MR-Session 4 runner draft — blocked before freeze, 2026-07-15)
 
